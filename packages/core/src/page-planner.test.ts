@@ -61,6 +61,21 @@ describe('createPagePlan', () => {
       expect(plan.pages[1]!.elements.map(node => node.id)).toEqual(['page-number__p1'])
     })
 
+    it('keeps repeated virtual identities distinct from legal user node ids', () => {
+      const repeated = makeNode('page-number', { type: 'page-number', y: 280, height: 10 })
+      const schema = makeSchema({
+        mode: 'fixed',
+        pagination: { strategy: 'fixed-sheets', pageCount: 1 },
+      }, [makeNode('page-number__p0'), repeated])
+
+      const plan = createPagePlan(schema, repeatedPageNumberOptions())
+
+      expect(plan.pages[0]!.elements.map(node => node.id)).toEqual([
+        'page-number__p0',
+        'page-number__p0__v1',
+      ])
+    })
+
     it('creates a single page with all elements', () => {
       const schema = makeSchema(
         { mode: 'fixed' },

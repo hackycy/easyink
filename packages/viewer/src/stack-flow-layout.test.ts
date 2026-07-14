@@ -1,12 +1,16 @@
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { ViewerOptions } from './types'
 import { compileBuiltinMaterialProfile } from '@easyink/builtin'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createViewer as createProfileViewer } from './index'
 import { applyStackFlowLayout } from './stack-flow-layout'
 
 const builtinProfile = compileBuiltinMaterialProfile('all')
 const createViewer = (options: Omit<ViewerOptions, 'profile'> & { profile?: ViewerOptions['profile'] }) => createProfileViewer({ ...options, profile: options.profile ?? builtinProfile })
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 function makeNode(id: string, overrides: Partial<MaterialNode> = {}): MaterialNode {
   return {
@@ -219,6 +223,17 @@ describe('viewer runtime stack-flow reflow', () => {
   it('repositions elements below bound auto-height text after measure', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 45,
+      height: 40,
+      x: 0,
+      y: 0,
+      top: 0,
+      right: 45,
+      bottom: 40,
+      left: 0,
+      toJSON: () => ({}),
+    })
 
     const schema: DocumentSchema = {
       version: '1.0.0',

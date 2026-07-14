@@ -78,15 +78,41 @@ function isViewerRenderContext(value: unknown): value is ViewerRenderContext {
 export const textViewerLayout: MaterialViewerLayoutFacet = Object.freeze({
   async measure(request: MaterialMeasureRequest) {
     const node = Object.freeze({ ...request.node, model: request.resolvedModel }) as MaterialNode
-    const measured = measureText(node)
+    const props = getTextProps(node)
+    let width = node.width
+    let height = node.height
+    if (props.heightMode === 'auto') {
+      const border = props.borderWidth * 2
+      const measured = await request.measureText({
+        text: getTextDisplayValue(props),
+        availableWidth: Math.max(0, node.width - border),
+        unit: request.constraints.unit,
+        style: {
+          fontFamily: props.fontFamily.trim() || 'sans-serif',
+          fontSize: props.fontSize,
+          fontWeight: props.fontWeight,
+          fontStyle: props.fontStyle === 'italic' || props.fontStyle === 'oblique'
+            ? props.fontStyle
+            : 'normal',
+          lineHeight: props.lineHeight,
+          letterSpacing: props.letterSpacing,
+          whiteSpace: props.wrapMode === 'wrap' ? 'normal' : 'pre-wrap',
+          overflowWrap: props.wrapMode === 'anywhere' ? 'anywhere' : 'normal',
+        },
+      })
+      const minHeight = props.minHeight > 0 ? props.minHeight : 0
+      const maxHeight = props.maxHeight > 0 ? props.maxHeight : Number.POSITIVE_INFINITY
+      width = node.width
+      height = Math.min(Math.max(measured.height + border, minHeight), maxHeight)
+    }
     return createNonFragmentingMaterialPlans({
       instanceKey: request.instanceKey,
       nodeId: request.node.id,
       nodeRevision: request.nodeRevision,
       constraintKey: createLayoutConstraintKey(request.constraints),
       pageIndex: 0,
-      borderBox: { x: request.node.x, y: request.node.y, width: measured.width, height: measured.height },
-      fragmentBox: { x: request.node.x, y: request.node.y, width: measured.width, height: measured.height },
+      borderBox: { x: request.node.x, y: request.node.y, width, height },
+      fragmentBox: { x: request.node.x, y: request.node.y, width, height },
     }).layoutPlan
   },
 })

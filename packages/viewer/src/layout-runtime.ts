@@ -718,6 +718,7 @@ function commitRepeatedPageInstances(
     profile,
     pageCount: plan.pages.length,
     paintableNodeIds,
+    occupiedNodeIds: new Set(input.document.elements.map(node => node.id)),
   })
   if (placements.length === 0)
     return plan

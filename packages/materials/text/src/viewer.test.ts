@@ -1,8 +1,8 @@
 import type { ViewerElementTree, ViewerTextTree } from '@easyink/core'
 import { createTestViewerRenderContext } from '@easyink/core/testing'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createTextNode, migrateTextModelV0ToV1 } from './schema'
-import { getTextRenderSize, measureText, renderText } from './viewer'
+import { getTextRenderSize, measureText, renderText, textViewerLayout } from './viewer'
 
 describe('renderText', () => {
   it('renders vertical writing mode with native vertical styles', () => {
@@ -138,5 +138,53 @@ describe('renderText', () => {
     expect(node.model.maxHeight).toBeNull()
     expect(measured.height).toBeGreaterThan(10)
     expect(measured.overflow).toBe(false)
+  })
+
+  it('uses the authoritative text measurement service for auto-height layout', async () => {
+    const node = createTextNode({
+      width: 12,
+      height: 4,
+      model: {
+        content: 'Brand text',
+        heightMode: 'auto',
+        fontFamily: 'Brand',
+        fontSize: 4,
+        fontWeight: '700',
+        fontStyle: 'italic',
+        lineHeight: 1.5,
+        letterSpacing: 0.5,
+        wrapMode: 'anywhere',
+        borderWidth: 1,
+        minHeight: 6,
+        maxHeight: 10,
+      },
+    })
+    const measureText = vi.fn(async () => ({ width: 10, height: 7 }))
+
+    const plan = await textViewerLayout.measure!({
+      instanceKey: node.id,
+      node,
+      resolvedModel: node.model,
+      nodeRevision: 1,
+      constraints: { availableWidth: 12, availableHeight: 20, unit: 'mm', writingMode: 'horizontal-tb' },
+      measureText,
+    } as never)
+
+    expect(measureText).toHaveBeenCalledWith({
+      text: 'Brand text',
+      availableWidth: 10,
+      unit: 'mm',
+      style: {
+        fontFamily: 'Brand',
+        fontSize: 4,
+        fontWeight: '700',
+        fontStyle: 'italic',
+        lineHeight: 1.5,
+        letterSpacing: 0.5,
+        whiteSpace: 'pre-wrap',
+        overflowWrap: 'anywhere',
+      },
+    })
+    expect(plan.borderBox).toMatchObject({ width: 12, height: 9 })
   })
 })

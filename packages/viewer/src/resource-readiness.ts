@@ -25,6 +25,7 @@ export interface ResourceReadinessResult {
 
 export interface ResourceReadinessCoordinator {
   readonly resourceRevision: number
+  readonly clear: () => void
   readonly prepare: (
     resources: readonly ViewerResource[],
     signal: AbortSignal,
@@ -58,10 +59,14 @@ export function createResourceReadinessCoordinator(
     get resourceRevision() {
       return resourceRevision
     },
+    clear() {
+      terminal.clear()
+      resourceRevision = 0
+    },
     async prepare(resources: readonly ViewerResource[], signal: AbortSignal): Promise<ResourceReadinessResult> {
       throwIfAborted(signal)
       const unique = normalizeUniqueResources(resources)
-      const pending = unique.filter(resource => !terminal.has(resource.key))
+      const pending = unique.filter(resource => terminal.get(resource.key)?.state !== 'ready')
       const prepared = await Promise.all(pending.map(async (entry): Promise<PreparedOutcome> => {
         throwIfAborted(signal)
         let result: Readonly<ResourcePreparationTerminal>
@@ -84,10 +89,10 @@ export function createResourceReadinessCoordinator(
 
       throwIfAborted(signal)
       for (const outcome of prepared) {
-        if (terminal.has(outcome.key))
-          continue
+        const previous = terminal.get(outcome.key)
         terminal.set(outcome.key, outcome.result)
-        resourceRevision++
+        if (previous?.state !== outcome.result.state)
+          resourceRevision++
       }
 
       const diagnostics: ResourcePreparationDiagnostic[] = []

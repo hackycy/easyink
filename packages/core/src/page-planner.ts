@@ -76,6 +76,7 @@ export function createPagePlan(schema: DocumentSchema, options: PagePlanOptions 
         profile: options.profile,
         pageCount: result.pages.length,
         paintableNodeIds: options.paintableNodeIds ?? new Set(),
+        occupiedNodeIds: new Set(schema.elements.map(node => node.id)),
       })
     : []
   const overlaysByPage = new Map<number, MaterialNode[]>()

@@ -535,6 +535,42 @@ describe('viewer runtime print behavior', () => {
 })
 
 describe('viewer runtime export behavior', () => {
+  it('waits for an active export lease before destroying the committed batch', async () => {
+    const container = document.createElement('div')
+    const viewer = createViewer({ container })
+    let releaseExport: (() => void) | undefined
+    let markStarted: (() => void) | undefined
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve
+    })
+    const gate = new Promise<void>((resolve) => {
+      releaseExport = resolve
+    })
+    viewer.registerExporter({
+      id: 'destroy-lease',
+      format: 'pdf',
+      async export() {
+        markStarted?.()
+        await gate
+        return new Blob(['leased'])
+      },
+    })
+    await viewer.open({ schema: createFixedSchema() })
+    const exporting = viewer.exportDocument({ format: 'pdf', throwOnError: true })
+    await started
+
+    let destroyed = false
+    const destroying = viewer.destroy().then(() => destroyed = true)
+    await Promise.resolve()
+    expect(destroyed).toBe(false)
+    expect(container.childNodes.length).toBeGreaterThan(0)
+
+    releaseExport?.()
+    await exporting
+    await destroying
+    expect(container.childNodes).toHaveLength(0)
+  })
+
   it('keeps every page materialized through exporter preparation and capture', async () => {
     const observer = installControlledIntersectionObserver()
     const container = document.createElement('div')

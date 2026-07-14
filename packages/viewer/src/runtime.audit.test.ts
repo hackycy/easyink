@@ -4,11 +4,11 @@ import type { ViewerRuntime } from './runtime'
 import type { ViewerDiagnosticEvent, ViewerOptions } from './types'
 import { DEFAULT_VIEWER_TREE_POLICY } from '@easyink/browser-dom'
 import { compileBuiltinMaterialProfile } from '@easyink/builtin'
-import { defineMaterialFacetFactory, defineMaterialManifest, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
+import { createModelPropertyAccessor, defineMaterialFacetFactory, defineMaterialManifest, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyBindingsToProps, projectBindings } from './binding-projector'
-import { createIframeViewerHost, createViewer as createProfileViewer } from './index'
+import { createCustomViewerHost, createIframeViewerHost, createViewer as createProfileViewer } from './index'
 
 const builtinProfile = compileBuiltinMaterialProfile('all')
 const createViewer = (options: Omit<ViewerOptions, 'profile'> & { profile?: ViewerOptions['profile'] } = {}) => createProfileViewer({ ...options, profile: options.profile ?? builtinProfile })
@@ -324,6 +324,155 @@ describe('viewer audit risk regressions', () => {
     ])
   })
 
+  it('retries failed declared fonts and remeasures against authoritative browser text revisions', async () => {
+    const fontOutcomes = ['fail', 'fail', 'ready'] as const
+    let fontAttempt = 0
+    const measure = vi.fn(async (request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> => {
+      const measured = await request.measureText({
+        text: 'Brand text',
+        availableWidth: 40,
+        unit: 'mm',
+        style: {
+          fontFamily: 'Brand',
+          fontSize: 4,
+          lineHeight: 1.2,
+          whiteSpace: 'pre-wrap',
+          overflowWrap: 'anywhere',
+        },
+      })
+      return {
+        instanceKey: request.instanceKey,
+        nodeId: request.node.id,
+        nodeRevision: request.nodeRevision,
+        constraintKey: '40:60:mm:horizontal-tb',
+        borderBox: { x: request.node.x, y: request.node.y, width: request.node.width, height: measured.height },
+        contentBox: { x: request.node.x, y: request.node.y, width: request.node.width, height: measured.height },
+        slotBoxes: [],
+        breakOpportunities: [],
+        diagnostics: [],
+      }
+    })
+    const manifest = createTestMaterialManifest({
+      type: 'resource-text',
+      properties: [{
+        key: 'fontFamily',
+        accessor: createModelPropertyAccessor('/fontFamily'),
+        label: 'font',
+        type: 'font',
+        group: 'typography',
+      }],
+      viewer: () => ({
+        capabilities: {},
+        extension: { render: () => ({ tree: viewerText('resource text') }) },
+        layout: {
+          resolveRuntimeModel: (node: Readonly<MaterialNode>) => node.model,
+          measure,
+        },
+      }),
+    })
+    const node = textNode('resource-text-node', undefined, { fontFamily: 'Brand' })
+    node.type = manifest.type
+    const previousFonts = Object.getOwnPropertyDescriptor(document, 'fonts')
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: {
+        load: vi.fn(async () => [{} as FontFace]),
+        ready: Promise.resolve({} as FontFaceSet),
+      },
+    })
+    const probe = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 100,
+      height: 20,
+      x: 0,
+      y: 0,
+      top: 0,
+      right: 100,
+      bottom: 20,
+      left: 0,
+      toJSON: () => ({}),
+    })
+    const viewer = createViewer({
+      container: document.createElement('div'),
+      profile: createTestCompiledMaterialProfile([manifest]),
+      fontProvider: {
+        listFonts: async () => [],
+        loadFont: async () => {
+          const outcome = fontOutcomes[fontAttempt++]
+          if (outcome === 'fail')
+            throw new Error('Brand unavailable')
+          return '/fonts/brand.woff2'
+        },
+      },
+    })
+
+    try {
+      await viewer.open({ schema: fixedSchema([node]), dataRevision: 1 })
+      expect(viewer.currentRevisions.resourceRevision).toBe(1)
+      await viewer.updateData({}, { dataRevision: 2 })
+      expect(viewer.currentRevisions.resourceRevision).toBe(1)
+      await viewer.updateData({}, { dataRevision: 3 })
+      expect(viewer.currentRevisions.resourceRevision).toBe(2)
+
+      expect(fontAttempt).toBe(3)
+      expect(measure).toHaveBeenCalledTimes(3)
+      expect(probe).toHaveBeenCalledTimes(2)
+      expect(document.querySelector('[data-easyink-text-measure]')).toBeNull()
+    }
+    finally {
+      await viewer.destroy()
+      if (previousFonts)
+        Object.defineProperty(document, 'fonts', previousFonts)
+      else
+        Reflect.deleteProperty(document, 'fonts')
+    }
+  })
+
+  it('versions declared asset failure and recovery with an explicit no-loader ready fallback', async () => {
+    const manifest = createTestMaterialManifest({
+      type: 'resource-asset',
+      properties: [{
+        key: 'source',
+        accessor: createModelPropertyAccessor('/source'),
+        label: 'source',
+        type: 'image',
+        group: 'content',
+      }],
+      viewer: () => ({
+        capabilities: {},
+        extension: { render: () => ({ tree: viewerText('asset') }) },
+      }),
+    })
+    const node = textNode('resource-asset-node', undefined, { source: 'asset://logo' })
+    node.type = manifest.type
+    const prepareAsset = vi.fn()
+      .mockResolvedValueOnce({ state: 'failed' as const, message: 'missing' })
+      .mockResolvedValueOnce({ state: 'ready' as const })
+    const diagnostics: ViewerDiagnosticEvent[] = []
+    const viewer = createViewer({
+      container: document.createElement('div'),
+      profile: createTestCompiledMaterialProfile([manifest]),
+      prepareAsset,
+    })
+
+    await viewer.open({ schema: fixedSchema([node]), onDiagnostic: event => diagnostics.push(event) })
+    expect(viewer.currentRevisions.resourceRevision).toBe(1)
+    expect(diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'VIEWER_ASSET_PREPARE_FAILED' }),
+    ]))
+    await viewer.updateData({})
+    expect(viewer.currentRevisions.resourceRevision).toBe(2)
+    expect(prepareAsset).toHaveBeenCalledTimes(2)
+    await viewer.destroy()
+
+    const fallback = createViewer({
+      container: document.createElement('div'),
+      profile: createTestCompiledMaterialProfile([manifest]),
+    })
+    await fallback.open({ schema: fixedSchema([node]) })
+    expect(fallback.currentRevisions.resourceRevision).toBe(1)
+    await fallback.destroy()
+  })
+
   it('lets a newer data task supersede an older deferred layout without stale publication', async () => {
     const started = deferred<void>()
     const release = deferred<void>()
@@ -523,6 +672,90 @@ describe('viewer audit risk regressions', () => {
     expect(nextCodes).toContain('NO_PRINT_DRIVER')
   })
 
+  it('leases one committed export batch while a data candidate waits to publish', async () => {
+    const measure = vi.fn(async () => {})
+    const manifest = statefulLayoutManifest('leased-export', measure)
+    const node = textNode('leased-export-node')
+    node.type = manifest.type
+    const container = document.createElement('div')
+    const viewer = createViewer({
+      container,
+      profile: createTestCompiledMaterialProfile([manifest]),
+    })
+    let update: Promise<void> | undefined
+    let updateSettled = false
+    viewer.registerExporter({
+      id: 'leased-exporter',
+      format: 'pdf',
+      async prepare(context) {
+        expect(context.data).toEqual({ label: 'old' })
+        expect(container.textContent).toContain('old')
+        update = viewer.updateData({ label: 'new' }, { dataRevision: 2 })
+        void update.then(() => updateSettled = true)
+        await vi.waitFor(() => expect(measure).toHaveBeenCalledTimes(2))
+        expect(updateSettled).toBe(false)
+        expect(context.data).toEqual({ label: 'old' })
+        expect(container.textContent).toContain('old')
+        expect(container.textContent).not.toContain('new')
+      },
+      async export(context) {
+        expect(context.data).toEqual({ label: 'old' })
+        expect(container.textContent).toContain('old')
+        return new Blob(['old batch'])
+      },
+    })
+    await viewer.open({
+      schema: fixedSchema([node]),
+      data: { label: 'old' },
+      dataRevision: 1,
+    })
+
+    await expect(viewer.exportDocument({ format: 'pdf', throwOnError: true }))
+      .resolves
+      .toBeInstanceOf(Blob)
+    await update
+    expect(viewer.currentRevisions.dataRevision).toBe(2)
+    expect(container.textContent).toContain('new')
+  })
+
+  it('leases one committed custom-print batch while a data candidate waits to publish', async () => {
+    const measure = vi.fn(async () => {})
+    const manifest = statefulLayoutManifest('leased-print', measure)
+    const node = textNode('leased-print-node')
+    node.type = manifest.type
+    const container = document.createElement('div')
+    const viewer = createViewer({
+      container,
+      profile: createTestCompiledMaterialProfile([manifest]),
+    })
+    let update: Promise<void> | undefined
+    let updateSettled = false
+    viewer.registerPrintDriver({
+      id: 'leased-printer',
+      async print(context) {
+        expect(context.data).toEqual({ label: 'old' })
+        expect(container.textContent).toContain('old')
+        update = viewer.updateData({ label: 'new' }, { dataRevision: 2 })
+        void update.then(() => updateSettled = true)
+        await vi.waitFor(() => expect(measure).toHaveBeenCalledTimes(2))
+        expect(updateSettled).toBe(false)
+        expect(context.data).toEqual({ label: 'old' })
+        expect(container.textContent).toContain('old')
+        expect(container.textContent).not.toContain('new')
+      },
+    })
+    await viewer.open({
+      schema: fixedSchema([node]),
+      data: { label: 'old' },
+      dataRevision: 1,
+    })
+
+    await viewer.print({ driverId: 'leased-printer', throwOnError: true })
+    await update
+    expect(viewer.currentRevisions.dataRevision).toBe(2)
+    expect(container.textContent).toContain('new')
+  })
+
   it('lets a render-time reentrant update win without publishing the interrupted mount', async () => {
     let viewer!: ViewerRuntime
     let update: Promise<void> | undefined
@@ -654,6 +887,22 @@ describe('viewer audit risk regressions', () => {
     await viewer.destroy()
   })
 
+  it('publishes page elements from the committed slot map without querying the host', async () => {
+    const container = document.createElement('div')
+    const query = vi.spyOn(container, 'querySelector').mockImplementation(() => {
+      throw new Error('host querySelector must not be used')
+    })
+    const schema = fixedSchema([])
+    schema.page.pagination = { strategy: 'fixed-sheets', pageCount: 200 }
+    const viewer = createViewer({ container })
+
+    await viewer.open({ schema })
+
+    expect(viewer.renderedPages).toHaveLength(200)
+    expect(query).not.toHaveBeenCalled()
+    await viewer.destroy()
+  })
+
   it('adopts a successful replacement before reporting old virtualizer cleanup errors', async () => {
     const container = document.createElement('div')
     const observed = collectDiagnostics()
@@ -729,6 +978,41 @@ describe('viewer audit risk regressions', () => {
       expect.objectContaining({ code: 'VIEWER_MATERIAL_INSTANCE_QUARANTINED', nodeId: 'unknown' }),
     ]))
     expect(container.textContent).toContain('[material quarantined]')
+  })
+
+  it('contains throwing candidate diagnostic observers across repeated unknown-material commits', async () => {
+    const container = document.createElement('div')
+    const viewer = createViewer({ container })
+    const firstObserver = vi.fn(() => {
+      throw new Error('first observer failed')
+    })
+    const secondObserver = vi.fn(() => {
+      throw new Error('second observer failed')
+    })
+    const first = textNode('unknown-first')
+    first.type = 'unknown-material'
+    const second = textNode('unknown-second')
+    second.type = 'unknown-material'
+
+    await expect(viewer.open({
+      schema: fixedSchema([first]),
+      documentRevision: 1,
+      dataRevision: 1,
+      onDiagnostic: firstObserver,
+    })).resolves.toBeUndefined()
+    expect(viewer.currentRevisions).toMatchObject({ documentRevision: 1, dataRevision: 1 })
+    expect(container.textContent).toContain('[material quarantined]')
+
+    await expect(viewer.open({
+      schema: fixedSchema([second]),
+      documentRevision: 2,
+      dataRevision: 2,
+      onDiagnostic: secondObserver,
+    })).resolves.toBeUndefined()
+    expect(viewer.currentRevisions).toMatchObject({ documentRevision: 2, dataRevision: 2 })
+    expect(container.textContent).toContain('[material quarantined]')
+    expect(firstObserver).toHaveBeenCalled()
+    expect(secondObserver).toHaveBeenCalled()
   })
 
   it('disposes nested page mounts in reverse order before rerender and destroy', async () => {
@@ -840,6 +1124,70 @@ describe('viewer audit risk regressions', () => {
     expect(diagnostics.filter(item => item.code === 'MATERIAL_DISPOSE_ERROR')).toHaveLength(2)
     expect(diagnostics.some(item => item.code === 'MATERIAL_FACET_DISPOSE_FAILED')).toBe(true)
   })
+
+  it.each(['before', 'after'] as const)(
+    'isolates every destroy cleanup when custom host clear throws %s DOM mutation',
+    async (throwAt) => {
+      const mount = document.createElement('div')
+      const host = createCustomViewerHost({ document, mount })
+      const diagnosticMessages: string[] = []
+      const viewer = createViewer({ host })
+      await viewer.open({
+        schema: fixedSchema([]),
+        onDiagnostic(event) {
+          if (event.code === 'MATERIAL_DISPOSE_ERROR')
+            diagnosticMessages.push(event.message)
+          throw new Error('diagnostic observer failed')
+        },
+      })
+      const state = viewer as unknown as {
+        _renderSurface: { dispose: () => void }
+        _layoutRuntime: { dispose: () => Promise<void> }
+        _materials: { dispose: () => Promise<readonly never[]> }
+        _fontManager: { clear: () => void }
+        _textMeasure: { clear: () => void }
+        _resourceReadiness: { clear: () => void }
+      }
+      state._renderSurface = { dispose: () => {
+        throw new Error('render cleanup')
+      } }
+      state._layoutRuntime = { dispose: async () => {
+        throw new Error('layout cleanup')
+      } }
+      state._materials = { dispose: async () => {
+        throw new Error('material cleanup')
+      } }
+      state._fontManager = { clear: () => {
+        throw new Error('font cleanup')
+      } }
+      state._textMeasure = { clear: () => {
+        throw new Error('text cleanup')
+      } }
+      state._resourceReadiness = { clear: () => {
+        throw new Error('resource cleanup')
+      } }
+      host.clear = () => {
+        if (throwAt === 'after')
+          mount.replaceChildren()
+        throw new Error('host cleanup')
+      }
+
+      await expect(viewer.destroy()).resolves.toBeUndefined()
+
+      expect(diagnosticMessages).toEqual([
+        'render cleanup',
+        'layout cleanup',
+        'material cleanup',
+        'font cleanup',
+        'text cleanup',
+        'resource cleanup',
+        'host cleanup',
+      ])
+      expect(mount.childNodes).toHaveLength(0)
+      expect(viewer.schema).toBeUndefined()
+      expect(viewer.data).toEqual({})
+    },
+  )
 
   it('repeats legacy page-number nodes from manifest layout metadata', async () => {
     const container = document.createElement('div')
@@ -1353,7 +1701,7 @@ describe('viewer audit risk regressions', () => {
     await viewer.print({ driverId: 'boom-print' })
     await Promise.resolve()
 
-    expect(diagnostics.some(d => d.code === 'FONT_LOAD_FAILED')).toBe(true)
+    expect(diagnostics.some(d => d.code === 'VIEWER_FONT_PREPARE_FAILED')).toBe(true)
     expect(diagnostics.some(d => d.code === 'EXPORTER_ERROR')).toBe(true)
     expect(diagnostics.some(d => d.code === 'PRINT_ERROR')).toBe(true)
     expect(diagnostics.some(d => d.code === 'DIAGNOSTIC_HOOK_ERROR')).toBe(true)

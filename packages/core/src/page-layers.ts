@@ -92,6 +92,7 @@ export function planRepeatedOverlays(input: {
   readonly profile: CompiledMaterialProfile
   readonly pageCount: number
   readonly paintableNodeIds: ReadonlySet<string>
+  readonly occupiedNodeIds?: ReadonlySet<string>
 }): readonly RepeatedOverlayPlacement[] {
   if (!Number.isSafeInteger(input.pageCount) || input.pageCount < 0)
     throw new Error('REPEATED_OVERLAY_PAGE_COUNT_INVALID')
@@ -109,18 +110,35 @@ export function planRepeatedOverlays(input: {
     throw new Error('PAGE_REPEAT_OVERLAY_BUDGET_EXCEEDED')
 
   const placements: RepeatedOverlayPlacement[] = []
+  const occupiedNodeIds = new Set(input.occupiedNodeIds)
   for (const node of repeatedNodes) {
     for (let pageIndex = 0; pageIndex < input.pageCount; pageIndex++) {
+      const virtualNodeId = mintRepeatedVirtualNodeId(node.id, pageIndex, occupiedNodeIds)
+      occupiedNodeIds.add(virtualNodeId)
       placements.push(Object.freeze({
         nodeId: node.id,
         pageIndex,
-        virtualNodeId: `${node.id}__p${pageIndex}`,
+        virtualNodeId,
         virtualInstanceKey: JSON.stringify(['page-repeat-instance', node.id, pageIndex]),
         virtualFragmentId: JSON.stringify(['page-repeat-fragment', node.id, pageIndex]),
       }))
     }
   }
   return Object.freeze(placements)
+}
+
+function mintRepeatedVirtualNodeId(
+  sourceNodeId: string,
+  pageIndex: number,
+  occupiedNodeIds: ReadonlySet<string>,
+): string {
+  const base = `${sourceNodeId}__p${pageIndex}`
+  if (!occupiedNodeIds.has(base))
+    return base
+  let suffix = 1
+  while (occupiedNodeIds.has(`${base}__v${suffix}`))
+    suffix++
+  return `${base}__v${suffix}`
 }
 
 export function resolvePageLayers(page: Pick<PageSchema, 'layers'>): ResolvedPageLayer[] {

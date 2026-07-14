@@ -21,6 +21,10 @@ export interface ViewerOptions {
   host?: ViewerHost
   iframe?: HTMLIFrameElement
   fontProvider?: FontProvider
+  prepareAsset?: (
+    value: string,
+    signal: AbortSignal,
+  ) => Promise<Readonly<{ state: 'ready' | 'failed', message?: string }>>
   browserDom?: {
     policy?: ViewerTreePolicy
     imperativeDom?: readonly string[]

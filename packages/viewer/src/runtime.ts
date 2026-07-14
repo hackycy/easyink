@@ -1,7 +1,10 @@
-import type { InternalHooks, MaterialLayoutPlan, MaterialLoadDiagnostic, MaterialNodeLoadState, MaterialTextMeasureInput, PagePlan, PaginationResult, ViewerMeasureResult } from '@easyink/core'
+import type { CompiledMaterialProfile, InternalHooks, MaterialLayoutPlan, MaterialLoadDiagnostic, MaterialNodeLoadState, PagePlan, PaginationResult, ViewerMeasureResult } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
+import type { CommittedPageSlotRegistry } from './committed-page-slots'
 import type { CommittedPagePlan } from './layout-runtime'
+import type { ReaderLease } from './reader-lease'
 import type { RenderTaskToken } from './render-task'
+import type { ResolvedRuntimeModel } from './runtime-model-resolver'
 import type {
   PrintDriver,
   ViewerDataUpdateOptions,
@@ -19,22 +22,25 @@ import type {
   ViewerRevisionSnapshot,
 } from './types'
 import type { ViewerHost } from './viewer-host'
-import { snapshotViewerTreePolicy } from '@easyink/browser-dom'
+import { BrowserTextMeasureService, snapshotViewerTreePolicy } from '@easyink/browser-dom'
 import { createInternalHooks, createLayoutConstraintKey, createNonFragmentingMaterialPlans, FontManager, freezeMaterialLayoutPlan, loadDocumentWithProfile, MeasureService, planRepeatedOverlays, runLayoutPipeline, runPagination, VIEWER_TREE_ABSOLUTE_MAX_NODES, walkMaterialNodes } from '@easyink/core'
 import { cloneJsonValue, deepClone, deepFreezeJsonValue, UNIT_FACTOR } from '@easyink/shared'
 import { applyBindingsToProps, projectBindings, walkProfileMaterialNodes } from './binding-projector'
+import { createCommittedPageSlotRegistry } from './committed-page-slots'
 import { resolveConditionalSchema } from './conditional-schema'
 import { resolveEffectiveOutputStates } from './effective-output-state'
-import { collectFontFamilies, loadAndInjectFonts } from './font-loader'
+import { collectFontFamilies, createFontPreparationAdapter, loadAndInjectFonts } from './font-loader'
 import { createDefaultLayoutRuntime } from './layout-runtime'
 import { ProfileMaterialRuntime } from './material-runtime'
 import { createBoundedMeasureScheduler } from './measure-scheduler'
 import { PageDomVirtualizer } from './page-dom-virtualizer'
 import { resolvePrintPolicy } from './print-policy'
 import { runPrintWithIsolation } from './print-service'
+import { createReaderLeaseCoordinator } from './reader-lease'
 import { createReadonlyMap } from './readonly-map'
 import { mountCommittedMaterial, renderPages, RenderSurface } from './render-surface'
 import { RenderTaskCoordinator } from './render-task'
+import { createResourceReadinessCoordinator } from './resource-readiness'
 import { createRuntimeModelResolutionCache } from './runtime-model-resolver'
 import { safeSummarizeThrown } from './safe-thrown'
 import { createThumbnails } from './thumbnail-pipeline'
@@ -61,6 +67,19 @@ interface ViewerInputState {
   readonly onDiagnostic?: (event: ViewerDiagnosticEvent) => void
 }
 
+interface CommittedViewerBatch {
+  readonly schema: DocumentSchema
+  readonly data: Record<string, unknown>
+  readonly renderedPages: readonly ViewerPageMetrics[]
+  readonly pageVirtualizer?: PageDomVirtualizer
+  readonly container?: HTMLElement
+}
+
+interface MountedCommittedPages {
+  readonly virtualizer: PageDomVirtualizer
+  readonly slots: CommittedPageSlotRegistry
+}
+
 export class ViewerRuntime {
   private _options: ViewerOptions
   private _schema?: DocumentSchema
@@ -79,15 +98,18 @@ export class ViewerRuntime {
   private _destroyPromise?: Promise<void>
   private _emittingHookFailure = false
   private _pageVirtualizer?: PageDomVirtualizer
+  private _pageSlots?: CommittedPageSlotRegistry
   private _operation = 0
   private readonly _performanceBudget: Readonly<ViewerPerformanceBudget>
   private readonly _tasks = new RenderTaskCoordinator()
   private readonly _layoutRuntime: ReturnType<typeof createDefaultLayoutRuntime>
   private readonly _renderSurface?: RenderSurface
+  private readonly _resourceReadiness: ReturnType<typeof createResourceReadinessCoordinator>
+  private readonly _textMeasure?: BrowserTextMeasureService
+  private readonly _readerLeases = createReaderLeaseCoordinator()
   private _requested: ViewerInputState = initialViewerInputState()
   private _committed: ViewerInputState = initialViewerInputState()
   private _lastRenderResult: ViewerRenderResult = emptyRenderResult([])
-  private readonly _preparedResourceKeys = new Set<string>()
   private _requestedDocumentRevision = 0
   private _requestedDataRevision = 0
   private _committedDocumentRevision = 0
@@ -116,6 +138,19 @@ export class ViewerRuntime {
           ? createBrowserViewerHost(options.container)
           : undefined)
     this._fontManager = new FontManager(options.fontProvider)
+    const textMeasureDocument = this._host?.document ?? getGlobalDocument()
+    this._textMeasure = textMeasureDocument
+      ? new BrowserTextMeasureService(textMeasureDocument, { maxEntries: this._performanceBudget.measureCacheEntries })
+      : undefined
+    this._resourceReadiness = createResourceReadinessCoordinator({
+      prepareFont: this._host
+        ? createFontPreparationAdapter(this._fontManager, this._host.document)
+        : (value, signal) => prepareFontWithoutHost(this._fontManager, value, signal),
+      prepareAsset: options.prepareAsset ?? (async (_value, signal) => {
+        throwIfAborted(signal)
+        return Object.freeze({ state: 'ready' as const })
+      }),
+    })
     this._hooks = createInternalHooks()
     this._renderSurface = this._host
       ? new RenderSurface(this._host.mount, { onDiagnostic: diagnostic => this.emitDiagnostic(diagnostic) })
@@ -126,7 +161,11 @@ export class ViewerRuntime {
       measureService: new MeasureService({ maxEntries: this._performanceBudget.measureCacheEntries }),
       runtimeModelCache: createRuntimeModelResolutionCache(options.profile, this._performanceBudget.measureCacheEntries),
       scheduler: createBoundedMeasureScheduler(this._performanceBudget.maxMeasureInFlight),
-      textMeasure: input => Promise.resolve(measureTextDeterministically(input)),
+      textMeasure: (input, resourceRevision, signal) => {
+        if (!this._textMeasure)
+          throw new Error('VIEWER_TEXT_MEASURE_DOCUMENT_UNAVAILABLE')
+        return this._textMeasure.measure(input, resourceRevision, signal)
+      },
       budget: {
         maxDataNodes: this._performanceBudget.maxInlineDataNodes,
         maxDataStringBytes: this._performanceBudget.maxInlineDataStringBytes,
@@ -139,6 +178,7 @@ export class ViewerRuntime {
       reportDiagnostic: diagnostic => this.emitRuntimeDiagnostic(diagnostic),
       prepareResources: (input, signal) => this.prepareLayoutResources(
         input.document,
+        input.runtimeModels,
         signal,
         input.reportDiagnostic ?? (diagnostic => this.emitRuntimeDiagnostic(diagnostic)),
       ),
@@ -395,53 +435,68 @@ export class ViewerRuntime {
       return
 
     const diagnostics = [...candidate.diagnostics, ...committedPlan.diagnostics.map(layoutDiagnosticToViewer)]
-    let candidateVirtualizer: PageDomVirtualizer | undefined
-    if (this._renderSurface) {
-      try {
+    let writerLease: ReaderLease
+    try {
+      writerLease = await this._readerLeases.acquireWriter(task.signal)
+    }
+    catch (error) {
+      if (!this._tasks.isCurrent(task.generation))
+        return
+      throw error
+    }
+    try {
+      if (!this._tasks.isCurrent(task.generation))
+        return
+      let mountedPages: MountedCommittedPages | undefined
+      if (this._renderSurface) {
         await this._renderSurface.commitAtomically((root, transaction) => {
-          candidateVirtualizer = this.mountCommittedPages(root, committedPlan, candidate, diagnostics, transaction)
-          transaction.register(candidateVirtualizer)
+          mountedPages = this.mountCommittedPages(root, committedPlan, candidate, diagnostics, transaction)
+          transaction.register(mountedPages.virtualizer)
         }, task.signal)
-      }
-      catch (error) {
-        if (!this._tasks.isCurrent(task.generation))
-          return
-        throw error
       }
       if (!this._tasks.isCurrent(task.generation))
         return
-    }
 
-    const pages = committedPlan.pages.map(page => ({
-      index: page.index,
-      width: page.width,
-      height: page.height,
-      elementCount: page.fragments.length,
-      element: this._host?.mount.querySelector(`[data-page-slot-index="${page.index}"]`) as HTMLElement | undefined,
-    }))
-    this._committed = candidate
-    this._schema = candidate.document
-    this._data = candidate.data as Record<string, unknown>
-    this._nodeStates = candidate.nodeStates
-    this._loadDiagnostics = [...candidate.diagnostics]
-    this._diagnosticHandler = candidate.onDiagnostic
-    this._pageVirtualizer = candidateVirtualizer
-    this._renderedPageMetrics = pages.map(page => ({
-      index: page.index,
-      width: page.width,
-      height: page.height,
-      unit: candidate.document!.unit,
-    }))
-    this._committedDocumentRevision = candidate.documentRevision
-    this._committedDataRevision = candidate.dataRevision
-    this._committedResourceRevision = committedPlan.resourceRevision
-    this._lastRenderResult = {
-      pages,
-      thumbnails: createThumbnails(pages, candidate.document.unit),
-      diagnostics,
+      const pages = committedPlan.pages.map(page => ({
+        index: page.index,
+        width: page.width,
+        height: page.height,
+        elementCount: page.fragments.length,
+        element: mountedPages?.slots.get(page.index),
+      }))
+      this._committed = candidate
+      this._schema = candidate.document
+      this._data = candidate.data as Record<string, unknown>
+      this._nodeStates = candidate.nodeStates
+      this._loadDiagnostics = [...candidate.diagnostics]
+      this._diagnosticHandler = candidate.onDiagnostic
+      this._pageVirtualizer = mountedPages?.virtualizer
+      this._pageSlots = mountedPages?.slots
+      this._renderedPageMetrics = pages.map(page => ({
+        index: page.index,
+        width: page.width,
+        height: page.height,
+        unit: candidate.document!.unit,
+      }))
+      this._committedDocumentRevision = candidate.documentRevision
+      this._committedDataRevision = candidate.dataRevision
+      this._committedResourceRevision = committedPlan.resourceRevision
+      this._lastRenderResult = {
+        pages,
+        thumbnails: createThumbnails(pages, candidate.document.unit),
+        diagnostics,
+      }
+      if (this._host)
+        this.applyViewportOffset(this._host.mount)
     }
-    if (this._host)
-      this.applyViewportOffset(this._host.mount)
+    catch (error) {
+      if (!this._tasks.isCurrent(task.generation))
+        return
+      throw error
+    }
+    finally {
+      writerLease.release()
+    }
     diagnostics.forEach(diagnostic => this.emitDiagnostic(diagnostic))
   }
 
@@ -473,14 +528,17 @@ export class ViewerRuntime {
     candidate: ViewerInputState,
     diagnostics: ViewerDiagnosticEvent[],
     transaction: import('./render-surface').RenderSurfaceTransaction,
-  ): PageDomVirtualizer {
+  ): MountedCommittedPages {
     const document = root.ownerDocument
     const zoom = this.resolveCandidateZoom(candidate.document!, this._host?.mount)
     const unit = candidate.document!.unit
     const virtualizer = new PageDomVirtualizer({ overscan: this._performanceBudget.pageDomOverscan })
+    const slots = createCommittedPageSlotRegistry()
     transaction.register(virtualizer)
+    transaction.register(() => slots.clear())
     for (const page of committedPlan.pages) {
       const slot = createCommittedPageSlot(document, page.index, page.width, page.height, unit, zoom)
+      slots.register(page.index, slot)
       virtualizer.register({
         index: page.index,
         widthPx: page.width * getPxFactor(unit) * zoom,
@@ -502,27 +560,21 @@ export class ViewerRuntime {
       root.appendChild(slot)
       transaction.checkpoint()
     }
-    return virtualizer
+    return Object.freeze({ virtualizer, slots })
   }
 
   private async prepareLayoutResources(
     document: DocumentSchema,
+    runtimeModels: ReadonlyMap<string, ResolvedRuntimeModel>,
     signal: AbortSignal,
     reportDiagnostic: (diagnostic: unknown) => void,
   ): Promise<number> {
     throwIfAborted(signal)
-    const families = collectFontFamilies(document, this._options.profile)
-    if (this._host && this._fontManager.provider) {
-      const diagnostics = await loadAndInjectFonts(families, this._fontManager, this._host.document)
-      throwIfAborted(signal)
-      diagnostics.forEach(reportDiagnostic)
-    }
-    for (const family of families) {
-      const key = `font:${family}`
-      if (!this._preparedResourceKeys.has(key))
-        this._preparedResourceKeys.add(key)
-    }
-    return this._preparedResourceKeys.size
+    const resources = collectDeclaredLayoutResources(document, runtimeModels, this._options.profile)
+    const result = await this._resourceReadiness.prepare(resources, signal)
+    throwIfAborted(signal)
+    result.diagnostics.forEach(reportDiagnostic)
+    return result.resourceRevision
   }
 
   private emitRuntimeDiagnostic(value: unknown): void {
@@ -530,7 +582,7 @@ export class ViewerRuntime {
   }
 
   private emitCandidateDiagnostic(candidate: ViewerInputState, value: unknown): void {
-    candidate.onDiagnostic?.(runtimeDiagnosticToViewer(value))
+    notifyDiagnosticObserver(candidate.onDiagnostic, runtimeDiagnosticToViewer(value))
   }
 
   async print(options: ViewerPrintOptions = {}): Promise<void> {
@@ -555,69 +607,72 @@ export class ViewerRuntime {
       ? options
       : { ...options, pageSizeMode: driver.defaults.pageSizeMode }
 
-    const printPolicy = this.createPrintPolicy(resolvedOptions)
-    if (!printPolicy)
-      return
+    await this.withCommittedBatch('print', async (batch) => {
+      const printPolicy = this.createPrintPolicy(resolvedOptions, batch)
+      if (!printPolicy)
+        return
 
-    if (!shouldUseBrowser) {
-      const customDriver = driver!
-      try {
-        await this.withMaterializedPages('print', async () => {
+      if (!shouldUseBrowser) {
+        const customDriver = driver!
+        try {
           options.onPhase?.({ phase: 'preparing', message: customDriver.id })
           await customDriver.print({
-            schema: this._schema!,
-            data: this._data,
+            schema: batch.schema,
+            data: batch.data,
             entry: 'preview',
             printPolicy,
-            renderedPages: this.renderedPages,
-            container: this._host?.mount,
+            renderedPages: batch.renderedPages.map(page => ({ ...page })),
+            container: batch.container,
             onPhase: options.onPhase,
             onProgress: options.onProgress,
             onDiagnostic: event => this.emitTaskDiagnostic(event, options.onDiagnostic),
           })
           options.onPhase?.({ phase: 'completed', message: customDriver.id })
-        })
+        }
+        catch (err) {
+          this.emitPrintError(err, options.onDiagnostic)
+          if (options.throwOnError)
+            throw err
+        }
+        return
       }
-      catch (err) {
-        this.emitPrintError(err, options.onDiagnostic)
-        if (options.throwOnError)
-          throw err
-      }
-      return
-    }
 
-    // Fallback: window.print with DOM isolation
-    const fallbackWindow = this._host?.window ?? getGlobalWindow()
-    if (fallbackWindow) {
-      if (this._host) {
-        try {
-          this.withMaterializedPages('print', () => runPrintWithIsolation(this._host!, printPolicy))
+      // Fallback: window.print with DOM isolation
+      const fallbackWindow = this._host?.window ?? getGlobalWindow()
+      if (fallbackWindow) {
+        if (this._host) {
+          try {
+            runPrintWithIsolation(this._host, printPolicy)
+          }
+          catch (err) {
+            this.emitPrintError(err, options.onDiagnostic)
+            if (options.throwOnError)
+              throw err
+          }
         }
-        catch (err) {
-          this.emitPrintError(err, options.onDiagnostic)
-          if (options.throwOnError)
-            throw err
+        else {
+          try {
+            fallbackWindow.print()
+          }
+          catch (err) {
+            this.emitPrintError(err, options.onDiagnostic)
+            if (options.throwOnError)
+              throw err
+          }
         }
       }
-      else {
-        try {
-          fallbackWindow.print()
-        }
-        catch (err) {
-          this.emitPrintError(err, options.onDiagnostic)
-          if (options.throwOnError)
-            throw err
-        }
-      }
-    }
+    })
   }
 
-  private createPrintPolicy(options: ViewerPrintOptions = {}): ViewerPrintPolicy | undefined {
+  private createPrintPolicy(
+    options: ViewerPrintOptions,
+    batch: CommittedViewerBatch,
+  ): ViewerPrintPolicy | undefined {
     try {
       return resolvePrintPolicy({
-        schema: this._schema!,
+        schema: batch.schema,
         options,
-        renderedPages: this._renderedPageMetrics,
+        renderedPages: batch.renderedPages.map(page => ({ ...page })),
       })
     }
     catch (err) {
@@ -674,19 +729,18 @@ export class ViewerRuntime {
       return
     }
 
-    const context = {
-      schema: this._schema,
-      data: this._data,
-      entry: options.entry ?? 'api' as const,
-      renderedPages: this.renderedPages,
-      container: this._host?.mount,
-      onPhase: options.onPhase,
-      onProgress: options.onProgress,
-      onDiagnostic: (event: ViewerDiagnosticEvent) => this.emitTaskDiagnostic(event, options.onDiagnostic),
-    }
-
     try {
-      return await this.withMaterializedPages('export', async () => {
+      return await this.withCommittedBatch('export', async (batch) => {
+        const context = {
+          schema: batch.schema,
+          data: batch.data,
+          entry: options.entry ?? 'api' as const,
+          renderedPages: batch.renderedPages.map(page => ({ ...page })),
+          container: batch.container,
+          onPhase: options.onPhase,
+          onProgress: options.onProgress,
+          onDiagnostic: (event: ViewerDiagnosticEvent) => this.emitTaskDiagnostic(event, options.onDiagnostic),
+        }
         if (exporter.prepare) {
           options.onPhase?.({ phase: 'preparing', message: exporter.id })
           await exporter.prepare(context)
@@ -710,6 +764,7 @@ export class ViewerRuntime {
     if (this._destroyPromise)
       return this._destroyPromise
     this._destroyed = true
+    this._readerLeases.close()
     this._tasks.dispose()
     this._destroyPromise = Promise.resolve().then(() => this.finishDestroy())
     return this._destroyPromise
@@ -718,6 +773,7 @@ export class ViewerRuntime {
   private async finishDestroy(): Promise<void> {
     ++this._operation
     const diagnostics: ViewerDiagnosticEvent[] = []
+    await this._readerLeases.waitForIdle(new AbortController().signal)
     try {
       this._renderSurface?.dispose()
     }
@@ -725,6 +781,7 @@ export class ViewerRuntime {
       appendDisposeDiagnostics(diagnostics, error)
     }
     this._pageVirtualizer = undefined
+    this._pageSlots = undefined
     try {
       await this._layoutRuntime.dispose()
     }
@@ -738,18 +795,52 @@ export class ViewerRuntime {
     catch (error) {
       appendDisposeDiagnostics(diagnostics, error)
     }
+    diagnostics.push(...facetDiagnostics.map(facetDiagnosticToViewer))
+    try {
+      this._fontManager.clear()
+    }
+    catch (error) {
+      appendDisposeDiagnostics(diagnostics, error)
+    }
+    try {
+      this._textMeasure?.clear()
+    }
+    catch (error) {
+      appendDisposeDiagnostics(diagnostics, error)
+    }
+    try {
+      this._resourceReadiness.clear()
+    }
+    catch (error) {
+      appendDisposeDiagnostics(diagnostics, error)
+    }
+    try {
+      this._host?.clear()
+    }
+    catch (error) {
+      appendDisposeDiagnostics(diagnostics, error)
+    }
+    try {
+      this._host?.mount.replaceChildren()
+    }
+    catch (error) {
+      appendDisposeDiagnostics(diagnostics, error)
+    }
     this._schema = undefined
     this._data = {}
     this._requested = initialViewerInputState()
     this._committed = initialViewerInputState()
     this._exporters = []
     this._printDrivers = []
+    this._nodeStates = createReadonlyMap(new Map())
+    this._loadDiagnostics = []
     this._renderedPageMetrics = []
-    this._preparedResourceKeys.clear()
-    this._fontManager.clear()
-    this._host?.clear()
-    diagnostics.push(...facetDiagnostics.map(facetDiagnosticToViewer))
+    this._lastRenderResult = emptyRenderResult([])
+    this._committedDocumentRevision = 0
+    this._committedDataRevision = 0
+    this._committedResourceRevision = 0
     diagnostics.forEach(diagnostic => this.emitDiagnostic(diagnostic))
+    this._diagnosticHandler = undefined
   }
 
   // ---------------------------------------------------------------------------
@@ -839,6 +930,10 @@ export class ViewerRuntime {
       profile: this._options.profile,
       pageCount: totalPages,
       paintableNodeIds,
+      occupiedNodeIds: new Set([
+        ...repeatedElements.map(node => node.id),
+        ...plan.pages.flatMap(page => page.elements.map(node => node.id)),
+      ]),
     })
 
     for (const placement of placements) {
@@ -1038,9 +1133,30 @@ export class ViewerRuntime {
     }
   }
 
-  private withMaterializedPages<T>(mode: 'print' | 'export', action: () => T): T {
-    const pageVirtualizer = this._pageVirtualizer
-    return pageVirtualizer ? pageVirtualizer.withMaterializedPages(mode, action) : action()
+  private async withCommittedBatch<T>(
+    mode: 'print' | 'export',
+    action: (batch: CommittedViewerBatch) => T | Promise<T>,
+  ): Promise<T> {
+    const lease = await this._readerLeases.acquire()
+    try {
+      const schema = this._schema
+      if (!schema)
+        throw new Error('No schema loaded')
+      const batch: CommittedViewerBatch = Object.freeze({
+        schema,
+        data: this._data,
+        renderedPages: Object.freeze(this._renderedPageMetrics.map(page => Object.freeze({ ...page }))),
+        ...(this._pageVirtualizer ? { pageVirtualizer: this._pageVirtualizer } : {}),
+        ...(this._host ? { container: this._host.mount } : {}),
+      })
+      const run = () => action(batch)
+      return await (batch.pageVirtualizer
+        ? batch.pageVirtualizer.withMaterializedPages(mode, run)
+        : run())
+    }
+    finally {
+      lease.release()
+    }
   }
 
   private ensureNotDestroyed(): void {
@@ -1121,17 +1237,22 @@ export class ViewerRuntime {
   }
 
   private emitDiagnostic(event: ViewerDiagnosticEvent): void {
-    this._diagnosticHandler?.(event)
-    this._hooks.diagnosticsEmitted.call(event).catch(() => {
+    notifyDiagnosticObserver(this._diagnosticHandler, event)
+    try {
+      this._hooks.diagnosticsEmitted.call(event).catch(() => {
+        this.emitDiagnosticHookError()
+      })
+    }
+    catch {
       this.emitDiagnosticHookError()
-    })
+    }
   }
 
   private emitTaskDiagnostic(
     event: ViewerDiagnosticEvent,
     onDiagnostic?: (event: ViewerDiagnosticEvent) => void,
   ): void {
-    onDiagnostic?.(event)
+    notifyDiagnosticObserver(onDiagnostic, event)
     this.emitDiagnostic(event)
   }
 
@@ -1157,7 +1278,7 @@ export class ViewerRuntime {
       return
     this._emittingHookFailure = true
     try {
-      this._diagnosticHandler?.({
+      notifyDiagnosticObserver(this._diagnosticHandler, {
         category: 'viewer',
         severity: 'warning',
         code: 'DIAGNOSTIC_HOOK_ERROR',
@@ -1173,6 +1294,22 @@ export class ViewerRuntime {
 
 function getGlobalWindow(): Window | undefined {
   return typeof window === 'undefined' ? undefined : window
+}
+
+function getGlobalDocument(): Document | undefined {
+  return typeof document === 'undefined' ? undefined : document
+}
+
+function notifyDiagnosticObserver(
+  observer: ((event: ViewerDiagnosticEvent) => void) | undefined,
+  event: ViewerDiagnosticEvent,
+): void {
+  try {
+    observer?.(event)
+  }
+  catch {
+    // Diagnostics are observational and must never affect runtime control flow.
+  }
 }
 
 function toPagePlan(result: PaginationResult): PagePlan {
@@ -1319,17 +1456,43 @@ function snapshotNodeStates(
   return createReadonlyMap(states)
 }
 
-function measureTextDeterministically(input: MaterialTextMeasureInput): Readonly<{ width: number, height: number }> {
-  const fontSize = input.style.fontSize
-  const lineHeight = fontSize * input.style.lineHeight
-  const unwrappedWidth = [...input.text].length * fontSize * 0.6
-  const lines = input.availableWidth <= 0
-    ? 1
-    : Math.max(1, Math.ceil(unwrappedWidth / input.availableWidth))
-  return Object.freeze({
-    width: Math.min(input.availableWidth, unwrappedWidth),
-    height: lineHeight * lines,
+function collectDeclaredLayoutResources(
+  document: DocumentSchema,
+  runtimeModels: ReadonlyMap<string, ResolvedRuntimeModel>,
+  profile: CompiledMaterialProfile,
+): Array<Readonly<{ kind: 'font' | 'asset', value: string }>> {
+  const resources: Array<Readonly<{ kind: 'font' | 'asset', value: string }>> = []
+  const pageFont = document.page.font?.trim()
+  if (pageFont)
+    resources.push(Object.freeze({ kind: 'font', value: pageFont }))
+  const measurableNodeIds = new Set([...runtimeModels.values()].map(model => model.nodeId))
+  walkMaterialNodes(document, profile, (node, _address, introspection) => {
+    if (!measurableNodeIds.has(node.id))
+      return
+    for (const resource of introspection.resources) {
+      const value = resource.value.trim()
+      if (value)
+        resources.push(Object.freeze({ kind: resource.kind, value }))
+    }
   })
+  return resources
+}
+
+async function prepareFontWithoutHost(
+  fontManager: FontManager,
+  value: string,
+  signal: AbortSignal,
+): Promise<Readonly<{ state: 'ready' | 'failed', message?: string }>> {
+  throwIfAborted(signal)
+  try {
+    await fontManager.loadFont(value)
+    throwIfAborted(signal)
+    return Object.freeze({ state: 'ready' })
+  }
+  catch (cause) {
+    throwIfAborted(signal)
+    return Object.freeze({ state: 'failed', message: safeSummarizeThrown(cause).message })
+  }
 }
 
 function mountCommittedPage(input: {

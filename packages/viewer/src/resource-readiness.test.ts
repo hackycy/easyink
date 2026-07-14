@@ -35,7 +35,7 @@ describe('resourceReadinessCoordinator', () => {
     ], new AbortController().signal)
     expect(repeated.resourceRevision).toBe(2)
     expect(repeated.diagnostics).toEqual(first.diagnostics)
-    expect(prepareAsset).toHaveBeenCalledTimes(1)
+    expect(prepareAsset).toHaveBeenCalledTimes(2)
   })
 
   it('uses injective tuple keys for delimiter-bearing values and trims declared values', async () => {
@@ -76,7 +76,7 @@ describe('resourceReadinessCoordinator', () => {
     expect(coordinator.resourceRevision).toBe(1)
   })
 
-  it('turns dependency throws into a cached terminal failure', async () => {
+  it('retries dependency throws without advancing an unchanged failed terminal state', async () => {
     const prepareFont = vi.fn(async () => {
       throw new Error('font host unavailable')
     })
@@ -97,7 +97,50 @@ describe('resourceReadinessCoordinator', () => {
       }],
     })
     expect(second).toEqual(first)
-    expect(prepareFont).toHaveBeenCalledOnce()
+    expect(prepareFont).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries failed resources and versions only failed-to-ready terminal changes', async () => {
+    const outcomes = [
+      { state: 'failed' as const, message: 'first failure' },
+      { state: 'failed' as const, message: 'second failure' },
+      { state: 'ready' as const },
+    ]
+    const prepareFont = vi.fn(async () => outcomes.shift()!)
+    const coordinator = createResourceReadinessCoordinator({
+      prepareFont,
+      prepareAsset: async () => ({ state: 'ready' as const }),
+    })
+    const resource = [{ kind: 'font' as const, value: 'Brand' }]
+
+    const first = await coordinator.prepare(resource, new AbortController().signal)
+    const second = await coordinator.prepare(resource, new AbortController().signal)
+    const third = await coordinator.prepare(resource, new AbortController().signal)
+    const fourth = await coordinator.prepare(resource, new AbortController().signal)
+
+    expect([first.resourceRevision, second.resourceRevision, third.resourceRevision, fourth.resourceRevision])
+      .toEqual([1, 1, 2, 2])
+    expect(first.diagnostics).toEqual([expect.objectContaining({ message: 'first failure' })])
+    expect(second.diagnostics).toEqual([expect.objectContaining({ message: 'second failure' })])
+    expect(third.diagnostics).toEqual([])
+    expect(prepareFont).toHaveBeenCalledTimes(3)
+  })
+
+  it('clears terminal state and revision', async () => {
+    const prepareFont = vi.fn(async () => ({ state: 'ready' as const }))
+    const coordinator = createResourceReadinessCoordinator({
+      prepareFont,
+      prepareAsset: async () => ({ state: 'ready' as const }),
+    })
+
+    await coordinator.prepare([{ kind: 'font', value: 'Brand' }], new AbortController().signal)
+    expect(coordinator.resourceRevision).toBe(1)
+
+    coordinator.clear()
+    expect(coordinator.resourceRevision).toBe(0)
+    await coordinator.prepare([{ kind: 'font', value: 'Brand' }], new AbortController().signal)
+    expect(prepareFont).toHaveBeenCalledTimes(2)
+    expect(coordinator.resourceRevision).toBe(1)
   })
 
   it('preserves pre-abort reason without invoking dependencies', async () => {

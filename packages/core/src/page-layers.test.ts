@@ -49,6 +49,21 @@ describe('page layers', () => {
     })).toEqual([])
   })
 
+  it('mints deterministic virtual node ids around explicitly occupied identities', () => {
+    const placements = planRepeatedOverlays({
+      nodes: [{ id: 'page', type: 'page-number' }] as never,
+      profile: { getManifest: () => ({ common: { layout: { pageRepeat: 'every-output-page' } } }) } as never,
+      pageCount: 2,
+      paintableNodeIds: new Set(['page']),
+      occupiedNodeIds: new Set(['page__p0', 'page__p0__v1']),
+    })
+
+    expect(placements.map(placement => placement.virtualNodeId)).toEqual([
+      'page__p0__v2',
+      'page__p1',
+    ])
+  })
+
   it('enforces the shared viewer node budget before allocating repeated overlays', () => {
     const input = {
       nodes: [{ id: 'page', type: 'page-number' }] as never,
