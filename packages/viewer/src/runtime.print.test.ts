@@ -509,6 +509,29 @@ describe('viewer runtime print behavior', () => {
     await expect(viewer.print({ driverId: 'bad-print-driver', throwOnError: true })).rejects.toThrow('print boom')
   })
 
+  it('revokes a custom print lease when its callback awaits destroy', async () => {
+    const container = document.createElement('div')
+    const viewer = createViewer({ container })
+    let destroying: Promise<void> | undefined
+    viewer.registerPrintDriver({
+      id: 'destroying-print-driver',
+      async print() {
+        destroying = viewer.destroy()
+        await destroying
+      },
+    })
+    await viewer.open({ schema: createFixedSchema() })
+
+    await expect(viewer.print({ driverId: 'destroying-print-driver', throwOnError: true }))
+      .rejects
+      .toThrow('VIEWER_OUTPUT_DESTROYED')
+    await destroying
+    expect(viewer.destroy()).toBe(destroying)
+    const leases = (viewer as unknown as { _readerLeases: { activeReaders: number, pendingReaders: number, pendingWriters: number } })._readerLeases
+    expect(leases).toMatchObject({ activeReaders: 0, pendingReaders: 0, pendingWriters: 0 })
+    expect(container.childNodes).toHaveLength(0)
+  })
+
   it('replaces print drivers with the same id', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
@@ -535,7 +558,7 @@ describe('viewer runtime print behavior', () => {
 })
 
 describe('viewer runtime export behavior', () => {
-  it('waits for an active export lease before destroying the committed batch', async () => {
+  it('revokes an active export lease before destroying the committed batch', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
     let releaseExport: (() => void) | undefined
@@ -559,15 +582,38 @@ describe('viewer runtime export behavior', () => {
     const exporting = viewer.exportDocument({ format: 'pdf', throwOnError: true })
     await started
 
-    let destroyed = false
-    const destroying = viewer.destroy().then(() => destroyed = true)
-    await Promise.resolve()
-    expect(destroyed).toBe(false)
-    expect(container.childNodes.length).toBeGreaterThan(0)
-
-    releaseExport?.()
-    await exporting
+    const destroying = viewer.destroy()
+    await expect(exporting).rejects.toThrow('VIEWER_OUTPUT_DESTROYED')
     await destroying
+    expect(container.childNodes).toHaveLength(0)
+    const leases = (viewer as unknown as { _readerLeases: { activeReaders: number, pendingReaders: number, pendingWriters: number } })._readerLeases
+    expect(leases).toMatchObject({ activeReaders: 0, pendingReaders: 0, pendingWriters: 0 })
+    releaseExport?.()
+    await Promise.resolve()
+  })
+
+  it('revokes an exporter lease when its callback awaits destroy', async () => {
+    const container = document.createElement('div')
+    const viewer = createViewer({ container })
+    let destroying: Promise<void> | undefined
+    viewer.registerExporter({
+      id: 'destroying-exporter',
+      format: 'pdf',
+      async export() {
+        destroying = viewer.destroy()
+        await destroying
+        return new Blob(['destroyed'])
+      },
+    })
+    await viewer.open({ schema: createFixedSchema() })
+
+    await expect(viewer.exportDocument({ format: 'pdf', throwOnError: true }))
+      .rejects
+      .toThrow('VIEWER_OUTPUT_DESTROYED')
+    await destroying
+    expect(viewer.destroy()).toBe(destroying)
+    const leases = (viewer as unknown as { _readerLeases: { activeReaders: number, pendingReaders: number, pendingWriters: number } })._readerLeases
+    expect(leases).toMatchObject({ activeReaders: 0, pendingReaders: 0, pendingWriters: 0 })
     expect(container.childNodes).toHaveLength(0)
   })
 

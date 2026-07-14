@@ -153,7 +153,7 @@ export class ViewerRuntime {
     })
     this._hooks = createInternalHooks()
     this._renderSurface = this._host
-      ? new RenderSurface(this._host.mount, { onDiagnostic: diagnostic => this.emitDiagnostic(diagnostic) })
+      ? new RenderSurface(this._host.mount)
       : undefined
     this._layoutRuntime = createDefaultLayoutRuntime({
       profile: options.profile,
@@ -449,13 +449,12 @@ export class ViewerRuntime {
         return
       let mountedPages: MountedCommittedPages | undefined
       if (this._renderSurface) {
-        await this._renderSurface.commitAtomically((root, transaction) => {
+        const commit = await this._renderSurface.commitAtomically((root, transaction) => {
           mountedPages = this.mountCommittedPages(root, committedPlan, candidate, diagnostics, transaction)
           transaction.register(mountedPages.virtualizer)
         }, task.signal)
+        diagnostics.push(...commit.cleanupDiagnostics)
       }
-      if (!this._tasks.isCurrent(task.generation))
-        return
 
       const pages = committedPlan.pages.map(page => ({
         index: page.index,
@@ -754,6 +753,8 @@ export class ViewerRuntime {
     }
     catch (err) {
       this.emitExportError(exporter.id, format, err, options.onDiagnostic)
+      if (err instanceof ViewerOutputDestroyedError)
+        throw err
       if (options.throwOnError)
         throw err
       return undefined
@@ -764,8 +765,10 @@ export class ViewerRuntime {
     if (this._destroyPromise)
       return this._destroyPromise
     this._destroyed = true
-    this._readerLeases.close()
+    const reason = new ViewerOutputDestroyedError()
+    this._readerLeases.close(reason)
     this._tasks.dispose()
+    this._readerLeases.revokeActive(reason)
     this._destroyPromise = Promise.resolve().then(() => this.finishDestroy())
     return this._destroyPromise
   }
@@ -930,10 +933,9 @@ export class ViewerRuntime {
       profile: this._options.profile,
       pageCount: totalPages,
       paintableNodeIds,
-      occupiedNodeIds: new Set([
-        ...repeatedElements.map(node => node.id),
-        ...plan.pages.flatMap(page => page.elements.map(node => node.id)),
-      ]),
+      occupiedNodeIds: this._schema
+        ? collectMaterialGraphNodeIds(this._schema, this._options.profile)
+        : new Set(plan.pages.flatMap(page => page.elements.map(node => node.id))),
     })
 
     for (const placement of placements) {
@@ -1150,9 +1152,11 @@ export class ViewerRuntime {
         ...(this._host ? { container: this._host.mount } : {}),
       })
       const run = () => action(batch)
-      return await (batch.pageVirtualizer
+      const actionPromise = Promise.resolve(batch.pageVirtualizer
         ? batch.pageVirtualizer.withMaterializedPages(mode, run)
         : run())
+      void actionPromise.catch(() => {})
+      return await Promise.race([actionPromise, lease.revoked])
     }
     finally {
       lease.release()
@@ -1289,6 +1293,15 @@ export class ViewerRuntime {
     finally {
       this._emittingHookFailure = false
     }
+  }
+}
+
+class ViewerOutputDestroyedError extends Error {
+  readonly code = 'VIEWER_OUTPUT_DESTROYED'
+
+  constructor() {
+    super('VIEWER_OUTPUT_DESTROYED')
+    this.name = 'ViewerOutputDestroyedError'
   }
 }
 
@@ -1476,6 +1489,15 @@ function collectDeclaredLayoutResources(
     }
   })
   return resources
+}
+
+function collectMaterialGraphNodeIds(
+  document: DocumentSchema,
+  profile: CompiledMaterialProfile,
+): ReadonlySet<string> {
+  const nodeIds = new Set<string>()
+  walkMaterialNodes(document, profile, node => nodeIds.add(node.id))
+  return nodeIds
 }
 
 async function prepareFontWithoutHost(

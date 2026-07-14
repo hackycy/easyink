@@ -236,8 +236,7 @@ describe('renderSurface', () => {
 
   it('commits successfully and reports old cleanup errors in stable reverse order', async () => {
     const host = document.createElement('div')
-    const diagnostics: ViewerDiagnosticEvent[] = []
-    const surface = new RenderSurface(host, { onDiagnostic: diagnostic => diagnostics.push(diagnostic) })
+    const surface = new RenderSurface(host)
     const calls: string[] = []
     const first = new Error('first')
     const second = new Error('second')
@@ -253,18 +252,21 @@ describe('renderSurface', () => {
     }, new AbortController().signal)
 
     let newDisposed = false
-    await expect(surface.commitAtomically((root, transaction) => {
+    const result = await surface.commitAtomically((root, transaction) => {
       root.textContent = 'new'
       transaction.register(() => {
         newDisposed = true
       })
-    }, new AbortController().signal)).resolves.toBeInstanceOf(HTMLElement)
+    }, new AbortController().signal)
 
     expect(calls).toEqual(['second', 'first'])
-    expect(diagnostics).toEqual([
+    expect(result.root).toBeInstanceOf(HTMLElement)
+    expect(result.cleanupDiagnostics).toEqual([
       expect.objectContaining({ code: 'MATERIAL_DISPOSE_ERROR', severity: 'warning', message: 'second', cause: { message: 'second' } }),
       expect.objectContaining({ code: 'MATERIAL_DISPOSE_ERROR', severity: 'warning', message: 'first', cause: { message: 'first' } }),
     ])
+    expect(Object.isFrozen(result)).toBe(true)
+    expect(Object.isFrozen(result.cleanupDiagnostics)).toBe(true)
     expect(host.textContent).toBe('new')
     expect(newDisposed).toBe(false)
     expect(host.childNodes).toHaveLength(1)

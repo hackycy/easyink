@@ -1,10 +1,11 @@
 import type { MaterialLayoutPlan, MaterialManifest, MaterialMeasureRequest, MaterialRuntimeScope, MaterialViewerExtension, ViewerFacetCapabilities, ViewerRenderContext } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
+import type { CommittedPagePlan, LayoutRuntimeInput } from './layout-runtime'
 import type { ViewerRuntime } from './runtime'
 import type { ViewerDiagnosticEvent, ViewerOptions } from './types'
 import { DEFAULT_VIEWER_TREE_POLICY } from '@easyink/browser-dom'
 import { compileBuiltinMaterialProfile } from '@easyink/builtin'
-import { createModelPropertyAccessor, defineMaterialFacetFactory, defineMaterialManifest, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
+import { createLayoutConstraintKey, createModelPropertyAccessor, defineMaterialFacetFactory, defineMaterialManifest, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyBindingsToProps, projectBindings } from './binding-projector'
@@ -931,6 +932,97 @@ describe('viewer audit risk regressions', () => {
     await viewer.destroy()
   })
 
+  it('publishes a physically swapped candidate before cleanup diagnostics can reenter with a failing generation', async () => {
+    const manifest = statefulLayoutManifest('post-swap-diagnostic', async (request) => {
+      if (request.resolvedModel.fail === true)
+        throw new Error('reentrant layout failed')
+    })
+    const node = textNode('post-swap-diagnostic-node')
+    node.type = manifest.type
+    const container = document.createElement('div')
+    let reentrant: Promise<void> | undefined
+    let reentrantError: unknown
+    const viewer = createViewer({
+      container,
+      profile: createTestCompiledMaterialProfile([manifest]),
+    })
+    await viewer.open({
+      schema: fixedSchema([node]),
+      data: { label: 'old' },
+      dataRevision: 1,
+      onDiagnostic(event) {
+        if (event.code !== 'MATERIAL_DISPOSE_ERROR' || reentrant)
+          return
+        reentrant = viewer.updateData({ label: 'newest', fail: true }, { dataRevision: 3 })
+          .catch((error) => {
+            reentrantError = error
+          })
+      },
+    })
+    const state = viewer as unknown as { _pageVirtualizer?: { dispose: () => void } }
+    const oldVirtualizer = state._pageVirtualizer!
+    const originalDispose = oldVirtualizer.dispose.bind(oldVirtualizer)
+    oldVirtualizer.dispose = () => {
+      originalDispose()
+      throw new Error('old cleanup diagnostic')
+    }
+
+    await viewer.updateData({ label: 'middle' }, { dataRevision: 2 })
+    await reentrant
+
+    expect(reentrantError).toBeInstanceOf(Error)
+    expect(viewer.data).toEqual({ label: 'middle' })
+    expect(viewer.currentRevisions.dataRevision).toBe(2)
+    expect(container.textContent).toContain('middle')
+    expect(container.textContent).not.toContain('old')
+    expect(container.textContent).not.toContain('newest')
+    await viewer.destroy()
+  })
+
+  it('publishes a physically swapped candidate before an old disposer starts a newer generation', async () => {
+    const latestStarted = deferred<void>()
+    const releaseLatest = deferred<void>()
+    const manifest = statefulLayoutManifest('post-swap-disposer', async (request) => {
+      if (request.resolvedModel.label === 'latest') {
+        latestStarted.resolve()
+        await releaseLatest.promise
+      }
+    })
+    const node = textNode('post-swap-disposer-node')
+    node.type = manifest.type
+    const container = document.createElement('div')
+    const viewer = createViewer({
+      container,
+      profile: createTestCompiledMaterialProfile([manifest]),
+    })
+    await viewer.open({
+      schema: fixedSchema([node]),
+      data: { label: 'old' },
+      dataRevision: 1,
+    })
+    const state = viewer as unknown as { _pageVirtualizer?: { dispose: () => void } }
+    const oldVirtualizer = state._pageVirtualizer!
+    const originalDispose = oldVirtualizer.dispose.bind(oldVirtualizer)
+    let latest: Promise<void> | undefined
+    oldVirtualizer.dispose = () => {
+      originalDispose()
+      latest = viewer.updateData({ label: 'latest' }, { dataRevision: 3 })
+    }
+
+    await viewer.updateData({ label: 'middle' }, { dataRevision: 2 })
+    await latestStarted.promise
+    expect(viewer.data).toEqual({ label: 'middle' })
+    expect(viewer.currentRevisions.dataRevision).toBe(2)
+    expect(container.textContent).toContain('middle')
+
+    releaseLatest.resolve()
+    await latest
+    expect(viewer.data).toEqual({ label: 'latest' })
+    expect(viewer.currentRevisions.dataRevision).toBe(3)
+    expect(container.textContent).toContain('latest')
+    await viewer.destroy()
+  })
+
   it('bounds configured viewer tree node budgets', () => {
     expect(() => createViewer({ browserDom: { maxNodes: 0 } })).toThrow('VIEWER_MAX_NODES_INVALID')
     expect(() => createViewer({ browserDom: { maxNodes: VIEWER_TREE_ABSOLUTE_MAX_NODES + 1 } })).toThrow('VIEWER_MAX_NODES_INVALID')
@@ -1331,6 +1423,93 @@ describe('viewer audit risk regressions', () => {
         expect.objectContaining({ nodeId: 'duplicate-id__p0' }),
         expect.objectContaining({ nodeId: 'duplicate-id__p1' }),
       ]))
+    await viewer.destroy()
+  })
+
+  it('mints repeated node identities around nested material graph occupants', async () => {
+    const nested = viewerManifest('repeat-nested', { render: node => ({ tree: viewerText(node.id) }) })
+    const repeated = viewerManifest('repeat-header', { render: node => ({ tree: viewerText(node.id) }) }, 'every-output-page')
+    const owner = createTestMaterialManifest({
+      type: 'repeat-owner',
+      slots: [{
+        id: 'content',
+        key: { kind: 'exact', value: 'content' },
+        coordinateSpace: 'owner',
+        layoutParticipation: 'independent',
+        reparent: 'allowed',
+      }],
+      viewer: () => ({
+        capabilities: {},
+        extension: { render: () => ({ tree: viewerText('owner') }) },
+        layout: {
+          async measure(request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> {
+            const slot = await request.measureSlot({
+              slot: 'content',
+              scope: request.scope,
+              constraints: request.constraints,
+            }, request.signal)
+            return {
+              instanceKey: request.instanceKey,
+              nodeId: request.node.id,
+              nodeRevision: request.nodeRevision,
+              constraintKey: createLayoutConstraintKey(request.constraints),
+              borderBox: { x: request.node.x, y: request.node.y, width: request.node.width, height: request.node.height },
+              contentBox: { x: request.node.x, y: request.node.y, width: request.node.width, height: request.node.height },
+              slotBoxes: [{
+                slotId: 'content',
+                slotInstanceKey: slot.instanceKey,
+                box: { x: 0, y: 0, width: request.node.width, height: request.node.height },
+                ownership: 'managed',
+                clip: true,
+              }],
+              breakOpportunities: [],
+              diagnostics: [],
+            }
+          },
+        },
+      }),
+    })
+    const nestedFirst = textNode('header__p0')
+    nestedFirst.type = nested.type
+    const nestedSecond = textNode('header__p0__v1')
+    nestedSecond.type = nested.type
+    const ownerNode = textNode('repeat-owner-node')
+    ownerNode.type = owner.type
+    ownerNode.slots = { content: [nestedFirst, nestedSecond] }
+    const repeatedNode = textNode('header')
+    repeatedNode.type = repeated.type
+    const schema = fixedSchema([ownerNode, repeatedNode])
+    schema.page.pagination = { strategy: 'fixed-sheets', pageCount: 1 }
+    let committed: CommittedPagePlan | undefined
+    const viewer = createViewer({
+      container: document.createElement('div'),
+      profile: createTestCompiledMaterialProfile([owner, nested, repeated]),
+    })
+    const state = viewer as unknown as {
+      _layoutRuntime: {
+        plan: (input: LayoutRuntimeInput, signal: AbortSignal) => Promise<CommittedPagePlan>
+        clear: () => void
+        dispose: () => Promise<void>
+      }
+    }
+    const base = state._layoutRuntime
+    state._layoutRuntime = Object.freeze({
+      ...base,
+      async plan(...args) {
+        committed = await base.plan(...args)
+        return committed
+      },
+    })
+
+    await viewer.open({ schema })
+
+    expect(committed?.outputStates.has('header__p0')).toBe(true)
+    expect(committed?.outputStates.has('header__p0__v1')).toBe(true)
+    expect(committed?.outputStates.has('header__p0__v2')).toBe(true)
+    const nodeIds = [...(committed?.runtimeInstances.values() ?? [])].map(instance => instance.nodeId)
+    expect(nodeIds.filter(nodeId => nodeId === 'header__p0')).toHaveLength(1)
+    expect(nodeIds.filter(nodeId => nodeId === 'header__p0__v1')).toHaveLength(1)
+    expect(nodeIds.filter(nodeId => nodeId === 'header__p0__v2')).toHaveLength(1)
     await viewer.destroy()
   })
 

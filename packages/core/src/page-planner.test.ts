@@ -1,6 +1,8 @@
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
+import { defineMaterialManifest } from './material-manifest'
 import { createPagePlan } from './page-planner'
+import { createTestCompiledMaterialProfile, createTestMaterialManifest } from './testing/material-profile'
 
 function makeNode(id: string, overrides: Partial<MaterialNode> = {}): MaterialNode {
   return {
@@ -31,11 +33,24 @@ function makeSchema(pageOverrides: Partial<DocumentSchema['page']>, elements: Ma
 
 function repeatedPageNumberOptions(nodeId = 'page-number') {
   return {
-    profile: {
-      getManifest: (type: string) => ({ common: { layout: { pageRepeat: type === 'page-number' ? 'every-output-page' : 'none' } } }),
-    } as never,
+    profile: repeatedPageNumberProfile(),
     paintableNodeIds: new Set([nodeId]),
   }
+}
+
+function repeatedPageNumberProfile() {
+  const text = createTestMaterialManifest({ type: 'text' })
+  const pageNumber = createTestMaterialManifest({ type: 'page-number' })
+  return createTestCompiledMaterialProfile([
+    text,
+    defineMaterialManifest({
+      ...pageNumber,
+      common: {
+        ...pageNumber.common,
+        layout: { ...pageNumber.common.layout, pageRepeat: 'every-output-page' },
+      },
+    }),
+  ])
 }
 
 describe('createPagePlan', () => {
@@ -48,12 +63,8 @@ describe('createPagePlan', () => {
         pageModel: { kind: 'paged-paper', paper: { width: 210, height: 297 } },
         pagination: { strategy: 'fixed-sheets', pageCount: 2 },
       }, [makeNode('content', { y: 20 }), repeated])
-      const profile = {
-        getManifest: (type: string) => ({ common: { layout: { pageRepeat: type === 'page-number' ? 'every-output-page' : 'none' } } }),
-      } as never
-
       const plan = createPagePlan(schema, {
-        profile,
+        profile: repeatedPageNumberProfile(),
         paintableNodeIds: new Set(['content', 'page-number']),
       })
 

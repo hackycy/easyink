@@ -112,7 +112,7 @@ export interface MaterialTextMeasureInput {
     fontStyle?: 'normal' | 'italic' | 'oblique'
     lineHeight: number
     letterSpacing?: number
-    whiteSpace: 'normal' | 'pre-wrap'
+    whiteSpace: 'pre' | 'pre-wrap'
     overflowWrap: 'normal' | 'anywhere'
   }>
 }

@@ -126,6 +126,67 @@ describe('resourceReadinessCoordinator', () => {
     expect(prepareFont).toHaveBeenCalledTimes(3)
   })
 
+  it('prunes terminal resources to the latest successful normalized key set', async () => {
+    const prepareFont = vi.fn(async () => ({ state: 'ready' as const }))
+    const coordinator = createResourceReadinessCoordinator({
+      prepareFont,
+      prepareAsset: async () => ({ state: 'ready' as const }),
+    })
+
+    for (let index = 0; index < 20; index++) {
+      const result = await coordinator.prepare([
+        { kind: 'font', value: `Font ${index}` },
+      ], new AbortController().signal)
+      expect(result.resourceRevision).toBe(index + 1)
+      expect(coordinator.size).toBe(1)
+    }
+
+    await coordinator.prepare([], new AbortController().signal)
+    expect(coordinator.size).toBe(0)
+  })
+
+  it('treats a resource that reappears after pruning as a new terminal transition', async () => {
+    const prepareFont = vi.fn(async () => ({ state: 'failed' as const, message: 'missing' }))
+    const coordinator = createResourceReadinessCoordinator({
+      prepareFont,
+      prepareAsset: async () => ({ state: 'ready' as const }),
+    })
+
+    const first = await coordinator.prepare([{ kind: 'font', value: 'First' }], new AbortController().signal)
+    const replacement = await coordinator.prepare([{ kind: 'font', value: 'Replacement' }], new AbortController().signal)
+    const reappeared = await coordinator.prepare([{ kind: 'font', value: 'First' }], new AbortController().signal)
+
+    expect([first.resourceRevision, replacement.resourceRevision, reappeared.resourceRevision]).toEqual([1, 2, 3])
+    expect(coordinator.size).toBe(1)
+    expect(prepareFont).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not let an older completion publish or prune after a newer resource set', async () => {
+    let resolveOld: ((value: { state: 'ready' }) => void) | undefined
+    const prepareFont = vi.fn((value: string) => value === 'Old'
+      ? new Promise<{ state: 'ready' }>((resolve) => {
+          resolveOld = resolve
+        })
+      : Promise.resolve({ state: 'ready' as const }))
+    const coordinator = createResourceReadinessCoordinator({
+      prepareFont,
+      prepareAsset: async () => ({ state: 'ready' as const }),
+    })
+
+    const old = coordinator.prepare([{ kind: 'font', value: 'Old' }], new AbortController().signal)
+    const current = await coordinator.prepare([{ kind: 'font', value: 'Current' }], new AbortController().signal)
+    expect(current.resourceRevision).toBe(1)
+    expect(coordinator.size).toBe(1)
+
+    resolveOld?.({ state: 'ready' })
+    await expect(old).resolves.toMatchObject({ resourceRevision: 1, diagnostics: [] })
+    expect(coordinator.resourceRevision).toBe(1)
+    expect(coordinator.size).toBe(1)
+
+    await coordinator.prepare([{ kind: 'font', value: 'Current' }], new AbortController().signal)
+    expect(prepareFont.mock.calls.filter(([value]) => value === 'Current')).toHaveLength(1)
+  })
+
   it('clears terminal state and revision', async () => {
     const prepareFont = vi.fn(async () => ({ state: 'ready' as const }))
     const coordinator = createResourceReadinessCoordinator({

@@ -18,7 +18,7 @@ export type { PreparedCollectionHandle, PreparedCollectionProvider } from './pre
 export { PrintPolicyError, resolvePrintPolicy } from './print-policy'
 export { mountCommittedMaterial, mountMaterialTree, renderPages, RenderSurface } from './render-surface'
 export type {
-  AtomicRenderSurfaceOptions,
+  AtomicRenderSurfaceCommitResult,
   MountCommittedMaterialOptions,
   MountMaterialTreeOptions,
   PageDOM,

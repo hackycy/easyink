@@ -560,7 +560,7 @@ describe('material measurement integration', () => {
         text: 'x',
         availableWidth: 10,
         unit: 'mm',
-        style: { fontFamily: 'sans-serif', fontSize: 3, lineHeight: 1.2, whiteSpace: 'normal', overflowWrap: 'normal' },
+        style: { fontFamily: 'sans-serif', fontSize: 3, lineHeight: 1.2, whiteSpace: 'pre-wrap', overflowWrap: 'normal' },
       })).resolves.toEqual({ width: 1, height: 2 })
       return {
         instanceKey: request.instanceKey,

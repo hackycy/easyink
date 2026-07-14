@@ -5,6 +5,7 @@ import type { MaterialFragmentPlan, MaterialLayoutPlan } from './material-layout
 import type { CompiledMaterialProfile } from './material-profile'
 import { deepClone } from '@easyink/shared'
 import { runLayoutPipeline } from './layout-strategy'
+import { walkMaterialNodes } from './material-introspection'
 import { createLayoutConstraintKey, createNonFragmentingMaterialPlans } from './material-layout-plan'
 import { planRepeatedOverlays } from './page-layers'
 import { runPagination } from './pagination-engine'
@@ -76,7 +77,7 @@ export function createPagePlan(schema: DocumentSchema, options: PagePlanOptions 
         profile: options.profile,
         pageCount: result.pages.length,
         paintableNodeIds: options.paintableNodeIds ?? new Set(),
-        occupiedNodeIds: new Set(schema.elements.map(node => node.id)),
+        occupiedNodeIds: collectMaterialGraphNodeIds(schema, options.profile),
       })
     : []
   const overlaysByPage = new Map<number, MaterialNode[]>()
@@ -112,6 +113,15 @@ export function createPagePlan(schema: DocumentSchema, options: PagePlanOptions 
     })),
     diagnostics: result.diagnostics.map(toPagePlanDiagnostic),
   }
+}
+
+function collectMaterialGraphNodeIds(
+  schema: DocumentSchema,
+  profile: CompiledMaterialProfile,
+): ReadonlySet<string> {
+  const nodeIds = new Set<string>()
+  walkMaterialNodes(schema, profile, node => nodeIds.add(node.id))
+  return nodeIds
 }
 
 function createLegacyNodePlans(schema: DocumentSchema) {

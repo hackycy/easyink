@@ -14,7 +14,7 @@ interface ValidatedTextMeasureInput {
     readonly fontStyle?: 'normal' | 'italic' | 'oblique'
     readonly lineHeight: number
     readonly letterSpacing?: number
-    readonly whiteSpace: 'normal' | 'pre-wrap'
+    readonly whiteSpace: 'pre' | 'pre-wrap'
     readonly overflowWrap: 'normal' | 'anywhere'
   }
 }
@@ -187,7 +187,7 @@ function validateInput(input: unknown): ValidatedTextMeasureInput {
       || (fontStyle !== undefined && fontStyle !== 'normal' && fontStyle !== 'italic' && fontStyle !== 'oblique')
       || !isFiniteNumber(lineHeight) || lineHeight <= 0
       || (letterSpacing !== undefined && !isFiniteNumber(letterSpacing))
-      || (whiteSpace !== 'normal' && whiteSpace !== 'pre-wrap')
+      || (whiteSpace !== 'pre' && whiteSpace !== 'pre-wrap')
       || (overflowWrap !== 'normal' && overflowWrap !== 'anywhere')) {
       throw new Error('invalid input')
     }

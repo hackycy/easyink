@@ -1,4 +1,4 @@
-import type { ViewerElementTree, ViewerTextTree } from '@easyink/core'
+import type { MaterialTextMeasureInput, ViewerElementTree, ViewerTextTree } from '@easyink/core'
 import { createTestViewerRenderContext } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { createTextNode, migrateTextModelV0ToV1 } from './schema'
@@ -186,5 +186,68 @@ describe('renderText', () => {
       },
     })
     expect(plan.borderBox).toMatchObject({ width: 12, height: 9 })
+  })
+
+  it('measures long nowrap text with the exact CSS used for paint', async () => {
+    const node = createTextNode({
+      width: 12,
+      height: 4,
+      model: {
+        content: 'long text that must stay on one line',
+        heightMode: 'auto',
+        wrapMode: 'nowrap',
+      },
+    })
+    const span = (renderText(node).tree as ViewerElementTree).children[0] as ViewerElementTree
+    const measureText = vi.fn(async (_input: MaterialTextMeasureInput) => ({ width: 30, height: 4 }))
+
+    await textViewerLayout.measure!({
+      instanceKey: node.id,
+      node,
+      resolvedModel: node.model,
+      nodeRevision: 1,
+      constraints: { availableWidth: 12, availableHeight: 20, unit: 'mm', writingMode: 'horizontal-tb' },
+      measureText,
+    } as never)
+
+    expect(measureText).toHaveBeenCalledOnce()
+    const measureInput = measureText.mock.calls[0]![0]
+    expect(measureInput.style).toMatchObject({
+      whiteSpace: span.style?.['white-space'],
+      overflowWrap: span.style?.['overflow-wrap'],
+    })
+    expect(span.style).toMatchObject({ 'white-space': 'pre', 'overflow-wrap': 'normal' })
+  })
+
+  it('measures wrapping text with the exact whitespace-preserving CSS used for paint', async () => {
+    const node = createTextNode({
+      width: 12,
+      height: 4,
+      model: {
+        content: 'first  line\nsecond line',
+        heightMode: 'auto',
+        wrapMode: 'wrap',
+      },
+    })
+    const span = (renderText(node).tree as ViewerElementTree).children[0] as ViewerElementTree
+    const measureText = vi.fn(async (_input: MaterialTextMeasureInput) => ({ width: 12, height: 8 }))
+
+    await textViewerLayout.measure!({
+      instanceKey: node.id,
+      node,
+      resolvedModel: node.model,
+      nodeRevision: 1,
+      constraints: { availableWidth: 12, availableHeight: 20, unit: 'mm', writingMode: 'horizontal-tb' },
+      measureText,
+    } as never)
+
+    expect(measureText).toHaveBeenCalledOnce()
+    const measureInput = measureText.mock.calls[0]![0]
+    expect(measureInput).toMatchObject({ text: 'first  line\nsecond line' })
+    expect(measureInput.style).toMatchObject({
+      whiteSpace: span.style?.['white-space'],
+      overflowWrap: span.style?.['overflow-wrap'],
+    })
+    expect(span.style).toMatchObject({ 'white-space': 'pre-wrap', 'overflow-wrap': 'normal' })
   })
 })

@@ -25,6 +25,7 @@ export interface ResourceReadinessResult {
 
 export interface ResourceReadinessCoordinator {
   readonly resourceRevision: number
+  readonly size: number
   readonly clear: () => void
   readonly prepare: (
     resources: readonly ViewerResource[],
@@ -54,17 +55,24 @@ export function createResourceReadinessCoordinator(
 ): ResourceReadinessCoordinator {
   const terminal = new Map<string, Readonly<ResourcePreparationTerminal>>()
   let resourceRevision = 0
+  let nextGeneration = 0
+  let publishedGeneration = 0
 
   return Object.freeze({
     get resourceRevision() {
       return resourceRevision
     },
+    get size() {
+      return terminal.size
+    },
     clear() {
       terminal.clear()
       resourceRevision = 0
+      publishedGeneration = ++nextGeneration
     },
     async prepare(resources: readonly ViewerResource[], signal: AbortSignal): Promise<ResourceReadinessResult> {
       throwIfAborted(signal)
+      const generation = ++nextGeneration
       const unique = normalizeUniqueResources(resources)
       const pending = unique.filter(resource => terminal.get(resource.key)?.state !== 'ready')
       const prepared = await Promise.all(pending.map(async (entry): Promise<PreparedOutcome> => {
@@ -88,16 +96,25 @@ export function createResourceReadinessCoordinator(
       }))
 
       throwIfAborted(signal)
-      for (const outcome of prepared) {
-        const previous = terminal.get(outcome.key)
-        terminal.set(outcome.key, outcome.result)
-        if (previous?.state !== outcome.result.state)
-          resourceRevision++
+      if (generation > publishedGeneration) {
+        for (const outcome of prepared) {
+          const previous = terminal.get(outcome.key)
+          terminal.set(outcome.key, outcome.result)
+          if (previous?.state !== outcome.result.state)
+            resourceRevision++
+        }
+        const currentKeys = new Set(unique.map(entry => entry.key))
+        for (const key of terminal.keys()) {
+          if (!currentKeys.has(key))
+            terminal.delete(key)
+        }
+        publishedGeneration = generation
       }
 
+      const preparedByKey = new Map(prepared.map(outcome => [outcome.key, outcome.result]))
       const diagnostics: ResourcePreparationDiagnostic[] = []
       for (const entry of unique) {
-        const result = terminal.get(entry.key)
+        const result = preparedByKey.get(entry.key) ?? terminal.get(entry.key)
         if (result?.state !== 'failed')
           continue
         diagnostics.push(Object.freeze({

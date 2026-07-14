@@ -66,14 +66,15 @@ export interface RenderSurfaceTransaction {
   readonly checkpoint: () => void
 }
 
-export interface AtomicRenderSurfaceOptions {
-  readonly onDiagnostic?: (diagnostic: ViewerDiagnosticEvent) => void
-}
-
 export type RenderSurfaceBuild = (
   root: HTMLElement,
   transaction: RenderSurfaceTransaction,
 ) => RenderSurfaceBuildResult | Promise<RenderSurfaceBuildResult>
+
+export interface AtomicRenderSurfaceCommitResult {
+  readonly root: HTMLElement
+  readonly cleanupDiagnostics: readonly ViewerDiagnosticEvent[]
+}
 
 export function mountMaterialTree(
   host: HTMLElement,
@@ -112,18 +113,16 @@ export function mountMaterialTree(
 
 export class RenderSurface {
   readonly host: HTMLElement
-  private readonly onDiagnostic?: AtomicRenderSurfaceOptions['onDiagnostic']
   private generation = 0
   private disposed = false
   private currentRoot?: HTMLElement
   private currentDisposers: RenderSurfaceDisposer[] = []
 
-  constructor(host: HTMLElement, options: AtomicRenderSurfaceOptions = {}) {
+  constructor(host: HTMLElement) {
     this.host = host
-    this.onDiagnostic = options.onDiagnostic
   }
 
-  async commitAtomically(build: RenderSurfaceBuild, signal: AbortSignal): Promise<HTMLElement> {
+  async commitAtomically(build: RenderSurfaceBuild, signal: AbortSignal): Promise<AtomicRenderSurfaceCommitResult> {
     if (this.disposed)
       throw new Error('RENDER_SURFACE_DISPOSED')
     const generation = ++this.generation
@@ -193,9 +192,10 @@ export class RenderSurface {
     this.currentDisposers = disposers
     oldRoot?.remove()
     const cleanupErrors = disposeRenderSurfaceDisposers(oldDisposers)
-    for (const error of cleanupErrors)
-      this.reportCleanupError(error)
-    return root
+    return Object.freeze({
+      root,
+      cleanupDiagnostics: Object.freeze(cleanupErrors.map(cleanupErrorToDiagnostic)),
+    })
   }
 
   dispose(): void {
@@ -212,23 +212,18 @@ export class RenderSurface {
     if (errors.length > 0)
       throw new AggregateError(errors, 'RENDER_SURFACE_DISPOSE_FAILED')
   }
+}
 
-  private reportCleanupError(error: unknown): void {
-    const thrown = safeSummarizeThrown(error)
-    try {
-      this.onDiagnostic?.(Object.freeze({
-        category: 'viewer',
-        severity: 'warning',
-        code: 'MATERIAL_DISPOSE_ERROR',
-        message: thrown.message,
-        scope: 'material',
-        cause: thrown.cause,
-      }))
-    }
-    catch {
-      // A diagnostic observer cannot invalidate an already committed root.
-    }
-  }
+function cleanupErrorToDiagnostic(error: unknown): ViewerDiagnosticEvent {
+  const thrown = safeSummarizeThrown(error)
+  return Object.freeze({
+    category: 'viewer',
+    severity: 'warning',
+    code: 'MATERIAL_DISPOSE_ERROR',
+    message: thrown.message,
+    scope: 'material',
+    cause: thrown.cause,
+  })
 }
 
 export interface MountCommittedMaterialOptions {

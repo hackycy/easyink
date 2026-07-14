@@ -15,7 +15,7 @@ export function renderText(node: MaterialNode, contextOrData?: ViewerRenderConte
   const align = vertical
     ? ({ top: 'flex-end', middle: 'center', bottom: 'flex-start' } as const)[props.verticalAlign]
     : ({ top: 'flex-start', middle: 'center', bottom: 'flex-end' } as const)[props.verticalAlign]
-  const whiteSpace = effectiveOverflow === 'ellipsis' || props.wrapMode === 'nowrap' ? 'pre' : 'pre-wrap'
+  const wrappingCss = resolveTextWrappingCss(props)
 
   return {
     tree: viewerElement('div', { style: {
@@ -38,9 +38,9 @@ export function renderText(node: MaterialNode, contextOrData?: ViewerRenderConte
       'color': props.color,
       'line-height': props.lineHeight,
       ...(props.letterSpacing ? { 'letter-spacing': `${props.letterSpacing}${resolvedUnit}` } : {}),
-      'white-space': whiteSpace,
+      'white-space': wrappingCss.whiteSpace,
       'word-break': props.wrapMode === 'anywhere' ? 'break-word' : 'normal',
-      'overflow-wrap': props.wrapMode === 'anywhere' ? 'anywhere' : 'normal',
+      'overflow-wrap': wrappingCss.overflowWrap,
       ...(effectiveOverflow === 'ellipsis' ? { 'overflow': 'hidden', 'text-overflow': 'ellipsis' } : { overflow }),
     } }, [viewerText(display || '\u00A0')])]),
   }
@@ -79,6 +79,7 @@ export const textViewerLayout: MaterialViewerLayoutFacet = Object.freeze({
   async measure(request: MaterialMeasureRequest) {
     const node = Object.freeze({ ...request.node, model: request.resolvedModel }) as MaterialNode
     const props = getTextProps(node)
+    const wrappingCss = resolveTextWrappingCss(props)
     let width = node.width
     let height = node.height
     if (props.heightMode === 'auto') {
@@ -96,8 +97,8 @@ export const textViewerLayout: MaterialViewerLayoutFacet = Object.freeze({
             : 'normal',
           lineHeight: props.lineHeight,
           letterSpacing: props.letterSpacing,
-          whiteSpace: props.wrapMode === 'wrap' ? 'normal' : 'pre-wrap',
-          overflowWrap: props.wrapMode === 'anywhere' ? 'anywhere' : 'normal',
+          whiteSpace: wrappingCss.whiteSpace,
+          overflowWrap: wrappingCss.overflowWrap,
         },
       })
       const minHeight = props.minHeight > 0 ? props.minHeight : 0
@@ -116,3 +117,12 @@ export const textViewerLayout: MaterialViewerLayoutFacet = Object.freeze({
     }).layoutPlan
   },
 })
+
+function resolveTextWrappingCss(
+  props: Pick<ReturnType<typeof getTextProps>, 'overflow' | 'wrapMode'>,
+): Readonly<{ whiteSpace: 'pre' | 'pre-wrap', overflowWrap: 'normal' | 'anywhere' }> {
+  return {
+    whiteSpace: props.overflow === 'ellipsis' || props.wrapMode === 'nowrap' ? 'pre' : 'pre-wrap',
+    overflowWrap: props.wrapMode === 'anywhere' ? 'anywhere' : 'normal',
+  }
+}

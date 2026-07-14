@@ -77,4 +77,21 @@ describe('reader lease coordinator', () => {
     const reader = await blockedReader
     reader.release()
   })
+
+  it('revokes active readers with the destroy reason and drains every counter', async () => {
+    const coordinator = createReaderLeaseCoordinator()
+    const lease = await coordinator.acquire()
+    const reason = new Error('VIEWER_OUTPUT_DESTROYED')
+    const revoked = lease.revoked.catch(error => error)
+
+    coordinator.close(reason)
+    coordinator.revokeActive(reason)
+
+    await expect(revoked).resolves.toBe(reason)
+    lease.release()
+    await expect(coordinator.waitForIdle(new AbortController().signal)).resolves.toBeUndefined()
+    expect(coordinator.activeReaders).toBe(0)
+    expect(coordinator.pendingReaders).toBe(0)
+    expect(coordinator.pendingWriters).toBe(0)
+  })
 })

@@ -34,6 +34,7 @@ import {
   planRepeatedOverlays,
   runLayoutPipeline,
   runPagination,
+  walkMaterialNodes,
 } from '@easyink/core'
 import { assertJsonValue, cloneJsonValue, deepFreezeJsonValue } from '@easyink/shared'
 import { createMaterialBindingResolver, createMaterialDisplayBindingResolver } from './binding-projector'
@@ -718,7 +719,7 @@ function commitRepeatedPageInstances(
     profile,
     pageCount: plan.pages.length,
     paintableNodeIds,
-    occupiedNodeIds: new Set(input.document.elements.map(node => node.id)),
+    occupiedNodeIds: collectMaterialGraphNodeIds(input.document, profile),
   })
   if (placements.length === 0)
     return plan
@@ -789,6 +790,15 @@ function commitRepeatedPageInstances(
     outputStates: createReadonlyMap(outputStates),
     runtimeInstances: createReadonlyMap(instances),
   })
+}
+
+function collectMaterialGraphNodeIds(
+  document: DocumentSchema,
+  profile: CompiledMaterialProfile,
+): ReadonlySet<string> {
+  const nodeIds = new Set<string>()
+  walkMaterialNodes(document, profile, node => nodeIds.add(node.id))
+  return nodeIds
 }
 
 function createQuarantinedRepeatedSource(

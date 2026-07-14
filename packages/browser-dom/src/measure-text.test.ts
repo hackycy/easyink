@@ -103,7 +103,7 @@ describe('browserTextMeasureService', () => {
       fontFamily: 'Invoice Sans',
       fontSize: 4,
       lineHeight: 1.5,
-      whiteSpace: 'normal' as const,
+      whiteSpace: 'pre' as const,
       overflowWrap: 'normal' as const,
     }
 
