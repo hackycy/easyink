@@ -29,7 +29,7 @@ If one link is missing, the failure mode is direct: no Designer registration mea
 
 - Schema state lives in `DocumentSchema` and `MaterialNode`: persistent, undoable, imported/exported.
 - Workbench state lives in Designer store: panels, zoom, selection, window layout, preferences, and active sessions.
-- Runtime state lives in Viewer and editing sessions: resolved props, measurements, layout fragments, output page plans, transient handles, drag gestures, DOM refs, and measured caches.
+- Runtime state lives in Viewer and editing sessions: resolved models, measurements, layout fragments, output page plans, transient handles, drag gestures, DOM refs, and measured caches.
 - Font runtime state lives in `FontManager`: provider catalog cache, in-flight loads, failures, loaded font sources, and injected style elements for a host `Document` or `ShadowRoot`.
 
 Do not move transient runtime details into Schema. Examples to keep out of Schema: active cell selection, pointer gesture state, virtual preview rows, handle positions, measurement caches, output page fragments, repeated overlay clones, DOM refs, active editing metadata, font sources, font load states, and injected `@font-face` CSS.
@@ -43,7 +43,7 @@ Rules:
 - Compile the material profile before loading a Viewer document.
 - Do not normalize Viewer input separately from profile-aware admission.
 - Preserve `DocumentSchema.extensions` and `MaterialNode.extensions` for host/plugin-owned serializable data.
-- New material semantics belong in explicit schema fields, material props, or namespaced `extensions`.
+- New material semantics belong in explicit canonical schema fields, the material `model`, or namespaced `extensions`.
 
 ## Orthogonal Page System
 
@@ -72,16 +72,16 @@ Material rules:
 
 ## Node Layout Behavior
 
-Node-level behavior lives outside material-specific props:
+Node-level behavior lives in `node.output`, outside the material model:
 
-- `node.placement.mode='flow'`: participates in `flow-y` reflow.
-- `node.placement.mode='fixed'`: keeps original document coordinates and ignores break constraints.
-- `node.break.keepTogether/before/after`: applies during `auto-sheets` pagination for flow nodes.
-- `node.repeat.scope='every-output-page'`: copied after pagination to every output page; does not affect page count or continuous-paper height.
+- `node.output.placement.mode='flow'`: participates in `flow-y` reflow.
+- `node.output.placement.mode='fixed'`: keeps original document coordinates and ignores break constraints.
+- `node.output.break.keepTogether/before/after`: applies during `auto-sheets` pagination for flow nodes.
+- `node.output.repeat.scope='every-output-page'`: copied after pagination to every output page; does not affect page count or continuous-paper height.
 
 Use `repeat.scope` for editable or data-bound headers, footers, page numbers, logos, and repeated watermarks. Use `page.layers` only for whole-page render layers that are not `MaterialNode`s and do not need selection, dragging, binding, or source-node editing.
 
-Write page behavior through `placement`, `break`, and `repeat` with `UpdateMaterialBehaviorCommand`.
+Write page behavior through `output.placement`, `output.break`, and `output.repeat` with `UpdateMaterialBehaviorCommand`.
 
 Designer exposes these behaviors through `createLayoutBehaviorPropSchemas()`:
 
@@ -135,7 +135,7 @@ Host apps pass a `FontProvider` into Designer and Viewer:
 Designer owns edit-time font loading:
 
 - `EasyInkDesigner` passes `fontProvider` to `DesignerStore`.
-- `DesignerStore` creates a `FontManager`, captures the host `Document` or `ShadowRoot` through `setFontTarget()`, and preloads fonts referenced by `schema.page.font` and `node.props.fontFamily`.
+- `DesignerStore` creates a `FontManager`, captures the host `Document` or `ShadowRoot` through `setFontTarget()`, and preloads fonts referenced by `schema.page.font` and schema-adapter paths such as `node.model.fontFamily`.
 - Font properties use the `font` editor. Preview writes are skipped for font fields, and commits call `store.ensureFontLoaded({ family })` before writing Schema.
 - Failed font loads do not commit the new font value. Designer diagnostics receive a `source: 'font'` warning.
 

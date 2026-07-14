@@ -49,7 +49,7 @@ export interface ViewerRenderContext {
 
 export type ViewerCssUnit = 'mm' | 'pt' | 'px' | 'in'
 
-function toViewerCssUnit(unit: LayoutConstraints['unit']): ViewerCssUnit {
+export function toViewerCssUnit(unit: LayoutConstraints['unit']): ViewerCssUnit {
   return unit === 'inch' ? 'in' : unit
 }
 

@@ -15,7 +15,7 @@ The chain is:
 Rules for material developers:
 
 - Store font references as family strings in the material model, or inherit from `schema.page.font`.
-- Render CSS such as `font-family:${escapeHtml(props.fontFamily)}` only after escaping or via DOM style APIs.
+- Render CSS from `context.resolvedModel.fontFamily` only after escaping or via DOM style APIs.
 - Do not call `FontProvider` or `FontManager` from material `render()` or layout measurement.
 - Do not serialize font URLs, `ArrayBuffer`s, loaded/error status, style elements, or generated `@font-face` text into Schema.
 - Publish every material-owned font or asset path from the schema adapter's `introspect()` result so Viewer can prepare it before measurement.
@@ -77,10 +77,11 @@ const binding = {
 
 Viewer rendering rules for data-contract materials:
 
-- Call `resolveMaterialDataContract(DATA_CONTRACT, node.binding, context.data ?? {})`.
-- Report every returned diagnostic through `context.reportDiagnostic?.({ ...diagnostic, nodeId: node.id })`.
-- Convert `resolution.records` into the renderer's runtime shape, such as chart points.
-- Keep visual options in `node.props`; keep source-to-target data mappings in `node.binding`.
+- Declare the data contract and semantic port in `MaterialManifest.common.binding`.
+- Store source-to-target mappings in the matching `node.bindings` port.
+- Let profile admission and the runtime binding resolver validate and resolve the mapping before layout/render.
+- Consume the resulting frozen target model through `context.resolvedModel` and report only material-specific diagnostics from the renderer.
+- Keep visual options in `node.model`; keep source-to-target data mappings in `node.bindings`.
 - Preserve full `mapping.select.path` values in Schema. If the resolver needs a collection parent or leaf path, derive it temporarily.
 
 Relation resolver rules:
@@ -164,7 +165,7 @@ Rules:
 
 - Preserve the requested instance and node identity.
 - Consume the exact forward range selected by core.
-- Do not mutate `node.table`, source rows, or source `MaterialNode` geometry in schema.
+- Do not mutate the source table model, source rows, or source `MaterialNode` geometry in Schema.
 - Keep measurement, break opportunities, and fragment contribution consistent.
 
 `table-data` is the current reference: it splits expanded rows, repeats header rows on following pages, and keeps footer rows with the remaining fragment.
@@ -221,9 +222,9 @@ Diagnostics and feedback matter in downstream validation:
 
 Viewer wraps material render and measurement through diagnostic handling:
 
-- Missing material type renders `[Unknown: type]`.
-- Render errors produce a warning diagnostic and placeholder output.
-- Measure errors are warnings and leave the original node size unchanged.
+- A missing or unadmitted material type is quarantined during profile/document admission and renders `[material unavailable]`.
+- Render errors produce a warning diagnostic and quarantine only the current committed plan/node behind stable placeholder output.
+- Measurement diagnostics flow through the committed layout plan; render never falls back to synchronous remeasurement or an uncommitted original-size result.
 - Layout/reflow/pagination diagnostics are emitted as Viewer diagnostics.
 
 Tests should assert these recovery paths when adding risky runtime behavior.

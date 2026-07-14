@@ -352,11 +352,13 @@ export type {
 export type {
   MaterialViewerExtension,
   MaterialViewerFacet,
+  ViewerCssUnit,
   ViewerFacetCapabilities,
   ViewerRenderCapabilities,
   ViewerRenderContext,
   ViewerRenderOutput,
 } from './material-viewer'
+export { toViewerCssUnit } from './material-viewer'
 export {
   applyMatrixToPoint,
   IDENTITY_MATRIX,

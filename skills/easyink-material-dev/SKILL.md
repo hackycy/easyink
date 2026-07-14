@@ -1,6 +1,6 @@
 ---
 name: easyink-material-dev
-description: EasyInk material development and review guide. Use when implementing, extending, debugging, or reviewing built-in or custom EasyInk materials that add or change a Schema-saved visual element across MaterialNode shape, default-node factories, Designer registration/rendering/editing, Viewer registration/rendering/measurement, orthogonal page layout behavior, repeated overlays, fragment pagination, datasource binding, Assistant material knowledge, tests, and i18n.
+description: EasyInk material development and review guide. Use when implementing, extending, debugging, or reviewing built-in or custom EasyInk materials that add or change a Schema-saved visual element across MaterialNode shape, default-node factories, Designer authoring, compiled-profile facet activation, Viewer rendering/layout measurement, orthogonal page layout behavior, repeated overlays, fragment pagination, datasource binding, Assistant material knowledge, tests, and i18n.
 ---
 
 # EasyInk Material Dev
@@ -36,7 +36,7 @@ Task-specific references:
 - `docs/advanced/exporters.md` and `docs/advanced/print-drivers.md` when output must be validated through export or print paths.
 - `docs/designer/fonts.md` when a material exposes `fontFamily`, page font, text measurement, or print/export output that depends on host-provided fonts.
 - `packages/materials/text`, `packages/materials/rect`, and `packages/materials/image` for simple fixed-size and ordinary `BindingRef` patterns.
-- `packages/materials/chart/bar` for material `binding.kind='data-contract'`, target data model mapping, relation resolver consumption, chart runtime diagnostics, and AI descriptor examples.
+- `packages/materials/chart/bar` for manifest `common.binding.kind='ports'` with a data contract, target data model mapping, relation resolver consumption, chart runtime diagnostics, and AI descriptor examples.
 - `packages/materials/chart/custom` and `packages/materials/chart/kernel` for ordinary option binding, trusted JS option source handling, Designer lazy material loading, and full ECharts export boundaries.
 - `packages/materials/page-number` for page-aware repeated overlays.
 - `packages/materials/flow-row` for runtime-height flow/flex behavior.
@@ -45,9 +45,9 @@ Task-specific references:
 
 ## Workflow
 
-1. Confirm this is a material change: a Schema node, Designer interaction or registration, and Viewer render path are affected.
-2. Define schema identity first: canonical `TYPE`, props interface, defaults, capabilities, and `createXNode(partial?, unit?)`. Default nodes must be visible without runtime data.
-3. Keep Schema serializable. Persistent semantics belong in `MaterialNode`, `node.props`, `node.binding`, `node.placement`, `node.break`, `node.repeat`, `node.table`, or `extensions`; runtime plans, DOM refs, preview rows, measurements, loaded fonts, and editing state do not.
+1. Confirm this is a material change: a Schema node, Designer interaction, and compiled-profile Viewer facet are affected.
+2. Define schema identity first: canonical `TYPE`, model interface, defaults, capabilities, schema adapter version, and `createXNode(partial?, unit?)`. Default nodes must be visible without runtime data.
+3. Keep Schema serializable. Persistent semantics belong in `MaterialNode` fields such as `model`, `bindings`, `output`, `slots`, and `extensions`; runtime plans, DOM refs, preview rows, measurements, loaded fonts, and editing state do not.
 4. Normalize page assumptions. Legal `page.mode` values are `fixed` and `continuous`, but new behavior should read the owning page strategy field: `page.pageModel`, `page.layout`, `page.reflow`, or `page.pagination`.
 5. Keep node geometry semantic. `MaterialNode.x/y/width/height` are document coordinates; Designer projection, measurement, reflow, pagination, and overlay cloning must not silently write runtime output plans back to source schema.
 6. Decide page behavior deliberately. Use canonical output placement and break constraints for `auto-sheets`, and manifest `common.layout.pageRepeat='every-output-page'` only for post-pagination element overlays. Repeated nodes must not affect flow, document height, or page count. Treat `page.layers` as a page-level render-layer boundary, not a material feature hook.
@@ -57,16 +57,16 @@ Task-specific references:
 10. If measurement or runtime data owns a dimension, return `MaterialDesignerExtension.resolveControlPolicy()` and also guard any deep-edit or behavior path that could mutate the blocked dimension.
 11. Do not register condition capability just to opt into ordinary conditional rendering. Every material defaults to condition support with `remove` and `reserve`; set `condition: false` only when the material must ignore `renderCondition`, or set `condition: { scope: 'node', hiddenEffects: [...] }` only to narrow allowed hidden effects.
 12. Publish both surfaces in one material manifest. Built-ins add that manifest to the appropriate immutable package in `packages/builtin/src/index.ts`; keep the root and `./all`, `./basic`, `./none` profile entry points aligned. Custom hosts include external manifest packages in `compileMaterialProfile()` before creating Designer or Viewer runtimes; live runtimes do not mutate their profile.
-13. Expose catalog entries deliberately. Built-ins visible in the material panel must appear in `catalogs` with a stable group `id`, translatable group `label`, optional `order`, and item entries. Designer registration alone is not panel exposure. A Designer-only material renders `[Unknown: type]` in Viewer.
-14. Keep heavyweight Designer rendering behind `lazyFactory` only. Material type, binding definition, prop schemas, locale messages, catalog metadata, default factory, and AI descriptor stay synchronous; Viewer registration stays synchronous.
-15. Add `propSchemas` for simple props-bag fields. Use custom `read` and `commit`, `requestPropertyPanel()`, or `SelectionType.getPropertySchema()` when data lives outside `node.props` or a write touches multiple fields. Use `editorOptions.valueInput` for host/file input; do not store `File`, local paths, file names, picker state, or import state in Schema.
-16. Use shared layout behavior props instead of material-local duplicates. `createLayoutBehaviorPropSchemas()` owns placement, break, and repeat UI visibility based on page strategy.
+13. Expose catalog entries deliberately. Built-ins visible in the material panel must appear in `catalogs` with a stable group `id`, translatable group `label`, optional `order`, and item entries. A Designer facet alone is not panel exposure. A type missing from the compiled profile, or missing an admitted Viewer facet, is quarantined during profile/document admission and renders `[material unavailable]`.
+14. Keep heavyweight Designer rendering behind `lazyFactory` only. Material type, binding definition, property descriptors, locale messages, catalog metadata, default factory, AI descriptor, and Viewer facet stay in the manifest before immutable profile compilation.
+15. Add `PropertyDescriptor` entries for simple model fields. Use an explicit accessor, `requestPropertyPanel()`, or `SelectionType.getPropertySchema()` when data lives outside `model` or a write touches multiple fields. Use `editorOptions.valueInput` for host/file input; do not store `File`, local paths, file names, picker state, or import state in Schema.
+16. Use shared layout behavior descriptors instead of material-local duplicates. `createLayoutBehaviorPropSchemas()` owns placement, break, and repeat UI visibility based on page strategy.
 17. Add deep editing only for meaningful sub-element selection. Define `MaterialGeometry`, JSON-safe namespaced `SelectionType`, behavior middleware, decorations, and `tx.run()` mutations with stable history labels and merge keys. Inline editors must be selection-scoped.
-18. Put datasource logic at the right layer. Whole-element prop binding uses ordinary `BindingRef` plus `binding.primaryProp`; table-like internal binding uses `binding.kind='custom'`, `datasourceDrop`, and cell-level `binding` or `staticBinding`; structured charts use `binding.kind='data-contract'` plus target-field mappings in `node.binding.kind='data-contract'`.
-19. For font-bearing materials, expose a `font` prop schema for `node.props.fontFamily` or the relevant sub-property. Material renderers may emit `font-family` CSS from resolved props, but Designer and Viewer own `FontProvider` -> `FontManager` -> `@font-face`.
+18. Put datasource logic at the right layer. Declare semantic ports and optional data contracts in the manifest; persist source mappings by port in `bindings`. Table-like internals may use `datasourceDrop` and cell-level bindings, while structured charts keep data-contract mappings under the manifest-declared semantic port.
+19. For font-bearing materials, expose a `font` property descriptor for `model.fontFamily` or the relevant model sub-property. Material renderers may emit `font-family` CSS from `context.resolvedModel`, but Designer and Viewer own `FontProvider` -> `FontManager` -> `@font-face`.
 20. Add i18n keys for visible labels, tooltips, property labels, reject reasons, history labels, placeholders, and material-local toolbar actions. Prefer `context.t()` and `store.t()` over hardcoded strings.
 21. Update material-local `src/ai.ts` when Assistant should generate or select the material. Register the descriptor as `aiDescriptor` on the Designer material entry; Assistant sees it through the live Designer material manifest, routes against lightweight descriptor knowledge first, and only loads detailed usage/schema rules when the material is selected.
-22. Test the smallest useful surface: default factory, Designer repaint/deep behavior, control policy, page behavior props, repeated overlays, fragment pagination, Viewer render/measure, binding projection or data-contract resolution, font-dependent output, registration/catalog fallout, AI manifest, and i18n.
+22. Test the smallest useful surface: default factory, Designer repaint/deep behavior, control policy, page behavior properties, repeated overlays, fragment pagination, Viewer render/measure, binding projection or data-contract resolution, font-dependent output, profile admission/facet activation, catalog fallout, AI manifest, and i18n.
 
 ## Reference Files
 
@@ -86,7 +86,7 @@ Load only the reference needed for the current task:
 - Authoring utilities may normalize loose input before use; Viewer input must go through `loadDocumentWithProfile()` with its compiled profile.
 - Use `continuous + continuous-paper + stack-flow + flow-y + none` for continuous paper templates.
 - Do not branch material behavior solely on `page.mode`; read the owning page strategy field instead: `page.pageModel`, `page.layout`, `page.reflow`, or `page.pagination`.
-- Designer and Viewer must both know the material type.
+- The material manifest must package both required facets before profile compilation; document admission quarantines unavailable material types.
 - Do not add `condition: DEFAULT_MATERIAL_CONDITION` or material-local `*_CONDITION` constants for ordinary materials. Conditional rendering is a framework default. Only declare `condition: false` or a narrowed `hiddenEffects` override when the default is wrong, and test Designer and Viewer behavior for that override.
 - Built-in materials that should be visible in the material panel must be present in `catalogs`; test that catalog entries point to registered materials, the expected panel group includes the new type, and any new catalog label is registered in bundle locale messages.
 - Use `convertUnit()` inside default-node factories when default physical sizes are authored in mm.
@@ -103,14 +103,14 @@ Load only the reference needed for the current task:
 - Preview-only rows remain outside Schema. If a runtime-height material shows Designer preview rows, keep them display-only.
 - Materials may store font family strings in Schema, but must not store font sources, `@font-face` CSS, loaded state, DOM style nodes, or provider results.
 - Designer font edits must go through the property panel font flow so `ensureFontLoaded()` succeeds before the font value is committed to Schema.
-- Viewer font loading happens before binding, measurement, layout, pagination, and DOM render. Material renderers should only emit `font-family` CSS from resolved props or inherited page font; they should not call `FontProvider` directly.
+- Viewer font loading happens before binding, measurement, layout, pagination, and DOM render. Material renderers should only emit `font-family` CSS from the resolved model or inherited page font; they should not call `FontProvider` directly.
 - Material-local toolbars should be compact command toolbars, not identity badges.
 - Material Designer UI must not call browser-native confirmation APIs. Destructive host UX belongs behind Designer's interaction bridge or a Contribution-level workflow.
 - Repeated/page-aware overlays are post-pagination page overlays. They must not affect flow, document height, page count, output sheets, or source-node editability.
 - `page.layers` is a page-level render-layer array, not a `MaterialNode` extension point and not a material capability surface. Use `page.layers[]` only for whole-page, non-editable, non-bindable decorations such as text watermarks. Use ordinary elements plus `repeat.scope` for editable headers, footers, logos, page numbers, data-bound repeated content, or editable watermarks.
 - For table-like deep editing, decoration visibility and behavior execution must share the same delegate rules for row/column resize affordances.
 - Add or reuse locale keys for anything user-visible in Designer UI, including property labels and history labels.
-- Assistant sees material capabilities, binding definitions, data-contract target fields, props, and AI descriptors through the current Designer store manifest. Register custom material `binding` and optional `aiDescriptor` on the Designer material entry.
-- Keep AI descriptors honest: do not list props, binding modes, child support, default sizes, or scenario fitness that the Designer/Viewer implementation cannot satisfy.
+- Assistant sees material capabilities, binding definitions, data-contract target fields, model properties, and AI descriptors through the current Designer store manifest. Register custom material binding metadata and optional `aiDescriptor` on the Designer material entry.
+- Keep AI descriptors honest: do not list model properties, binding modes, child support, default sizes, or scenario fitness that the Designer/Viewer implementation cannot satisfy.
 - For data-contract materials, set descriptor `binding: 'data-contract'`, include mapping examples with `binding.kind='data-contract'`, and explain that relation mode is resolver-derived rather than a UI/schema mode.
 - Exporters and print drivers must consume Viewer-rendered pages and `ViewerPageMetrics`; do not reimplement material layout in those layers.

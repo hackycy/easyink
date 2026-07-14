@@ -18,10 +18,10 @@ Source files:
 Key rules:
 
 - Schema type is `table-data`.
-- Node is a `TableNode` with `table.kind = 'data'`.
+- Node is a canonical `MaterialNode` whose `model.kind` is `data`.
 - Topology stores normalized column ratios and real rows only.
 - Default rows are `header`, `repeat-template`, and `footer`.
-- Header/footer visibility is stored on `node.table`, not `node.props`.
+- Header/footer visibility is represented by bands in `node.model`; property accessors update model topology and related bindings/slots atomically.
 - Designer preview injects virtual placeholder rows after repeat-template, but those rows are display-only.
 - Viewer expands the repeat-template row from runtime data.
 - Runtime measurement owns final table height.
@@ -37,7 +37,7 @@ Designer complexity:
 - Designer placeholder rows are display-only and must not expose a height-changing drag path.
 - `datasourceDrop` rejects hidden rows and mismatched collection prefixes.
 - `sectionFilter` hides element-level binding because binding belongs to cells.
-- `prop-schemas.ts` uses custom commit for `showHeader` and `showFooter` because the fields live on `node.table` and must flush or exit active cell editing.
+- `prop-schemas.ts` uses explicit topology accessors for `showHeader` and `showFooter` because they rewrite model bands, related bindings, and slots atomically.
 
 Viewer complexity:
 
@@ -55,7 +55,7 @@ What to copy:
 - Keep row/column boundary handles in the shared table-kernel model, but gate them through material delegates.
 - Put material-specific resize policy in delegates and cover the rules with pure helper tests.
 - Use `resolveControlPolicy()` for outer Designer controls when runtime measurement owns height.
-- Use custom property commits for non-props fields.
+- Use explicit property accessors for non-model or multi-path fields.
 - Publish break opportunities and fragment contributions; core owns document page-break selection.
 
 What not to copy blindly:
@@ -96,7 +96,7 @@ Design lesson:
 Key rules:
 
 - Schema type is `flow-row`.
-- Columns live in `node.props.columns`; column selection uses `flow-row.column`.
+- Columns live in `node.model.columns`; column selection uses `flow-row.column`.
 - Viewer can expand collection-bound data and `flowRowViewerLayout.measure()` computes runtime height.
 - Designer declares fixed runtime height through `resolveControlPolicy()`, even when current sample content is static.
 - Width remains editable so columns can reflow; height is runtime-owned.
@@ -119,14 +119,14 @@ Viewer lessons:
 Use as the custom ECharts reference:
 
 - Schema type is `chart-custom`.
-- Props store `optionCode`, `option`, and visual props such as `backgroundColor`.
+- The model stores `optionCode`, `option`, and visual fields such as `backgroundColor`.
 - `optionCode` is JavaScript source text, not a function value. Keep Schema JSON-safe.
 - Binding is ordinary: `binding.kind='ordinary'`, `primaryProp='option'`, and `formatEditor` exposes only `custom`.
 - Bound option values may be objects or JSON strings. Viewer reads them from `context.resolvedModel.option`, prefers them when present, and falls back to `optionCode` when a binding has no value yet.
 - Code-authored options support body and expression styles such as `return { ... }`, `({ ... })`, `(ctx) => ({ ... })`, and `function option(ctx) { ... }`.
 - Option code is trusted template code. It is not a sandbox; failures become warning diagnostics and fall back to a visible default option.
 - Designer registration keeps metadata synchronous and loads the heavy renderer through `lazyFactory`.
-- Viewer registration is synchronous and renders SVG through `@easyink/material-chart-kernel/full`.
+- The manifest packages its Viewer facet before profile compilation, and that facet renders SVG through `@easyink/material-chart-kernel/full`.
 - `@easyink/material-chart-kernel` has a lightweight default entry for built-in chart types and a `./full` subpath for the complete ECharts package.
 
 What to copy:
@@ -138,7 +138,7 @@ What to copy:
 
 What not to copy blindly:
 
-- Do not use JS source props for untrusted template imports.
+- Do not use model fields containing JS source for untrusted template imports.
 - Do not hide material metadata in the lazy Designer chunk.
 - Do not use `DataContractBinding` when the material wants one complete runtime option object rather than a target record model.
 
@@ -155,7 +155,7 @@ Source files:
 
 Key rules:
 
-- Schema stores shape props: `fillColor`, `borderWidth`, `borderColor`, `starPoints`, `starInnerRatio`, `starRotation`.
+- The material model stores shape fields: `fillColor`, `borderWidth`, `borderColor`, `starPoints`, `starInnerRatio`, `starRotation`.
 - Rendering logic is shared by Designer and Viewer through `buildStarSvgMarkup()`.
 - Geometry knows how to hit-test the inner-radius handle and map selected handles to document-space rects.
 - Selection type is `svg-star.control`.
@@ -187,16 +187,16 @@ What to improve when touching it:
 - `fontFamily` is a plain Schema string consumed by shared Designer/Viewer font loading; the material renderer only emits the CSS declaration.
 - No deep editing is needed.
 
-Copy this pattern for mostly fixed-size, props-bag-only materials.
+Copy this pattern for mostly fixed-size, model-only materials.
 
 ## page-number
 
 Use as the page-aware reference:
 
-- `createPageNumberNode()` sets `placement: { mode: 'fixed' }` and `repeat: { scope: 'every-output-page' }`.
+- `createPageNumberNode()` sets `output.placement: { mode: 'fixed' }`.
 - The manifest sets `common.layout.pageRepeat='every-output-page'`, making default repetition explicit.
 - Runtime removes it from layout inputs, replicates it after pagination, and injects `__pageNumber` and `__totalPages`.
-- Rendering uses resolved runtime props, not schema-time page counts.
+- Rendering uses the resolved runtime model, not schema-time page counts.
 - Designer shows one editable source node and non-interactive repeat previews on other pages. It uses `renderContextSignal.page` to display real design-time page numbers for both source and preview instances, while keeping those values out of Schema.
 
 Use this pattern for editable or data-bound watermarks, repeated headers, and repeated footers. Ensure repeated overlays do not influence flow, continuous-paper height, output page count, or source-node editability.

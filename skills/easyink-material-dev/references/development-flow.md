@@ -8,7 +8,7 @@ Typical files:
 
 - `package.json`: package name, workspace deps, optional Vue peer dependency when Designer code imports Vue, and subpath exports for lazy-loaded entries such as `./designer`, `./schema`, `./prop-schemas`, `./locale`, or `./viewer`.
 - `tsdown.config.ts`: `entry: ['src/index.ts']` plus any public subpath entries, `dts: true`, `exports: true`, `publint: true`.
-- `src/schema.ts`: type constant, props interface, defaults, capabilities, `createXNode()`.
+- `src/schema.ts`: type constant, model interface, defaults, capabilities, schema migration, and `createXNode()`.
 - `src/designer.ts`: `createXExtension(context)`.
 - `src/viewer.ts`: `ViewerRenderTree` rendering plus an optional pure layout adapter.
 - `src/prop-schemas.ts`: material-owned property panel additions when needed.
@@ -23,42 +23,42 @@ In `schema.ts`:
 - Export a canonical `TYPE` string and do not rename it after release.
 - Use `generateId(prefix)` from `@easyink/shared` for IDs.
 - Use `convertUnit(value, 'mm', unit)` when defaults are authored in mm and `unit` may differ.
-- Merge defaults before partial props, and do not let `partial.props` accidentally overwrite the entire node before you normalize it.
+- Merge defaults before the partial model, and do not let `partial.model` accidentally overwrite the entire node before canonicalization.
 - Default nodes must be visible without external data.
 - Capabilities must match actual behavior. Do not mark binding, resizing, rotation, slots, repetition, or aspect-lock support optimistically.
 - Do not add material-local condition constants or default `condition` registrations. Conditional rendering is enabled by default for all materials with `remove` and `reserve`; only declare `condition: false` or a narrowed `hiddenEffects` override when the default behavior is wrong.
-- Use `placement`, `break`, and `repeat` for node-level page behavior. Do not add new page behavior fields under `node.props`.
+- Use `output.placement`, `output.break`, and `output.repeat` for node-level page behavior. Do not add page behavior fields under the material model.
 
 Pattern:
 
 ```ts
 export const X_TYPE = 'x'
 
-export interface XProps {
+export interface XModel {
   content: string
 }
 
-export const X_DEFAULTS: XProps = {
+export const X_DEFAULTS: XModel = {
   content: 'Preview',
 }
 
 export function createXNode(partial?: Partial<MaterialNode>, unit?: string): MaterialNode {
   const c = unit && unit !== 'mm' ? (v: number) => convertUnit(v, 'mm', unit) : (v: number) => v
-  const partialProps = (partial?.props ?? {}) as Partial<XProps>
+  const partialModel = (partial?.model ?? {}) as Partial<XModel>
   const partialNode = partial ? { ...partial } : undefined
   if (partialNode)
-    delete partialNode.props
+    delete partialNode.model
 
-  return {
+  return canonicalizeMaterialNode(X_TYPE, {
     id: generateId('x'),
     type: X_TYPE,
     x: 0,
     y: 0,
     width: c(80),
     height: c(20),
-    props: { ...X_DEFAULTS, ...partialProps },
+    model: { ...X_DEFAULTS, ...partialModel },
     ...partialNode,
-  }
+  })
 }
 ```
 
@@ -66,8 +66,11 @@ For page overlays such as page numbers, defaults may set:
 
 ```ts
 const overlayDefaults = {
-  placement: { mode: 'fixed' },
-  repeat: { scope: 'every-output-page' },
+  output: {
+    visibility: 'include',
+    placement: { mode: 'fixed' },
+    repeat: { scope: 'every-output-page' },
+  },
 }
 ```
 
@@ -87,13 +90,13 @@ Use `renderContent(nodeSignal, container, renderContextSignal?)`:
 
 Simple materials can set `container.innerHTML`. Complex materials can create Vue decorations or DOM manually, but cleanup must be deterministic.
 
-Designer coordinates and design-time page context come through framework-owned surface planning. Material code should use material-local coordinates in geometry and datasource drop protocols, and should not convert output page plans or `renderContextSignal` values back into schema coordinates or persisted props.
+Designer coordinates and design-time page context come through framework-owned surface planning. Material code should use material-local coordinates in geometry and datasource drop protocols, and should not convert output page plans or `renderContextSignal` values back into schema coordinates or persisted model state.
 
-For heavyweight Designer renderers, register a synchronous metadata entry and put only the extension factory behind `lazyFactory`. Keep `binding`, `propSchemas`, `localeMessages`, `aiDescriptor`, catalog entries, and `createDefaultNode` in the initial registration so Designer panels and Assistant manifest are complete before the renderer chunk loads. Use a lightweight `factory` placeholder when the registration type requires one; the registry will show its loading extension while `lazyFactory` resolves and remount the canvas after `materialExtensionRevision` changes.
+For heavyweight Designer renderers, keep only the extension factory behind `lazyFactory`. Keep binding ports, property descriptors, locale messages, AI descriptor, catalog entries, default node, and Viewer facet in the manifest before profile compilation so Designer panels, Viewer activation, and Assistant manifest are complete before the renderer chunk loads.
 
 For font-bearing materials:
 
-- Use `node.props.fontFamily` for the normal element font field when possible, because Designer and Viewer already collect that path.
+- Use `node.model.fontFamily` for the normal element font field when possible, and publish the path through schema-adapter resource introspection.
 - Let the property panel `font` editor own catalog display, load button state, preview suppression, and commit-time `ensureFontLoaded()`.
 - Designer renderers may set `font-family` from the current prop to reflect the selected family, but they should not inject font CSS or call the host font provider.
 - If a deep-edit sub-property exposes a font field, define it as `type: 'font'` through `SelectionType.getPropertySchema()` so the same loading and commit guard applies.
@@ -103,7 +106,7 @@ For font-bearing materials:
 Build a `ViewerRenderTree` with `viewerText()`, `viewerElement()`, and `viewerFragment()`:
 
 - Read `context.resolvedModel` for ordinary element bindings.
-- For structured data materials, read `node.binding` only through `resolveMaterialDataContract(contract, node.binding, context.data ?? {})`, report diagnostics, and map target records to the renderer's runtime data.
+- For structured data materials, declare ports and the data contract in the manifest, persist mappings in `node.bindings`, and consume the already resolved `context.resolvedModel` in layout and render.
 - The committed renderer passes the exact frozen runtime model, layout plan, and fragment plan for the instance.
 - Put runtime strings in `viewerText()`; raw HTML strings are not a Viewer output.
 - Keep Viewer output print/export stable because print and export reuse the Viewer result.
@@ -170,14 +173,14 @@ Then return it from `resolveControlPolicy()` and also guard any behavior that wo
 
 ## Property Panel Rules
 
-Use `propSchemas` for simple `node.props` fields:
+Use `PropertyDescriptor` entries for simple `node.model` fields:
 
 - `string`, `text`, `textarea`, `number`, `color`, `switch`, `enum`, `font`, `image`, etc.
-- Nested props can use dotted keys such as `typography.fontSize`.
+- Nested model values can use dotted keys such as `typography.fontSize` with a model accessor.
 - Labels should be i18n keys.
 - Group names should be one of the groups mapped in `PropertiesPanel.vue` or an intentionally visible custom group.
-- For `code` or `textarea` props whose value is commonly authored in a local text file, declare `editorOptions.valueInput = { kind: 'text-file', id, source, accept, pickTitle, maxBytes }`. For image or asset URL props, use `{ kind: 'asset-url', id, source, accept, pickTitle }`. The shared `PropSchemaEditor` calls Designer's interaction bridge and commits the returned value as the prop value. Do not add material-local `<input type="file">` controls, and do not persist file names, local paths, `File` objects, picker state, or import state in Schema.
-- For JavaScript authoring props such as custom ECharts option code, use `type: 'code'` with `editorOptions.language = 'javascript'`, editor height/dialog sizing, and localized labels/placeholders. Store source strings only. Treat execution as trusted template code, not a sandbox, and turn failures into diagnostics plus stable placeholder output.
+- For `code` or `textarea` properties whose value is commonly authored in a local text file, declare `editorOptions.valueInput = { kind: 'text-file', id, source, accept, pickTitle, maxBytes }`. For image or asset URL properties, use `{ kind: 'asset-url', id, source, accept, pickTitle }`. The shared `PropSchemaEditor` calls Designer's interaction bridge and commits the returned property value. Do not add material-local `<input type="file">` controls, and do not persist file names, local paths, `File` objects, picker state, or import state in Schema.
+- For JavaScript authoring properties such as custom ECharts option code, use `type: 'code'` with `editorOptions.language = 'javascript'`, editor height/dialog sizing, and localized labels/placeholders. Store source strings only. Treat execution as trusted template code, not a sandbox, and turn failures into diagnostics plus stable placeholder output.
 
 For font properties:
 
@@ -190,14 +193,14 @@ Material package `src/prop-schemas.ts` files own the full Designer property sche
 
 Base layout behavior props are appended by `PropertiesPanel.vue` through `createLayoutBehaviorPropSchemas({ page })`. Do not duplicate placement, break, or repeat controls in material packages unless the material has a truly different sub-selection UI.
 
-Use a custom `read` and `commit` when the property is outside `node.props` or has side effects. `table-data` `showHeader` and `showFooter` are the model example: they live on `node.table`, flush active edits, potentially exit an editing session, and execute `UpdateTableVisibilityCommand`.
+Use an explicit `PropertyAccessor` when the property is outside the normal model path or has side effects. `table-data` `showHeader` and `showFooter` are the model example: their accessors update `/model/bands`, `/bindings`, and `/slots` together and return selection-rebase hints through the editing transaction.
 
 Use `requestPropertyPanel()` or `SelectionType.getPropertySchema()` when:
 
 - The property applies to a sub-selection.
 - A write touches multiple fields.
 - The editor is context-aware or temporary.
-- The data path is not the normal props bag.
+- The data path is not a normal model path.
 
 ## Built-In Registry Checklist
 
@@ -210,7 +213,7 @@ For a new built-in material:
 5. Import that manifest into `packages/builtin/src/index.ts` and add it to `builtinAllMaterialPackage`; add it to `builtinBasicMaterialPackage` only when it belongs in the reduced set.
 6. Keep `getBuiltinMaterialPackage()` and `compileBuiltinMaterialProfile()` behavior aligned across the root, `/all`, `/basic`, and `/none` public entry points. The none package remains empty.
 7. Leave `condition` omitted unless this material explicitly opts out or narrows hidden effects; do not register the framework default.
-8. If Designer rendering is heavy, register metadata synchronously and use `lazyFactory` for the Designer extension chunk only; keep Viewer registration synchronous.
+8. If Designer rendering is heavy, use `lazyFactory` for the Designer extension chunk only; keep the Viewer facet and all common metadata in the manifest before compiling the immutable profile.
 9. Put the material-local AI descriptor in the manifest AI facet. `packages/builtin/src/ai.ts` derives descriptors from `builtinAllMaterialPackage`; do not hand-maintain a second list.
 10. Add `src/locale.ts` in the material package and expose it through the manifest Designer facet. Keep `@easyink/locales` for Designer common strings only.
 11. Declare catalog group and order metadata in the manifest Designer facet. If you add a new group id, include `materials.catalog.<id>` in the material locale messages.
@@ -223,7 +226,7 @@ Every material change should be checked through Viewer because both export and p
 
 - Exporters read `.ei-viewer-page` DOM and `renderedPages`; they should not reinterpret material schema or rerun material layout.
 - Print drivers read `ViewerPrintContext.container`, `renderedPages`, `ViewerPageMetrics`, and print policy; they should not recalculate page layout.
-- If a material depends on fonts, runtime data, page-aware props, measured height, or fragment pagination, verify those are reflected in Viewer DOM before debugging exporter or printer code.
+- If a material depends on fonts, runtime data, page-aware output state, measured height, or fragment pagination, verify those are reflected in Viewer DOM before debugging exporter or printer code.
 - For formal print paths, confirm material dimensions are stable in the schema unit and convert to the print system unit at the driver boundary.
 
 If export/print fails for a custom material, first confirm its manifest was admitted by the compiled Viewer profile, then inspect render output, page plan shape, and rendered page metrics. Only then inspect exporter or driver bridge logic.
@@ -242,13 +245,13 @@ For a host-owned custom material outside built-ins:
 ## Common Failure Signals
 
 - Designer changes do not repaint: `renderContent()` did not subscribe to `nodeSignal`.
-- Viewer shows `[Unknown: type]`: Viewer registration is missing.
-- Bound values do not change: renderer reads defaults instead of resolved props, or `viewer.open({ data })` data shape does not match `fieldPath`.
+- Viewer shows `[material unavailable]`: profile or document admission quarantined the type because its manifest/facet was unavailable or invalid.
+- Bound values do not change: renderer reads defaults instead of `context.resolvedModel`, or `viewer.open({ data })` does not match the admitted port mapping.
 - Page-aware content changes page count: repeated nodes were included in layout/pagination inputs.
 - Page numbers are missing: the manifest lacks `common.layout.pageRepeat='every-output-page'` or the renderer reads schema-time counts instead of the committed runtime model.
 - Break rules do nothing: the page does not use `auto-sheets`, the node is fixed-position, or the node does not write behavior through `placement`, `break`, and `repeat`.
 - Undo groups every pointer move separately: continuous operations need a stable `mergeKey`.
-- Property panel writes to the wrong location: the schema needs custom `read` and `commit`, not a plain props-bag schema.
+- Property panel writes to the wrong location: the descriptor needs an explicit accessor, not the default model accessor.
 - Resize breaks internals: implement a `MaterialResizeAdapter` or control policy.
-- Export or print output differs from preview: the material may rely on design-only DOM, unmeasured runtime size, missing Viewer registration, bad page overlay handling, or non-printable external resources.
+- Export or print output differs from preview: the material may rely on design-only DOM, unmeasured runtime size, a missing admitted Viewer facet, bad page overlay handling, or non-printable external resources.
 - Custom print driver size is wrong: driver skipped unit conversion or ignored print policy and rendered page metrics.

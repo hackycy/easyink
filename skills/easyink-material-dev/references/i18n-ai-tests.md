@@ -34,7 +34,7 @@ Property schemas can store label keys directly because `PropertiesPanel.vue` res
 - New material panel catalog groups use `materials.catalog.<id>` labels registered through bundle locale messages.
 - Decoration tooltips, material-local toolbar button titles, property titles, reject labels, placeholders, and history labels are localized.
 - Page-aware or fragment-pagination diagnostics that surface to users are stable, translated where they are Designer-facing, and use Viewer diagnostics for runtime-only failures.
-- `PropSchema.group` uses an existing group mapped by `GROUP_LABELS` in `PropertiesPanel.vue`, or the visible custom group text is intentional.
+- `PropertyDescriptor.group` uses an existing group mapped by `GROUP_LABELS` in `PropertiesPanel.vue`, or the visible custom group text is intentional.
 - History panel can display the command label. Prefer stable `materials.<material>.history.*` keys for material commands.
 - Custom host-owned materials register their locale messages through `registerMaterialBundle()` instead of coupling them to `@easyink/locales`.
 
@@ -47,7 +47,7 @@ Read `references/ai-assistant-materials.md` when AI behavior matters. In short:
 - Register built-in descriptors through Designer `aiDescriptor`; `packages/builtin/src/ai.ts` is derived from the Designer bundle.
 - Register custom material descriptors on the Designer material entry; Assistant gets them from the live store manifest.
 
-Assistant reads canonical material types, binding rules, props, and optional AI descriptors from the live Designer material manifest. If a generated material should be available to Assistant but lacks a Designer `aiDescriptor`, selection and schema generation become weaker even when Designer and Viewer registration are otherwise correct.
+Assistant reads canonical material types, binding rules, model properties, and optional AI descriptors from the live Designer material manifest. If a generated material should be available to Assistant but lacks a Designer `aiDescriptor`, selection and schema generation become weaker even when its manifest package and compiled-profile facets are otherwise correct.
 
 ## AI Review Smells
 
@@ -64,13 +64,13 @@ Choose focused tests based on risk:
 - Designer render: subscribes to `nodeSignal` and escapes labels/content.
 - Prop schema: custom `read`/`commit` writes the correct schema location and command.
 - Deep editing: hit test, selection validation, property schema, behavior commands, keyboard navigation.
-- Viewer render: returns trusted HTML, uses resolved props, escapes user content.
+- Viewer render: returns a `ViewerRenderTree` or a capability-gated output, uses `context.resolvedModel`, and escapes user content.
 - Viewer measure: runtime height/width, layout cache behavior, diagnostics.
 - Fragment pagination: split behavior under `auto-sheets`, preservation of `sourceNodeId`, and no source schema mutation.
 - Page-aware/repeat overlay: excluded from layout inputs, copied after pagination, receives `__pageNumber` and `__totalPages`.
 - Datasource drop: accepted/rejected zones, collection prefix checks, cell binding shape, or data-contract target field mapping.
 - Data-contract resolver: shared record collection, top-level array index alignment, source-scoped root resolution, invalid relation diagnostics.
-- Registration: built-in Designer and Viewer registries include the new material.
+- Profile admission: the built-in manifest package compiles with both required facets and admits the new material.
 
 Useful commands:
 
@@ -81,12 +81,12 @@ Useful commands:
 
 ## Review Smells
 
-- New material has Designer code but no Viewer registration.
-- New Viewer renderer manually resolves ordinary `node.binding`.
+- New material has Designer code but its manifest/profile package lacks a Viewer facet.
+- New Viewer renderer manually resolves ordinary `node.bindings` instead of consuming `context.resolvedModel`.
 - New data-contract material truncates `mappings.*.select.path` values or lacks relation resolver coverage in tests.
 - New property label is a hardcoded string while neighboring schemas use locale keys.
 - New deep-edit payload stores DOM or non-serializable values.
 - New table-like material duplicates preview rows into Schema.
 - New repeated/page-aware material changes page count or continuous-paper height.
-- New material writes placement, break, or repeat semantics into `node.props` instead of `node.placement`, `node.break`, or `node.repeat`.
+- New material writes placement, break, or repeat semantics into `node.model` instead of `node.output`.
 - Tests assert raw full HTML instead of stable semantic snippets where markup is generated.

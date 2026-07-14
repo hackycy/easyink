@@ -186,7 +186,7 @@ Current flow:
 ## Review Checklist
 
 - `type` exactly matches the canonical material type and factory default.
-- `properties` names exist in `node.props` or material-owned top-level schema structures.
+- `properties` names exist in `node.model` or an explicitly declared material-owned canonical field.
 - `requiredProps` are truly required by the renderer or schema generator.
 - Descriptor `binding` and `knowledge.bindingSpec.mode` match actual binding behavior.
 - Data-contract materials set descriptor `binding: 'data-contract'`, include examples with `binding.kind='data-contract'`, and preserve full source paths in `mappings.*.select.path`.
