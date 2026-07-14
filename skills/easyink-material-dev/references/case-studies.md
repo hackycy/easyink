@@ -27,7 +27,7 @@ Key rules:
 - Runtime measurement owns final table height.
 - Designer declares runtime height through `resolveControlPolicy()`: `height` is disabled and vertical outer resize handles are hidden.
 - Cell-level binding uses `binding` for repeat-template cells and `staticBinding` for fixed cells.
-- Viewer registration includes both `measureTableData()` and `tableDataFragmentPaginator`.
+- The Viewer layout facet includes table measurement, monotonic row break opportunities, and fragment contribution.
 
 Designer complexity:
 
@@ -45,7 +45,7 @@ Viewer complexity:
 - `renderTableData()` reuses measured layout through a WeakMap because the render node has the measured height.
 - Empty arrays render a single placeholder row; they do not mutate Schema.
 - Static rows resolve `staticBinding` and repeat rows resolve item-level `binding`.
-- `tableDataFragmentPaginator` splits expanded runtime rows for `auto-sheets`, preserving `sourceNodeId` and keeping source schema untouched.
+- The table fragment adapter contributes the exact row range requested by core for `auto-sheets`, preserving instance identity and keeping source schema untouched.
 
 What to copy:
 
@@ -56,7 +56,7 @@ What to copy:
 - Put material-specific resize policy in delegates and cover the rules with pure helper tests.
 - Use `resolveControlPolicy()` for outer Designer controls when runtime measurement owns height.
 - Use custom property commits for non-props fields.
-- Use `fragmentPaginator` for material-owned splitting rather than teaching pagination engine material internals.
+- Publish break opportunities and fragment contributions; core owns document page-break selection.
 
 What not to copy blindly:
 
@@ -122,7 +122,7 @@ Use as the custom ECharts reference:
 - Props store `optionCode`, `option`, and visual props such as `backgroundColor`.
 - `optionCode` is JavaScript source text, not a function value. Keep Schema JSON-safe.
 - Binding is ordinary: `binding.kind='ordinary'`, `primaryProp='option'`, and `formatEditor` exposes only `custom`.
-- Bound option values may be objects or JSON strings. Viewer reads them from `context.resolvedProps.option`, prefers them when present, and falls back to `optionCode` when a binding has no value yet.
+- Bound option values may be objects or JSON strings. Viewer reads them from `context.resolvedModel.option`, prefers them when present, and falls back to `optionCode` when a binding has no value yet.
 - Code-authored options support body and expression styles such as `return { ... }`, `({ ... })`, `(ctx) => ({ ... })`, and `function option(ctx) { ... }`.
 - Option code is trusted template code. It is not a sandbox; failures become warning diagnostics and fall back to a visible default option.
 - Designer registration keeps metadata synchronous and loads the heavy renderer through `lazyFactory`.
@@ -194,7 +194,7 @@ Copy this pattern for mostly fixed-size, props-bag-only materials.
 Use as the page-aware reference:
 
 - `createPageNumberNode()` sets `placement: { mode: 'fixed' }` and `repeat: { scope: 'every-output-page' }`.
-- Viewer registration also sets `pageAware: true`, making the material default repeat behavior explicit.
+- The manifest sets `common.layout.pageRepeat='every-output-page'`, making default repetition explicit.
 - Runtime removes it from layout inputs, replicates it after pagination, and injects `__pageNumber` and `__totalPages`.
 - Rendering uses resolved runtime props, not schema-time page counts.
 - Designer shows one editable source node and non-interactive repeat previews on other pages. It uses `renderContextSignal.page` to display real design-time page numbers for both source and preview instances, while keeping those values out of Schema.

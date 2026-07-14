@@ -23,16 +23,16 @@ Rules for material developers:
 
 ## Binding Projection
 
-Ordinary element binding is handled by Viewer before material render:
+Ordinary element binding is handled by the profile runtime before material layout or render:
 
-1. `ViewerRuntime.resolveAllBindings()` calls `projectBindings(node, data)`.
-2. `applyBindingsToProps(props, projected, materialBindingDefinition)` maps projected values into props declared by the material registration.
-3. `measure()` receives a temporary node whose `props` are already resolved.
-4. `renderPages()` passes `context.resolvedProps` and a `nodeForRender` whose `props` are the resolved props.
+1. The compiled profile supplies the material's binding-port policy.
+2. The runtime binding resolver validates port kind, scope, JSON shape, and format policy.
+3. `projectMaterialRuntimeModel()` copies the admitted model and projects display ports into declared model paths.
+4. Layout and render consume the same frozen model as `context.resolvedModel`.
 
-For standard materials, do not manually walk `context.data` in `render()`. Read `context.resolvedProps` or `getNodeProps(node)` after the Viewer pipeline has projected props.
+For standard materials, do not manually walk `context.data` in `render()`. Read `context.resolvedModel` after the Viewer pipeline has projected bindings.
 
-Ordinary binding can project structured values, not only scalar display text. For example, a custom ECharts material can declare `binding.kind='ordinary'` with `primaryProp: 'option'`; Viewer will project the bound value into `context.resolvedProps.option`, and the material can accept either an option object or a JSON string. If the material executes JavaScript source to build that object, document it as trusted template code and report failures as material diagnostics.
+Ordinary binding can project structured values, not only scalar display text. A chart material can declare an object-shaped port and consume the projected value from `context.resolvedModel`. If the material executes JavaScript source to build that object, document it as trusted template code and report failures as material diagnostics.
 
 Primary binding defaults:
 
@@ -155,59 +155,43 @@ When implementing a measured material:
 - `renderTableData()` reuses the cached layout because Viewer has already applied measured height to the render node.
 - The cache is runtime-only and must not be serialized.
 
-## Fragment Pagination
+## Fragment Contribution
 
-Use `fragmentPaginator` when a material can split itself across `auto-sheets`.
-
-`FragmentPaginator.paginateFragment(input)` receives:
-
-- the current `LayoutFragment`,
-- available height on the output page,
-- page context with `pageIndex`.
-
-It returns:
-
-- `currentPage`: the fragment to render on this page,
-- optional `nextPage`: the remaining fragment,
-- diagnostics.
+Publish monotonic break opportunities and a fragment adapter when a material can split itself across `auto-sheets`. Core selects the page break and asks the adapter to contribute the exact requested range.
 
 Rules:
 
-- Preserve `sourceNodeId` so diagnostics and renderer behavior still point to the original material.
-- Create virtual fragments/nodes only for runtime planning.
+- Preserve the requested instance and node identity.
+- Consume the exact forward range selected by core.
 - Do not mutate `node.table`, source rows, or source `MaterialNode` geometry in schema.
-- Keep `measure()` and `fragmentPaginator` consistent: the measured height must describe the same content the paginator splits.
+- Keep measurement, break opportunities, and fragment contribution consistent.
 
 `table-data` is the current reference: it splits expanded rows, repeats header rows on following pages, and keeps footer rows with the remaining fragment.
 
-## Trusted Viewer HTML
+## Viewer Output
 
-Viewer string output must be wrapped:
+Viewer output is a budgeted render tree:
 
 ```ts
 return {
-  html: trustedViewerHtml(html),
+  tree: viewerElement('div', {}, [viewerText(text)]),
 }
 ```
 
-Use `trustedViewerHtml(html, 'sanitized-rich-text')` only when the material has already sanitized or internally generated the rich markup. Escape all user-controlled strings with `escapeHtml()` before interpolation.
+Raw HTML strings are not part of the contract. Use an opaque `SanitizedMarkup` token for declared markup capabilities, or an explicitly granted imperative host when a library must own DOM.
 
 ## Page-Aware and Repeated Overlays
 
-There are two ways to request post-pagination repetition:
-
-- Viewer extension `pageAware: true`, used for material defaults such as `page-number`.
-- Schema field `node.repeat.scope='every-output-page'`, used when the user or factory explicitly repeats an editable or data-bound element such as a header, footer, logo, page number, or watermark.
+Declare post-pagination repetition with manifest `common.layout.pageRepeat='every-output-page'`.
 
 Viewer behavior:
 
-- Repeated/page-aware elements are excluded from layout/reflow/pagination inputs.
+- Repeated elements are excluded from layout/reflow/pagination inputs.
 - They are copied into every output page after pagination.
-- Virtual IDs are generated as `originalId__p${page.index}`.
-- Resolved props get `__pageNumber` and `__totalPages`.
+- Runtime instances receive collision-free identities and page-context models.
 - In `fixed-sheets + blankPolicy='remove'`, visible repeated overlays can retain an otherwise blank page.
 
-Material renderers should read page-aware runtime values from `context.resolvedProps`. Do not compute page counts from schema `page.pages`, copy counts, or output DOM.
+Material renderers should read page runtime values from `context.resolvedModel`. Do not compute page counts from schema counts or output DOM.
 
 Designer behavior:
 

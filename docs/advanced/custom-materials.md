@@ -12,7 +12,7 @@ description: EasyInk 自定义物料开发：同时覆盖 Schema、Designer 和 
 import type { DesignerMaterialBundle, DesignerStore, MaterialDesignerExtension } from '@easyink/designer'
 import type { MaterialNode } from '@easyink/schema'
 import type { ViewerRuntime } from '@easyink/viewer'
-import { trustedViewerHtml } from '@easyink/core'
+import { viewerElement, viewerText } from '@easyink/core'
 import { registerMaterialBundle } from '@easyink/designer'
 import { IconText } from '@easyink/icons'
 
@@ -162,11 +162,9 @@ export function registerPriceTagViewer(viewer: ViewerRuntime) {
     formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' },
   }, {
     render(_node, context) {
-      const props = context.resolvedProps
+      const props = context.resolvedModel
       return {
-        html: trustedViewerHtml(
-          `<div>${escapeHtml(String(props.label ?? ''))}: ${escapeHtml(String(props.amount ?? ''))}</div>`,
-        ),
+        tree: viewerElement('div', {}, [viewerText(`${String(props.label ?? '')}: ${String(props.amount ?? '')}`)]),
       }
     },
   })
@@ -440,7 +438,7 @@ export function createPriceTagDesignerExtension(): MaterialDesignerExtension {
 Viewer 需要按同一个 `type` 再注册一次：
 
 ```ts
-import { trustedViewerHtml } from '@easyink/core'
+import { viewerElement, viewerText } from '@easyink/core'
 import { createViewer } from '@easyink/viewer'
 
 const viewer = createViewer({ container })
@@ -451,20 +449,18 @@ viewer.registerMaterial(PRICE_TAG_TYPE, {
   formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' },
 }, {
   render(_node, context) {
-    const props = context.resolvedProps
+    const props = context.resolvedModel
     return {
-      html: trustedViewerHtml(
-        `<div class="price-tag">${escapeHtml(String(props.amount ?? ''))}</div>`,
-      ),
+      tree: viewerElement('div', { attributes: { class: 'price-tag' } }, [viewerText(String(props.amount ?? ''))]),
     }
   },
 })
 ```
 
-这里最值得记住的是 `context.resolvedProps`。绑定、默认值和运行时属性会在 Viewer 渲染前合成好，你的渲染器直接消费它就行。
+这里最值得记住的是 `context.resolvedModel`。绑定、默认值和运行时属性会在 Viewer 渲染前合成并冻结，你的渲染器直接消费它就行。
 
 :::warning 注意
-`html` 必须用 `trustedViewerHtml()` 包装。不要直接返回裸字符串。
+Viewer 不接受原始 HTML 字符串。普通输出必须构造成 `ViewerRenderTree`；markup 只能通过显式声明的 sanitized-markup capability。
 :::
 
 ## 接入数据绑定 {#binding}
@@ -483,7 +479,7 @@ viewer.open({
 })
 ```
 
-当节点保存了 `binding` 后，Viewer 会把绑定结果写进 `context.resolvedProps`。你的物料渲染器继续读 `resolvedProps`，不用手写 `getByPath(context.data, fieldPath)`。
+当节点保存了 binding 后，Viewer 会按 compiled profile 的端口策略把结果投影进 `context.resolvedModel`。物料渲染器直接读取冻结的 runtime model，不用手写字段路径遍历。
 
 普通绑定不只适合字符串或数字。只要物料的 `primaryProp` 指向某个 props 字段，Viewer 就会把绑定结果投影到这个字段。例如自定义 ECharts 物料可以声明 `primaryProp: 'option'`，运行时数据源直接返回完整 option 对象：
 
@@ -625,7 +621,7 @@ viewer.registerMaterial(PRICE_TAG_TYPE, {
 }, {
   render(_node, context) {
     return {
-      html: trustedViewerHtml(`<div>${escapeHtml(String(context.resolvedProps.amount ?? ''))}</div>`),
+      tree: viewerElement('div', {}, [viewerText(String(context.resolvedModel.amount ?? ''))]),
     }
   },
   measure(node) {
@@ -645,19 +641,16 @@ viewer.registerMaterial(PRICE_TAG_TYPE, {
 - 表格根据数据行数增高。
 - 容器根据子项数量展开。
 
-## 何时使用 pageAware {#page-aware}
+## 何时使用每页重复 {#page-aware}
 
-`pageAware` 表示这个物料要复制到每一页：
+manifest 的 `common.layout.pageRepeat: 'every-output-page'` 表示这个物料要在 core 分页后复制到每一页。重复物料不参与内容 flow 或页数计算。
 
 ```ts
 viewer.registerMaterial('page-badge', { kind: 'none' }, {
-  pageAware: true,
   render(_node, context) {
-    const props = context.resolvedProps
+    const props = context.resolvedModel
     return {
-      html: trustedViewerHtml(
-        `<div>第 ${String(props.__pageNumber ?? '')} / ${String(props.__totalPages ?? '')} 页</div>`,
-      ),
+      tree: viewerText(`第 ${String(props.__pageNumber ?? '')} / ${String(props.__totalPages ?? '')} 页`),
     }
   },
 })
@@ -665,7 +658,7 @@ viewer.registerMaterial('page-badge', { kind: 'none' }, {
 
 它适合页码、页眉、页脚、水印这类“每页都出现”的元素。它不负责重新分页，也不会替你改变 layout 或 reflow。
 
-Viewer 会给复制后的节点注入 `__pageNumber` 和 `__totalPages`，所以页码类物料应该从 `context.resolvedProps` 读取它们。
+Viewer 会把 `__pageNumber` 和 `__totalPages` 投影进重复实例的 runtime model，所以页码类物料从 `context.resolvedModel` 读取它们。
 
 ## 完成前检查 {#checklist}
 
@@ -687,7 +680,7 @@ viewer.registerMaterial(PRICE_TAG_TYPE, priceTagViewerExtension)
 - 从物料面板点击或拖入后，画布上能看到元素。
 - 修改属性后，Schema 保存出稳定的 `type` 和 `props`。
 - 同一份 Schema 交给 Viewer 后，不会出现 `[Unknown: price-tag]`。
-- 绑定数据后，Viewer 能从 `context.resolvedProps` 读到结果。
+- 绑定数据后，Viewer 能从 `context.resolvedModel` 读到结果。
 - 打印和导出结果与 Viewer 预览一致。
 
 关于物料，目前知道这些就够用了。接下来可以继续看 [贡献扩展开发](/advanced/contributions) 或 [Schema 参考](/advanced/schema)。

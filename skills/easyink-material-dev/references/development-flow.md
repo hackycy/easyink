@@ -10,7 +10,7 @@ Typical files:
 - `tsdown.config.ts`: `entry: ['src/index.ts']` plus any public subpath entries, `dts: true`, `exports: true`, `publint: true`.
 - `src/schema.ts`: type constant, props interface, defaults, capabilities, `createXNode()`.
 - `src/designer.ts`: `createXExtension(context)`.
-- `src/viewer.ts`: render plus optional `measure()`, `getRenderSize()`, or `fragmentPaginator`.
+- `src/viewer.ts`: `ViewerRenderTree` rendering plus an optional pure layout adapter.
 - `src/prop-schemas.ts`: material-owned property panel additions when needed.
 - `src/ai.ts`: `AIMaterialDescriptor` plus optional `knowledge` for Assistant generation, material selection, binding, sizing, and scenario fit.
 - `src/index.ts`: export public symbols.
@@ -25,7 +25,7 @@ In `schema.ts`:
 - Use `convertUnit(value, 'mm', unit)` when defaults are authored in mm and `unit` may differ.
 - Merge defaults before partial props, and do not let `partial.props` accidentally overwrite the entire node before you normalize it.
 - Default nodes must be visible without external data.
-- Capabilities must match actual behavior. Do not mark `bindable`, `multiBinding`, `resizable`, `rotatable`, `supportsChildren`, `pageAware`, or `aspectLock` optimistically.
+- Capabilities must match actual behavior. Do not mark binding, resizing, rotation, slots, repetition, or aspect-lock support optimistically.
 - Do not add material-local condition constants or default `condition` registrations. Conditional rendering is enabled by default for all materials with `remove` and `reserve`; only declare `condition: false` or a narrowed `hiddenEffects` override when the default behavior is wrong.
 - Use `placement`, `break`, and `repeat` for node-level page behavior. Do not add new page behavior fields under `node.props`.
 
@@ -100,15 +100,15 @@ For font-bearing materials:
 
 ## Viewer Rendering Rules
 
-Use `trustedViewerHtml()` for strings:
+Build a `ViewerRenderTree` with `viewerText()`, `viewerElement()`, and `viewerFragment()`:
 
-- Read `context.resolvedProps` for ordinary element bindings.
+- Read `context.resolvedModel` for ordinary element bindings.
 - For structured data materials, read `node.binding` only through `resolveMaterialDataContract(contract, node.binding, context.data ?? {})`, report diagnostics, and map target records to the renderer's runtime data.
-- `renderPages()` passes a `nodeForRender` whose `props` are already projected; direct `getNodeProps(node)` is acceptable when called through the Viewer pipeline, but `context.resolvedProps` communicates runtime intent better.
-- Escape runtime strings before interpolation.
+- The committed renderer passes the exact frozen runtime model, layout plan, and fragment plan for the instance.
+- Put runtime strings in `viewerText()`; raw HTML strings are not a Viewer output.
 - Keep Viewer output print/export stable because print and export reuse the Viewer result.
 - Add `measure()` only when runtime content changes physical size.
-- Add `fragmentPaginator` only when an oversized measured fragment can be meaningfully split across `auto-sheets`.
+- Publish monotonic break opportunities and a fragment adapter only when measured content can split across `auto-sheets`.
 - Use `getRenderSize()` only when the wrapper dimensions must differ from schema `width` and `height`.
 
 `measure()` runs before layout/reflow/pagination. It should return document-unit size and must not mutate the source schema. `render()` must use the same layout assumptions as `measure()`.
@@ -133,8 +133,8 @@ Do not implement material-specific page planning. Materials may provide:
 
 - stable document geometry,
 - optional runtime `measure()` results,
-- optional `fragmentPaginator` for splittable content,
-- optional `pageAware` default repetition,
+- optional break opportunities and fragment adapter for splittable content,
+- optional manifest `common.layout.pageRepeat` default repetition,
 - and node-level `placement`, `break`, or `repeat` defaults.
 
 The Viewer owns layout, pagination, page overlay cloning, page number context, and `ViewerPageMetrics`.
@@ -246,7 +246,7 @@ For a host-owned custom material outside built-ins:
 - Viewer shows `[Unknown: type]`: Viewer registration is missing.
 - Bound values do not change: renderer reads defaults instead of resolved props, or `viewer.open({ data })` data shape does not match `fieldPath`.
 - Page-aware content changes page count: repeated nodes were included in layout/pagination inputs.
-- Page numbers are missing: the material lacks `repeat.scope='every-output-page'`, Viewer `pageAware`, or reads schema-time counts instead of `__pageNumber` / `__totalPages`.
+- Page numbers are missing: the manifest lacks `common.layout.pageRepeat='every-output-page'` or the renderer reads schema-time counts instead of the committed runtime model.
 - Break rules do nothing: the page does not use `auto-sheets`, the node is fixed-position, or the node does not write behavior through `placement`, `break`, and `repeat`.
 - Undo groups every pointer move separately: continuous operations need a stable `mergeKey`.
 - Property panel writes to the wrong location: the schema needs custom `read` and `commit`, not a plain props-bag schema.

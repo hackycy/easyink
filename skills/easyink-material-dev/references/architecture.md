@@ -152,16 +152,16 @@ The Viewer contract is in `packages/core/src/material-viewer.ts`.
 
 Implement `MaterialViewerExtension` with:
 
-- `render(node, context)`: return `{ html: trustedViewerHtml(...) }` or `{ element }`.
+- `render(node, context)`: return `{ tree: ViewerRenderTree }`.
 - `measure(node, context)`: optional pre-layout sizing for content-driven dimensions.
 - `getRenderSize(node, context)`: optional wrapper size override.
-- `fragmentPaginator`: optional split logic for fragments that can cross `auto-sheets`.
-- `pageAware`: default repeated overlay behavior for materials such as page numbers.
+- layout break opportunities and a fragment adapter: optional split contribution for `auto-sheets`; core selects the break.
+- manifest `common.layout.pageRepeat`: default repeated overlay behavior for materials such as page numbers.
 
 Viewer runtime stages:
 
 1. Normalize/validate schema and load fonts.
-2. Resolve ordinary bindings into `resolvedPropsMap`; data-contract materials resolve their target records inside their Viewer renderer with `resolveMaterialDataContract()`.
+2. Resolve bindings through the profile port policy into frozen runtime models and scopes.
 3. Run material `measure()` with resolved props applied to a temporary node.
 4. Exclude repeated/page-aware nodes from layout inputs.
 5. Run `runLayoutPipeline()` and `runPagination()`.

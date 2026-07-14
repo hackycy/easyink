@@ -1,5 +1,5 @@
-import type { CompiledMaterialProfile, InternalHooks, MaterialLayoutPlan, MaterialLoadDiagnostic, MaterialNodeLoadState, PagePlan, PaginationResult, ViewerMeasureResult } from '@easyink/core'
-import type { DocumentSchema, MaterialNode } from '@easyink/schema'
+import type { CompiledMaterialProfile, InternalHooks, MaterialLoadDiagnostic, MaterialNodeLoadState, PageLayerRenderPlan, TextWatermarkPageLayerPlan } from '@easyink/core'
+import type { DocumentSchema, MaterialNode, PageBackground } from '@easyink/schema'
 import type { CommittedPageSlotRegistry } from './committed-page-slots'
 import type { CommittedPagePlan } from './layout-runtime'
 import type { ReaderLease } from './reader-lease'
@@ -11,7 +11,6 @@ import type {
   ViewerDiagnosticEvent,
   ViewerExporter,
   ViewerExportOptions,
-  ViewerMeasureContext,
   ViewerOpenInput,
   ViewerOptions,
   ViewerPageMetrics,
@@ -23,13 +22,11 @@ import type {
 } from './types'
 import type { ViewerHost } from './viewer-host'
 import { BrowserTextMeasureService, snapshotViewerTreePolicy } from '@easyink/browser-dom'
-import { createInternalHooks, createLayoutConstraintKey, createNonFragmentingMaterialPlans, FontManager, freezeMaterialLayoutPlan, loadDocumentWithProfile, MeasureService, planRepeatedOverlays, runLayoutPipeline, runPagination, VIEWER_TREE_ABSOLUTE_MAX_NODES, walkMaterialNodes } from '@easyink/core'
-import { cloneJsonValue, deepClone, deepFreezeJsonValue, UNIT_FACTOR } from '@easyink/shared'
-import { applyBindingsToProps, projectBindings, walkProfileMaterialNodes } from './binding-projector'
+import { createInternalHooks, FontManager, groupPageLayerPlansByPlacement, loadDocumentWithProfile, MeasureService, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayerStackIndex, VIEWER_TREE_ABSOLUTE_MAX_NODES, walkMaterialNodes } from '@easyink/core'
+import { cloneJsonValue, deepFreezeJsonValue, UNIT_FACTOR } from '@easyink/shared'
 import { createCommittedPageSlotRegistry } from './committed-page-slots'
-import { resolveConditionalSchema } from './conditional-schema'
 import { resolveEffectiveOutputStates } from './effective-output-state'
-import { collectFontFamilies, createFontPreparationAdapter, loadAndInjectFonts } from './font-loader'
+import { createFontPreparationAdapter } from './font-loader'
 import { assertViewerPerformanceBudget, createDefaultLayoutRuntime, DEFAULT_VIEWER_PERFORMANCE_BUDGET } from './layout-runtime'
 import { ProfileMaterialRuntime } from './material-runtime'
 import { createBoundedMeasureScheduler } from './measure-scheduler'
@@ -38,7 +35,7 @@ import { resolvePrintPolicy } from './print-policy'
 import { runPrintWithIsolation } from './print-service'
 import { createReaderLeaseCoordinator } from './reader-lease'
 import { createReadonlyMap } from './readonly-map'
-import { mountCommittedMaterial, renderPages, RenderSurface } from './render-surface'
+import { mountCommittedMaterial, RenderSurface } from './render-surface'
 import { RenderTaskCoordinator } from './render-task'
 import { createResourceReadinessCoordinator } from './resource-readiness'
 import { createRuntimeModelResolutionCache } from './runtime-model-resolver'
@@ -88,7 +85,6 @@ export class ViewerRuntime {
   private _emittingHookFailure = false
   private _pageVirtualizer?: PageDomVirtualizer
   private _pageSlots?: CommittedPageSlotRegistry
-  private _operation = 0
   private readonly _performanceBudget: Readonly<ViewerPerformanceBudget>
   private readonly _tasks = new RenderTaskCoordinator()
   private readonly _layoutRuntime: ReturnType<typeof createDefaultLayoutRuntime>
@@ -239,166 +235,6 @@ export class ViewerRuntime {
       throw new Error('No schema loaded. Call open() first.')
     await this.prepareAndPlan(this._requested, this._tasks.begin())
     return this._lastRenderResult
-  }
-
-  private async renderLegacy(expectedOperation?: number): Promise<ViewerRenderResult> {
-    this.ensureNotDestroyed()
-    if (!this._schema) {
-      throw new Error('No schema loaded. Call open() first.')
-    }
-
-    const operation = expectedOperation ?? ++this._operation
-    const diagnostics: ViewerDiagnosticEvent[] = [...this._loadDiagnostics]
-    const conditional = resolveConditionalSchema(this._schema, this._data, this._options.profile)
-    const runtimeSchema = conditional.schema
-    diagnostics.push(...conditional.diagnostics)
-
-    // Stage 1: Font loading
-    await this.loadFonts(diagnostics, runtimeSchema)
-    if (operation !== this._operation || this._destroyed)
-      return emptyRenderResult(diagnostics)
-
-    // Stage 2: Binding projection
-    const resolvedPropsMap = this.resolveAllBindings(diagnostics, runtimeSchema)
-
-    // Stage 3: Hook - beforePagePlan
-    try {
-      this._hooks.beforePagePlan.call({ schema: runtimeSchema, mode: runtimeSchema.page.mode })
-    }
-    catch (err) {
-      const thrown = safeSummarizeThrown(err)
-      const diagnostic: ViewerDiagnosticEvent = {
-        category: 'viewer',
-        severity: 'error',
-        code: 'BEFORE_PAGE_PLAN_HOOK_ERROR',
-        message: `beforePagePlan hook failed: ${thrown.message}`,
-        scope: 'hook',
-        cause: thrown.cause,
-      }
-      diagnostics.push(diagnostic)
-      this.emitDiagnostic(diagnostic)
-      throw err
-    }
-
-    // Stage 3.5: Measure elements that need expansion (e.g., table-data)
-    const { measurements, diagnostics: layoutDiagnostics } = this.measureRuntimeElements(resolvedPropsMap, runtimeSchema)
-    diagnostics.push(...layoutDiagnostics)
-
-    // Stage 4: Orthogonal layout + pagination planning. Page-repeated
-    // elements are overlays resolved after pagination, so they must not
-    // contribute to flow, document height, or page count.
-    const repeatedElements = this.collectRepeatedPageElements(runtimeSchema.elements)
-    const paintableRepeatedIds = new Set(repeatedElements
-      .filter(node => !node.editorState?.hidden && node.output.visibility === 'include')
-      .map(node => node.id))
-    const layoutSchema = repeatedElements.length > 0
-      ? { ...runtimeSchema, elements: runtimeSchema.elements.filter(el => !repeatedElements.includes(el)) }
-      : runtimeSchema
-    const originalRepeatedIds = new Set(this.collectRepeatedPageElements(this._schema.elements).map(el => el.id))
-    const layoutOriginalSchema = originalRepeatedIds.size > 0
-      ? { ...this._schema, elements: this._schema.elements.filter(el => !originalRepeatedIds.has(el.id)) }
-      : this._schema
-    const layoutDocument = runLayoutPipeline(layoutSchema, {
-      originalSchema: layoutOriginalSchema,
-      plans: this.createLayoutPlans(layoutSchema, measurements),
-    })
-    const pagination = runPagination(layoutSchema, layoutDocument, {
-      originalSchema: layoutSchema,
-      resolveFragmentAdapter: fragment => this.isNodeReady(fragment.node) ? this._materials.getFragmentAdapter(fragment.node.type) : undefined,
-      retainBlankPage: paintableRepeatedIds.size > 0 ? () => true : undefined,
-    })
-    const plan = toPagePlan(pagination)
-
-    for (const d of plan.diagnostics) {
-      diagnostics.push({
-        category: 'viewer',
-        severity: d.severity,
-        code: d.code,
-        message: d.message,
-      })
-    }
-
-    // Stage 4.5: Resolve per-page overlays (e.g., page-number)
-    this.resolveRepeatedPageElements(plan, resolvedPropsMap, repeatedElements, paintableRepeatedIds)
-
-    // Stage 5: DOM rendering
-    const pages = plan.pages.map(p => ({
-      index: p.index,
-      width: p.width,
-      height: p.height,
-      elementCount: p.elements.length,
-      element: undefined as HTMLElement | undefined,
-    }))
-    const renderedPageMetrics = pages.map(page => ({
-      index: page.index,
-      width: page.width,
-      height: page.height,
-      unit: runtimeSchema.unit,
-    }))
-
-    if (this._host) {
-      const previousPageVirtualizer = this._pageVirtualizer
-      const pageVirtualizer = new PageDomVirtualizer()
-      let pageDOMs: ReturnType<typeof renderPages>
-      try {
-        pageDOMs = renderPages(
-          plan.pages,
-          this._materials,
-          {
-            container: this._host.mount,
-            document: this._host.document,
-            zoom: this.resolveZoom(),
-            unit: runtimeSchema.unit,
-            data: this._data,
-            resolvedPropsMap,
-            pageSchema: runtimeSchema.page,
-            nodeStates: this._nodeStates,
-            browserDom: this._options.browserDom as Required<NonNullable<ViewerOptions['browserDom']>>,
-          },
-          diagnostics,
-          pageVirtualizer,
-        )
-      }
-      catch (error) {
-        try {
-          pageVirtualizer.dispose()
-        }
-        catch (cleanupError) {
-          appendDisposeDiagnostics(diagnostics, cleanupError)
-        }
-        throw error
-      }
-      this._pageVirtualizer = pageVirtualizer
-      this._renderedPageMetrics = renderedPageMetrics
-      if (previousPageVirtualizer) {
-        try {
-          previousPageVirtualizer.dispose()
-        }
-        catch (error) {
-          appendDisposeDiagnostics(diagnostics, error)
-        }
-      }
-
-      for (const dom of pageDOMs) {
-        const page = pages.find(p => p.index === dom.pageIndex)
-        if (page) {
-          page.element = dom.element
-        }
-      }
-
-      // Apply page-level viewport offset (preview only, not print)
-      this.applyViewportOffset(this._host.mount)
-    }
-    else {
-      this._renderedPageMetrics = renderedPageMetrics
-    }
-
-    // Emit all diagnostics
-    for (const d of diagnostics.slice(this._loadDiagnostics.length)) {
-      this.emitDiagnostic(d)
-    }
-
-    return { pages, thumbnails: createThumbnails(pages, runtimeSchema.unit), diagnostics }
   }
 
   private async planAndPaint(candidate: ViewerInputState, task: RenderTaskToken): Promise<void> {
@@ -763,7 +599,6 @@ export class ViewerRuntime {
   }
 
   private async finishDestroy(): Promise<void> {
-    ++this._operation
     const diagnostics: ViewerDiagnosticEvent[] = []
     await this._readerLeases.waitForIdle(new AbortController().signal)
     try {
@@ -894,235 +729,6 @@ export class ViewerRuntime {
   // ---------------------------------------------------------------------------
   // Internal pipeline stages
   // ---------------------------------------------------------------------------
-
-  private collectRepeatedPageElements(elements: MaterialNode[]): MaterialNode[] {
-    return elements.filter(node =>
-      this._options.profile.getManifest(node.type)?.common.layout.pageRepeat === 'every-output-page',
-    )
-  }
-
-  /**
-   * Stage 4.5: Resolve per-page repeated elements.
-   * Repeated elements are page overlays: one schema node is copied to every
-   * output page after pagination and receives page context props.
-   */
-  private resolveRepeatedPageElements(
-    plan: PagePlan,
-    resolvedPropsMap: Map<string, Record<string, unknown>>,
-    repeatedElements: MaterialNode[],
-    paintableNodeIds: ReadonlySet<string>,
-  ): void {
-    if (repeatedElements.length === 0)
-      return
-
-    const totalPages = plan.pages.length
-    const byId = new Map(repeatedElements.map(node => [node.id, node]))
-    const placements = planRepeatedOverlays({
-      nodes: repeatedElements,
-      profile: this._options.profile,
-      pageCount: totalPages,
-      paintableNodeIds,
-      occupiedNodeIds: this._schema
-        ? collectMaterialGraphNodeIds(this._schema, this._options.profile)
-        : new Set(plan.pages.flatMap(page => page.elements.map(node => node.id))),
-    })
-
-    for (const placement of placements) {
-      const page = plan.pages[placement.pageIndex]
-      const el = byId.get(placement.nodeId)
-      if (!page || !el)
-        continue
-      const virtualId = `${el.id}__p${page.index}`
-      const virtualNode = {
-        ...deepClone(el),
-        id: virtualId,
-        sourceNodeId: el.id,
-        sourceAdmissionStatus: this._nodeStates.get(el.id)?.status ?? 'missing',
-        y: page.yOffset + resolveRepeatedElementLocalY(el, page.height),
-      }
-      page.elements.push(virtualNode)
-
-      const baseProps = resolvedPropsMap.get(el.id) ?? el.model
-      resolvedPropsMap.set(virtualId, {
-        ...baseProps,
-        __pageNumber: page.index + 1,
-        __totalPages: totalPages,
-      })
-    }
-  }
-
-  private measureRuntimeElements(resolvedPropsMap: Map<string, Record<string, unknown>>, schema: DocumentSchema): { measurements: Map<string, ViewerMeasureResult>, diagnostics: ViewerDiagnosticEvent[] } {
-    const diagnostics: ViewerDiagnosticEvent[] = []
-    const measurements = new Map<string, ViewerMeasureResult>()
-    const measureCtx: ViewerMeasureContext = {
-      data: this._data,
-      unit: schema.unit,
-      reportDiagnostic: diagnostic => diagnostics.push({
-        category: 'datasource',
-        severity: diagnostic.severity,
-        code: diagnostic.code,
-        message: diagnostic.message,
-        nodeId: diagnostic.nodeId,
-        scope: 'datasource',
-        cause: diagnostic.cause,
-      }),
-    }
-
-    for (const node of schema.elements) {
-      const resolvedProps = resolvedPropsMap.get(node.id) ?? node.model as Record<string, unknown>
-      const nodeForMeasure = resolvedProps === node.model ? node : { ...node, model: resolvedProps }
-      let result
-      try {
-        result = this.isNodeReady(node) ? this._materials.measure(nodeForMeasure, measureCtx) : null
-      }
-      catch (err) {
-        const thrown = safeSummarizeThrown(err)
-        diagnostics.push({
-          category: 'viewer',
-          severity: 'warning',
-          code: 'MATERIAL_MEASURE_ERROR',
-          message: `Material measure failed for ${node.id}: ${thrown.message}`,
-          nodeId: node.id,
-          scope: 'material',
-          cause: thrown.cause,
-        })
-        continue
-      }
-      if (result) {
-        measurements.set(node.id, result)
-      }
-    }
-
-    return { measurements, diagnostics }
-  }
-
-  private createLayoutPlans(
-    schema: DocumentSchema,
-    measurements: ReadonlyMap<string, ViewerMeasureResult>,
-  ): ReadonlyMap<string, MaterialLayoutPlan> {
-    const constraints = {
-      availableWidth: schema.page.width,
-      availableHeight: schema.page.height,
-      unit: schema.unit,
-      writingMode: 'horizontal-tb' as const,
-    }
-    const constraintKey = createLayoutConstraintKey(constraints)
-    return new Map(schema.elements.map((node) => {
-      const measured = measurements.get(node.id)
-      const borderBox = {
-        x: node.x,
-        y: node.y,
-        width: measured?.width ?? node.width,
-        height: measured?.height ?? node.height,
-      }
-      const fallback = createNonFragmentingMaterialPlans({
-        instanceKey: node.id,
-        nodeId: node.id,
-        nodeRevision: 0,
-        constraintKey,
-        pageIndex: 0,
-        borderBox,
-        fragmentBox: borderBox,
-      }).layoutPlan
-      return [node.id, measured?.breakOpportunities || measured?.payload !== undefined
-        ? freezeMaterialLayoutPlan({
-            ...fallback,
-            breakOpportunities: measured.breakOpportunities ?? [],
-            ...(measured.payload === undefined ? {} : { payload: measured.payload }),
-          })
-        : fallback]
-    }))
-  }
-
-  private async loadFonts(diagnostics: ViewerDiagnosticEvent[], schema: DocumentSchema): Promise<void> {
-    if (!this._fontManager.provider)
-      return
-
-    const families = collectFontFamilies(schema, this._options.profile)
-    if (families.size === 0)
-      return
-
-    if (!this._host)
-      return
-
-    try {
-      const fontDiags = await loadAndInjectFonts(families, this._fontManager, this._host.document)
-      diagnostics.push(...fontDiags)
-    }
-    catch (err) {
-      const thrown = safeSummarizeThrown(err)
-      diagnostics.push({
-        category: 'viewer',
-        severity: 'warning',
-        code: 'FONT_LOAD_ERROR',
-        message: `Font loading failed: ${thrown.message}`,
-        scope: 'font',
-        cause: thrown.cause,
-      })
-    }
-  }
-
-  private resolveAllBindings(diagnostics: ViewerDiagnosticEvent[], schema: DocumentSchema): Map<string, Record<string, unknown>> {
-    const resolvedMap = new Map<string, Record<string, unknown>>()
-    walkProfileMaterialNodes(schema, this._options.profile, (node) => {
-      if (Object.keys(node.bindings).length === 0) {
-        resolvedMap.set(node.id, node.model)
-        return
-      }
-
-      try {
-        const projected = projectBindings(node, this._data)
-        for (const binding of projected) {
-          for (const diagnostic of binding.diagnostics ?? []) {
-            diagnostics.push({
-              category: 'datasource',
-              severity: diagnostic.severity,
-              code: diagnostic.code,
-              message: diagnostic.message,
-              nodeId: node.id,
-              scope: 'datasource',
-              cause: diagnostic.cause,
-            })
-          }
-        }
-        const resolvedProps = applyBindingsToProps(node.model, projected, this._materials.getBinding(node.type))
-        resolvedMap.set(node.id, resolvedProps)
-      }
-      catch (err) {
-        const thrown = safeSummarizeThrown(err)
-        diagnostics.push({
-          category: 'datasource',
-          severity: 'warning',
-          code: 'BINDING_RESOLVE_ERROR',
-          message: `Binding resolution failed for ${node.id}: ${thrown.message}`,
-          nodeId: node.id,
-          scope: 'datasource',
-          cause: thrown.cause,
-        })
-        resolvedMap.set(node.id, node.model)
-      }
-    })
-
-    return resolvedMap
-  }
-
-  private isNodeReady(node: MaterialNode<unknown>): boolean {
-    return this._nodeStates.get(node.id)?.status !== 'quarantined'
-      && this._materials.get(node.type)?.state === 'active'
-  }
-
-  private disposePageMounts(diagnostics: ViewerDiagnosticEvent[]): void {
-    const pageVirtualizer = this._pageVirtualizer
-    this._pageVirtualizer = undefined
-    if (pageVirtualizer) {
-      try {
-        pageVirtualizer.dispose()
-      }
-      catch (error) {
-        appendDisposeDiagnostics(diagnostics, error)
-      }
-    }
-  }
 
   private async withCommittedBatch<T>(
     mode: 'print' | 'export',
@@ -1314,35 +920,6 @@ function notifyDiagnosticObserver(
   }
 }
 
-function toPagePlan(result: PaginationResult): PagePlan {
-  return {
-    mode: result.mode,
-    pages: result.pages.map(page => ({
-      index: page.index,
-      width: page.width,
-      height: page.height,
-      elements: page.fragments.map(fragment => fragment.node),
-      fragments: page.fragments.flatMap(fragment => fragment.fragmentPlan
-        ? [{ node: fragment.node as MaterialNode<unknown>, layoutPlan: fragment.plan, fragmentPlan: fragment.fragmentPlan }]
-        : []),
-      copyIndex: page.pageContext.copyIndex,
-      yOffset: page.yOffset,
-    })),
-    diagnostics: result.diagnostics.map(diagnostic => ({
-      code: diagnostic.code,
-      severity: diagnostic.severity,
-      message: diagnostic.message,
-    })),
-  }
-}
-
-function resolveRepeatedElementLocalY(node: MaterialNode, pageHeight: number): number {
-  if (pageHeight <= 0)
-    return node.y
-  const localY = node.y % pageHeight
-  return localY < 0 ? localY + pageHeight : localY
-}
-
 function collectPreparedMaterialTypes(
   candidate: ViewerInputState,
   profile: ViewerOptions['profile'],
@@ -1490,15 +1067,6 @@ function collectDeclaredLayoutResources(
   return resources
 }
 
-function collectMaterialGraphNodeIds(
-  document: DocumentSchema,
-  profile: CompiledMaterialProfile,
-): ReadonlySet<string> {
-  const nodeIds = new Set<string>()
-  walkMaterialNodes(document, profile, node => nodeIds.add(node.id))
-  return nodeIds
-}
-
 async function prepareFontWithoutHost(
   fontManager: FontManager,
   value: string,
@@ -1533,6 +1101,12 @@ function mountCommittedPage(input: {
   content.className = 'ei-viewer-content-layer'
   content.style.position = 'absolute'
   content.style.inset = '0'
+  content.style.zIndex = String(PAGE_CONTENT_LAYER_STACK_INDEX)
+  const pageLayers = groupPageLayerPlansByPlacement(resolvePageLayerPlans(input.document.page, {
+    width: input.page.width,
+    height: input.page.height,
+  }))
+  appendCommittedPageLayers(pageElement, pageLayers.underContent, input.page.index, input.document.unit, input.diagnostics)
   pageElement.appendChild(content)
   const mounts: ReturnType<typeof mountCommittedMaterial>[] = []
   try {
@@ -1585,6 +1159,8 @@ function mountCommittedPage(input: {
       content.appendChild(wrapper)
       input.checkpoint()
     }
+    appendCommittedPageLayers(pageElement, pageLayers.overContent, input.page.index, input.document.unit, input.diagnostics)
+    appendCommittedPageLayers(pageElement, pageLayers.top, input.page.index, input.document.unit, input.diagnostics)
     input.slot.appendChild(pageElement)
     input.checkpoint()
   }
@@ -1647,7 +1223,7 @@ function createCommittedPageElement(
   element.style.height = `${page.height}${schema.unit}`
   element.style.overflow = 'hidden'
   element.style.boxSizing = 'border-box'
-  element.style.backgroundColor = schema.page.background?.color ?? 'white'
+  applyCommittedPageBackground(element, schema.page.background, schema.unit)
   if (schema.page.font)
     element.style.fontFamily = schema.page.font
   if (schema.page.radius)
@@ -1657,6 +1233,97 @@ function createCommittedPageElement(
     element.style.transformOrigin = 'top left'
   }
   return element
+}
+
+function applyCommittedPageBackground(element: HTMLElement, background: PageBackground | undefined, unit: string): void {
+  if (!background) {
+    element.style.background = 'white'
+    return
+  }
+  element.style.backgroundColor = background.color || 'white'
+  if (!background.image)
+    return
+  element.style.backgroundImage = `url(${JSON.stringify(background.image)})`
+  const repeat = background.repeat || 'none'
+  if (repeat === 'full') {
+    element.style.backgroundSize = '100% 100%'
+    element.style.backgroundRepeat = 'no-repeat'
+  }
+  else {
+    element.style.backgroundRepeat = repeat === 'repeat' || repeat === 'repeat-x' || repeat === 'repeat-y'
+      ? repeat
+      : 'no-repeat'
+    if (background.width != null && background.height != null)
+      element.style.backgroundSize = `${background.width}${unit} ${background.height}${unit}`
+    else if (background.width != null)
+      element.style.backgroundSize = `${background.width}${unit} auto`
+    else if (background.height != null)
+      element.style.backgroundSize = `auto ${background.height}${unit}`
+  }
+  if (background.offsetX != null || background.offsetY != null)
+    element.style.backgroundPosition = `${background.offsetX ?? 0}${unit} ${background.offsetY ?? 0}${unit}`
+}
+
+function appendCommittedPageLayers(
+  pageElement: HTMLElement,
+  plans: readonly PageLayerRenderPlan[],
+  pageIndex: number,
+  unit: string,
+  diagnostics: ViewerDiagnosticEvent[],
+): void {
+  for (const plan of plans) {
+    if (plan.layer.kind === 'watermark' && plan.layer.type === 'text')
+      appendCommittedTextWatermark(pageElement, plan, pageIndex, unit, diagnostics)
+  }
+}
+
+function appendCommittedTextWatermark(
+  pageElement: HTMLElement,
+  plan: TextWatermarkPageLayerPlan,
+  pageIndex: number,
+  unit: string,
+  diagnostics: ViewerDiagnosticEvent[],
+): void {
+  const layer = pageElement.ownerDocument.createElement('div')
+  layer.className = 'ei-viewer-page-layer ei-viewer-page-layer--watermark'
+  layer.setAttribute('data-page-layer-id', plan.layer.id)
+  layer.setAttribute('data-page-layer-kind', plan.layer.kind)
+  layer.style.position = 'absolute'
+  layer.style.inset = '0'
+  layer.style.zIndex = String(resolvePageLayerStackIndex(plan))
+  layer.style.pointerEvents = 'none'
+  layer.style.userSelect = 'none'
+  layer.style.overflow = 'hidden'
+  layer.style.color = plan.layer.color
+  layer.style.opacity = String(plan.layer.opacity)
+  for (const tile of plan.tiles) {
+    const text = pageElement.ownerDocument.createElement('span')
+    text.className = 'ei-viewer-page-layer__watermark-tile'
+    text.textContent = plan.layer.text
+    text.style.position = 'absolute'
+    text.style.display = 'inline-flex'
+    text.style.alignItems = 'center'
+    text.style.justifyContent = 'center'
+    text.style.left = `${tile.x}${unit}`
+    text.style.top = `${tile.y}${unit}`
+    text.style.fontSize = `${plan.layer.fontSize}${unit}`
+    text.style.fontWeight = '500'
+    text.style.lineHeight = '1'
+    text.style.whiteSpace = 'nowrap'
+    text.style.transform = `translate(-50%, -50%) rotate(${plan.layer.rotation}deg)`
+    text.style.transformOrigin = 'center center'
+    layer.appendChild(text)
+  }
+  if (plan.truncated) {
+    diagnostics.push({
+      category: 'viewer',
+      severity: 'warning',
+      code: 'PAGE_WATERMARK_TRUNCATED',
+      message: `Page ${pageIndex + 1} layer ${plan.layer.id} generated too many watermark tiles and was truncated.`,
+      detail: { pageIndex, layerId: plan.layer.id, tileCount: plan.tiles.length },
+    })
+  }
+  pageElement.appendChild(layer)
 }
 
 function createCommittedElementWrapper(

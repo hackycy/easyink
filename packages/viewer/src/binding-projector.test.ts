@@ -1,8 +1,7 @@
 import type { MaterialBindingDefinition, MaterialRuntimeScope } from '@easyink/core'
-import type { DocumentSchema, MaterialNode } from '@easyink/schema'
-import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
+import type { MaterialNode } from '@easyink/schema'
 import { describe, expect, it, vi } from 'vitest'
-import { createMaterialBindingResolver, createMaterialDisplayBindingResolver, projectBindings, walkProfileMaterialNodes } from './binding-projector'
+import { createMaterialBindingResolver, createMaterialDisplayBindingResolver } from './binding-projector'
 
 const mocks = vi.hoisted(() => ({
   formatBindingDisplayValue: vi.fn(),
@@ -38,77 +37,6 @@ function bindingNode(bindings: MaterialNode['bindings']): MaterialNode {
     output: { visibility: 'include' },
   }
 }
-
-describe('projectBindings', () => {
-  it('disables custom binding source without executing it', () => {
-    const data = {
-      invoiceNo: 'INV-001',
-      customer: { name: 'Ada' },
-    }
-    const projected = projectBindings({
-      id: 'txt-customer',
-      type: 'text',
-      x: 0,
-      y: 0,
-      width: 40,
-      height: 10,
-      modelVersion: 1,
-      model: {},
-      slots: {},
-      bindings: { value: {
-        sourceId: 'invoice',
-        fieldPath: 'customer/name',
-        format: {
-          mode: 'custom',
-          custom: { source: 'globalThis.__bindingCustomExecuted = true' },
-        },
-      } },
-      output: { visibility: 'include' },
-    }, data)
-
-    expect(projected).toEqual([{
-      port: 'value',
-      value: 'Ada',
-      diagnostics: [expect.objectContaining({ code: 'BINDING_FORMAT_CUSTOM_DISABLED' })],
-    }])
-    expect((globalThis as Record<string, unknown>).__bindingCustomExecuted).toBeUndefined()
-  })
-
-  it('discovers nested binding nodes through profile introspection', () => {
-    const child: MaterialNode = {
-      id: 'child',
-      type: 'child',
-      x: 0,
-      y: 0,
-      width: 10,
-      height: 10,
-      modelVersion: 1,
-      model: {},
-      slots: {},
-      bindings: { value: { sourceId: 'invoice', fieldPath: 'customer/name' } },
-      output: { visibility: 'include' },
-    }
-    const schema: DocumentSchema = {
-      version: '1.0.0',
-      unit: 'mm',
-      page: { mode: 'fixed', width: 80, height: 60 },
-      guides: { x: [], y: [] },
-      elements: [{ ...child, id: 'owner', type: 'owner', bindings: {}, slots: { content: [child] } }],
-    }
-    const profile = createTestCompiledMaterialProfile([
-      createTestMaterialManifest({
-        type: 'owner',
-        slots: [{ id: 'content', key: { kind: 'exact', value: 'content' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }],
-      }),
-      createTestMaterialManifest({ type: 'child', binding: { kind: 'ports', ports: [] } }),
-    ])
-    const visited: string[] = []
-
-    walkProfileMaterialNodes(schema, profile, node => visited.push(node.id))
-
-    expect(visited).toEqual(['owner', 'child'])
-  })
-})
 
 describe('material binding resolvers', () => {
   it.each([

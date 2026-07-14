@@ -1,53 +1,49 @@
-# 20. 性能策略
+# 20. Performance And Resource Budgets
 
-## 20.1 架构层预留
+Performance correctness is part of the Viewer contract. Caches are bounded, dependency-complete, and generation-aware; budgets are reserved before allocation; superseded work cannot publish.
 
-v1 不做激进的性能优化，但在架构层面为以下优化预留口子：
+## 20.1 Explicit dependency keys
 
-| 优化方向 | 预留接口 | 触发时机 |
-|----------|----------|----------|
-| **渲染缓存** | Viewer 渲染管线的 `beforeMaterialRender` 等 Hook 可插入缓存层 | 大量静态元素 |
-| **Web Worker** | 布局测量或大数据预处理可移入 Worker | 大模板测量、业务侧装配 |
-| **DOM 复用** | Viewer 页面层支持增量刷新而非全量替换 | 频繁数据变化 |
-| **物料 facet 激活** | `MaterialFacetHost` 按 profile/type/surface 去重并隔离激活 | 重型设计态渲染器、全量图表库、复杂代码编辑器 |
+Every reusable result declares the dependencies that can change it. Depending on the stage, keys include:
 
-## 20.2 基本性能目标
+- compiled profile identity and execution mode;
+- material type, runtime instance key, and node revision;
+- document revision, node graph revision, and data revision;
+- resource revision and layout constraint key;
+- available width and height, unit, and writing mode;
+- prepared collection or row source revision;
+- page, fragment range, and render policy identity.
 
-| 场景 | 目标 |
-|------|------|
-| 设计器加载（空模板） | < 500ms |
-| 中等模板渲染（50 elements） | < 200ms |
-| 大型模板渲染（200 elements） | < 1s |
-| 拖拽/缩放交互帧率 | >= 30fps |
+Measure cache keys include profile, mode, type, instance, node, document, data, resource, and constraints. Runtime-model and prepared-data caches include their scope and data dependencies. Page DOM retention is not a layout or pagination cache key because virtualization cannot change committed facts.
 
-## 20.3 选区命中加速（延迟实现）
+All caches have host-configured entry limits. Eviction cannot retain strong descendant graphs or unbounded historical tombstones. Published values are copied and recursively frozen without freezing caller-owned inputs.
 
-画布的 marquee 框选与 element-drag 的 snap candidate 收集目前都是 O(N) 全表扫描（见 `use-marquee-select.ts`、`use-element-drag.ts`）。在 v1 的目标场景（≤ 200 elements）下每帧成本可以接受。
+## 20.2 Admission and inline data
 
-阈值：**当单页元素数稳定 > 500 且实测 marquee 拖动帧率掉到 < 30fps 时**，引入 spatial index：
+Document admission bounds material nodes, JSON nodes, depth, and string bytes before graph expansion. Inline data is copied with explicit node and string-byte limits. Effective runtime limits use the minimum applicable host limit, including inline-data nodes, runtime rows, layout facts, render-tree nodes, and browser DOM nodes.
 
-- **首选**：固定网格 hash（cell size ≈ 平均元素宽高的 2 倍）。建表 O(N)，查询 O(k)，无需平衡。
-- **次选**：R-tree（需要引入依赖，仅当元素尺寸差异极大时考虑）。
+Prepared collections reserve row and key-token budgets before materialization. Keys have token and byte limits. Runtime-row and layout-fact reservations use host budget tokens; material-local defaults cannot increase them.
 
-接入点：在 `DesignerStore` 暴露一个 `getElementsIntersecting(rect: Rect): MaterialNode[]`，由 marquee / snap collect / minimap dirty rect 共用。物料几何变更（增删、移动、resize、rotation）必须主动失效相关 cell。
+## 20.3 Layout and render tokens
 
-**不在此之前实现**的理由：v1 没有任何线上模板触及阈值；提前实现会引入"网格失效正确性"这条新的 bug 类，得不偿失。
+`MaterialLayoutBudgetToken` bounds runtime rows, layout facts, and fragmentation work. `MaterialRenderBudgetToken` bounds every element, text, fragment, markup, and imperative node across a root material and its nested slots. Core-created wrapper and fallback nodes consume the same shared token.
 
-## 20.4 设计器物料懒加载
+Large arrays, row models, layout facts, break indexes, render trees, and page slot registries are preallocated only after their reservation succeeds. Over-limit work is quarantined with stable diagnostics before allocation or DOM mutation. A material cannot swallow a budget error and continue consuming the generation.
 
-Designer/Viewer 通过 manifest facet factory 激活物料 surface。manifest 的 common contract、schema adapter 与 AI portable data 在 profile compile 时同步快照；facet factory 可以声明 `sync` 或显式 `async-isolated`。
+## 20.4 Scheduling and cancellation
 
-这样物料面板、属性面板、数据绑定面板和 Assistant manifest 可直接读取编译 profile，而重型 surface 代码在 `MaterialFacetHost` 激活时加载。
+The measure scheduler has a bounded in-flight count. Resource preparation, runtime-model resolution, measure, layout, fragmentation, and render commits carry the generation's cancellation signal. Each asynchronous boundary and synchronous mount registration checkpoints cancellation and supersession.
 
-运行时规则：
+Only the current generation may publish diagnostics, cache entries, revisions, or DOM. Candidate roots and mounts are disposed in reverse order on failure. Requested revisions remain distinct from committed revisions until the atomic root swap succeeds.
 
-- `MaterialFacetHost` 对同一 profile/type/surface 的并发激活去重。
-- 激活失败只 quarantine 对应 surface，并发布稳定 diagnostics。
-- 新的编译 profile 对象可以重新尝试先前隔离的 facet；旧 profile snapshot 不被原地修改。
-- shutdown 等待在途激活，并按确定顺序执行 facet disposer。
+## 20.5 Page DOM and output readers
 
-使用边界：
+Interactive page virtualization retains a bounded page window plus configured overscan. Stable page slots preserve scroll geometry while material DOM is absent. Page unmount disposes page-local mounts only; the single profile material runtime owns shared facets.
 
-- 适合：完整 ECharts、自定义代码编辑器、复杂设计态交互内核。
-- 不适合：只包含普通 DOM 文本、少量 SVG 或轻量渲染函数的物料。
-- 懒加载 chunk 内不应包含物料面板必须同步读取的信息，否则会造成点击/拖拽/属性面板先于渲染器加载时状态不完整。
+Print and export acquire committed reader leases and materialize all pages. A waiting writer cannot partially replace the batch. Destroy revokes readers, cancels pending work, disposes candidate and committed mounts, then disposes the layout runtime, material runtime, resources, measures, and host in deterministic order.
+
+## 20.6 Diagnostics
+
+Budget, admission, resource, measure, fragmentation, render, cleanup, and cancellation failures use stable diagnostic codes with material type, node id, runtime instance, revision, requested count, used count, and limit where applicable. Quarantine is scoped to the failed profile/surface/generation facts and never mutates persisted Schema.
+
+Performance tests use deterministic operation counts, reservation results, cache sizes, and retained-page counts instead of wall-clock thresholds.

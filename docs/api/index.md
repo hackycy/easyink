@@ -38,7 +38,7 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 |------|------|------|
 | `FontManager` | Class | 字体目录缓存、加载状态、批量加载和可选 `@font-face` 注入 |
 | `collectFontFamilies` | Function | 从 DocumentSchema 收集页面和元素字体引用 |
-| `trustedViewerHtml` | Function | 标记物料 Viewer HTML 为可信输出 |
+| `viewerElement` / `viewerText` / `viewerFragment` | Functions | 构造受预算约束的 ViewerRenderTree |
 | `resolveMaterialDataContract` | Function | 解析 data-contract 物料的目标 records |
 
 字体相关类型导出：`FontDescriptor`, `FontProvider`, `FontSource`, `FontLoadRequest`, `FontLoadStatus`, `FontLoadState`, `FontLoadSuccess`, `FontLoadFailure`, `FontBatchLoadOptions`, `FontBatchLoadResult`, `FontPreloadResult`
@@ -58,8 +58,7 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 | `createThumbnails` | Function | 生成缩略图 |
 | `collectFontFamilies` | Function | 收集字体引用 |
 | `loadAndInjectFonts` | Function | 加载并注入字体到 Viewer host document |
-| `projectBindings` | Function | 解析数据绑定 |
-| `applyBindingsToProps` | Function | 应用绑定到属性 |
+| `ProfileMaterialRuntime` | Class | 基于 compiled profile 激活 Viewer facet |
 | `resolvePrintPolicy` | Function | 解析打印策略 |
 | `PrintPolicyError` | Class | 打印策略解析错误 |
 | `createBrowserViewerHost` | Function | Browser Host |

@@ -3,12 +3,13 @@ import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { CommittedPagePlan, LayoutRuntimeInput } from './layout-runtime'
 import type { ViewerRuntime } from './runtime'
 import type { ViewerDiagnosticEvent, ViewerOptions } from './types'
+import { readdirSync, readFileSync } from 'node:fs'
+import { relative, resolve } from 'node:path'
 import { DEFAULT_VIEWER_TREE_POLICY } from '@easyink/browser-dom'
 import { compileBuiltinMaterialProfile } from '@easyink/builtin'
 import { createLayoutConstraintKey, createModelPropertyAccessor, defineMaterialFacetFactory, defineMaterialManifest, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { applyBindingsToProps, projectBindings } from './binding-projector'
 import { createCustomViewerHost, createIframeViewerHost, createViewer as createProfileViewer } from './index'
 
 const builtinProfile = compileBuiltinMaterialProfile('all')
@@ -165,7 +166,130 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
+describe('viewer architecture source guards', () => {
+  it('contains no legacy Viewer rendering or schema mutation path', () => {
+    const coreSources = productionSources('packages/core/src')
+    const viewerSources = productionSources('packages/viewer/src')
+    const allSources = [...coreSources, ...viewerSources]
+
+    expectForbiddenSources(allSources, [
+      'TrustedViewerHtml',
+      'trustedViewerHtml',
+      'normalizeDocumentSchema(',
+      'renderLegacy',
+      'renderPages(',
+      'from \'./conditional-schema\'',
+      'FragmentPaginator',
+      'fragmentPaginator',
+      'paginateFragment',
+      'resolveFragmentPaginator',
+    ])
+    expectForbiddenSources(viewerSources.filter(source => source.path.endsWith('render-surface.ts')), ['innerHTML'])
+  })
+
+  it('keeps Viewer output state independent from Designer hidden state', () => {
+    const outputState = sourceFile('packages/viewer/src/effective-output-state.ts')
+
+    expectForbiddenSources([outputState], ['editorState.hidden', 'editorState?.hidden'])
+    expect(outputState.text, `${outputState.path}:/.hidden\\b/`).not.toMatch(/\.hidden\b/)
+  })
+
+  it('admits documents through the compiled profile and owns one Viewer material runtime', () => {
+    const runtime = sourceFile('packages/viewer/src/runtime.ts')
+    const viewerSources = productionSources('packages/viewer/src')
+    const viewerSource = viewerSources.map(source => source.text).join('\n')
+
+    expect(runtime.text, `${runtime.path}:loadDocumentWithProfile`).toContain('loadDocumentWithProfile(')
+    expect(countSymbol(viewerSource, 'new ProfileMaterialRuntime('), 'packages/viewer/src:ProfileMaterialRuntime').toBe(1)
+    expect(countSymbol(viewerSource, 'new MaterialFacetHost('), 'packages/viewer/src:MaterialFacetHost').toBe(1)
+  })
+})
+
+interface AuditedSource {
+  readonly path: string
+  readonly text: string
+}
+
+function productionSources(directoryPath: string): AuditedSource[] {
+  const directory = resolve(directoryPath)
+  const files: AuditedSource[] = []
+  const stack = [directory]
+  while (stack.length > 0) {
+    const current = stack.pop()!
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const path = resolve(current, entry.name)
+      if (entry.isDirectory()) {
+        stack.push(path)
+        continue
+      }
+      if (entry.isFile() && path.endsWith('.ts') && !path.endsWith('.test.ts'))
+        files.push({ path: relative(resolve(), path).replaceAll('\\', '/'), text: readFileSync(path, 'utf8') })
+    }
+  }
+  return files
+}
+
+function sourceFile(relativePath: string): AuditedSource {
+  const path = resolve(relativePath)
+  return { path: path.replaceAll('\\', '/'), text: readFileSync(path, 'utf8') }
+}
+
+function expectForbiddenSources(sources: readonly AuditedSource[], symbols: readonly string[]): void {
+  const violations = sources.flatMap(source => symbols
+    .filter(symbol => source.text.includes(symbol))
+    .map(symbol => `${source.path}:${symbol}`))
+  expect(violations, violations.join('\n')).toEqual([])
+}
+
+function countSymbol(source: string, symbol: string): number {
+  return source.split(symbol).length - 1
+}
+
 describe('viewer audit risk regressions', () => {
+  it('renders committed page backgrounds from canonical page facts', async () => {
+    const container = document.createElement('div')
+    const schema = fixedSchema([])
+    schema.page.background = {
+      color: '#ffeeaa',
+      image: 'https://example.com/bg.png',
+      repeat: 'repeat-x',
+      width: 120,
+      offsetY: 8,
+    }
+    const viewer = createViewer({ container })
+
+    await viewer.open({ schema })
+
+    const page = container.querySelector('.ei-viewer-page') as HTMLElement | null
+    expect(page?.style.backgroundColor).toBe('#ffeeaa')
+    expect(page?.style.backgroundImage).toBe('url("https://example.com/bg.png")')
+    expect(page?.style.backgroundRepeat).toBe('repeat-x')
+    expect(page?.style.backgroundSize).toBe('120mm auto')
+    expect(page?.style.backgroundPosition).toBe('0mm 8mm')
+  })
+
+  it('mounts committed page layers around the content layer in stack order', async () => {
+    const container = document.createElement('div')
+    const schema = fixedSchema([])
+    schema.page.layers = [
+      { id: 'top', kind: 'watermark', type: 'text', enabled: true, text: 'TOP', placement: 'top' },
+      { id: 'under', kind: 'watermark', type: 'text', enabled: true, text: 'UNDER', placement: 'under-content' },
+      { id: 'over', kind: 'watermark', type: 'text', enabled: true, text: 'OVER', placement: 'over-content' },
+    ]
+    const viewer = createViewer({ container })
+
+    await viewer.open({ schema })
+
+    const page = container.querySelector('.ei-viewer-page')
+    expect([...page!.children].map((child) => {
+      const element = child as HTMLElement
+      return element.dataset.pageLayerId ?? element.className
+    })).toEqual(['under', 'ei-viewer-content-layer', 'over', 'top'])
+    const tile = page!.querySelector('.ei-viewer-page-layer__watermark-tile') as HTMLElement
+    expect(tile.textContent).toBe('UNDER')
+    expect(tile.style.pointerEvents).toBe('')
+  })
+
   it('requires a compiled material profile before accepting a document', () => {
     expect(() => createProfileViewer({ container: document.createElement('div') } as unknown as ViewerOptions))
       .toThrow('MATERIAL_PROFILE_REQUIRED')
@@ -1860,34 +1984,6 @@ describe('viewer audit risk regressions', () => {
     expect(container.textContent).toContain('Paper')
     expect(container.textContent).toContain('Ink')
     expect(container.textContent).not.toContain('Wrong Nested')
-  })
-
-  it('preserves raw binding value types before material render boundaries', () => {
-    const node: MaterialNode = {
-      id: 'barcode',
-      type: 'barcode',
-      x: 0,
-      y: 0,
-      width: 30,
-      height: 10,
-      modelVersion: 1,
-      model: {},
-      slots: {},
-      bindings: { value: { sourceId: 'product', fieldPath: 'value' } },
-      output: { visibility: 'include' },
-    }
-
-    const projected = projectBindings(node, {
-      value: 123456,
-      format: 'CODE128',
-      params: { width: 2 },
-    })
-    const props = applyBindingsToProps(node.model, projected, {
-      kind: 'ports',
-      ports: [{ id: 'value', key: { kind: 'exact', value: 'value' }, role: 'display', valueShape: 'scalar', modelPath: '/model/value', formatEditor: { tabs: ['preset'] } }],
-    })
-
-    expect(props.value).toBe(123456)
   })
 
   it('returns one thumbnail entry per rendered page', async () => {

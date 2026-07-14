@@ -1,30 +1,35 @@
-# 6. 渲染管线
+# 6. Viewer Render Pipeline
 
-Viewer 消费 `CompiledMaterialProfile`，不从 Designer 实例复制物料，也不接受运行时可变物料注册表。宿主在创建 Viewer 前编译 profile，并把同一个 profile 边界用于加载、facet 激活与渲染。
+Viewer consumes one immutable `CompiledMaterialProfile`. The same profile boundary governs document loading, material admission, facet activation, layout, and rendering. Viewer never copies a Designer registry and never accepts a mutable runtime registry.
 
-## 6.1 阶段
+## 6.1 Authoritative sequence
 
-当前可执行顺序为：
+The only production sequence is:
 
-1. `loadDocumentWithProfile()`：按 `envelope -> resolve -> validate-input -> migrate -> normalize -> validate -> introspect -> graph` 准入并产生 sidecar。
-2. binding/condition projection：只处理 ready 节点和 manifest 声明的 binding ports。
-3. `runLayoutPipeline()`：读取公共 placement、repeat 和 break 约束。
-4. `runPagination()`：安排页面与已提供的 fragment paginator。
-5. `MaterialFacetHost`：按 `(profile, material type, surface)` 激活 Viewer facet。
-6. material render tree -> browser capability -> DOM mount。
+```text
+compiled profile -> document admission -> effective output -> facet activation/runtime model resolution
+-> resource readiness -> MeasureService -> MaterialLayoutPlan -> document layout -> core pagination
+-> page overlays -> ViewerRenderTree/imperative host -> browser DOM
+```
 
-`common.layout.fragmentation = 'break-opportunities'` 只声明 core 可调度能力；完整 break API 与 Viewer layout 接线属于后续 Viewer Layout 计划。Foundation 不虚构尚未存在的分页协议。
+`loadDocumentWithProfile()` performs document admission and publishes canonical Schema plus node admission states. Quarantined or missing nodes remain represented by safe runtime instances; later stages do not call their material code.
 
-## 6.2 Surface intersection
+Effective output is a frozen runtime map. Binding projection resolves the profile-declared port policy into a runtime model without changing Schema. Declared fonts and assets reach a terminal ready-or-failed state before authoritative measure. Material layout adapters return `MaterialLayoutPlan` facts and break opportunities; core owns document layout, page-break selection, fragment identity, placement, and page overlays.
 
-profile 分别发布 `editableTypes / renderableTypes / generatableTypes`。Designer 只消费 designer surface，Viewer 只消费 viewer surface；AI generation 只在 designer、viewer 与启用的 AI facet 三者交集内成立。一个 surface 激活失败只隔离对应 facet，不污染其他物料或 surface。
+## 6.2 Requested and committed state
 
-## 6.3 安全 render tree
+Each open or data update creates a requested revision. Requested document, data, and resource revisions become committed only after layout completes and `RenderSurface` atomically swaps a fully built root into the host. A failed, aborted, or superseded generation disposes candidate mounts and cannot publish DOM, diagnostics, cache entries, or committed revisions. Cleanup failures from the previous root are reported after the successful replacement is already committed.
 
-物料返回语义 `ViewerRenderTree`，不能返回 HTML 字符串。普通节点由 `viewerElement / viewerText / viewerFragment` 构造，并接受深度、节点数、属性和文本预算。
+Exactly one `ProfileMaterialRuntime`, backed by one Viewer `MaterialFacetHost`, owns Viewer facet activation, quarantine, and disposal for the profile. Individual pages and material mounts do not own shared facets.
 
-SVG/markup 必须先由当前 browser capability 生成不透明 `SanitizedMarkup` token，再由同一 capability store 消费；token 不能跨 store、跨 document 或重复使用。imperative DOM 需要 manifest facet 与 host 双方声明同名 capability，mount 第一次调用必须返回 disposer。
+## 6.3 Output boundary
 
-`RenderSurface` 对 mount 逆序清理，失败仍继续其余 disposer；嵌套 material 拥有独立 capability scope 和共享总预算。facet 实例由 `MaterialFacetHost` 管理，render mount 不负责销毁共享 facet。
+Materials return `ViewerRenderTree`. Text and elements use the core tree constructors and are checked against depth, node, attribute, style, and text budgets. A material cannot return a raw HTML string and the public contract has no trusted-HTML wrapper.
 
-实现入口见 [`packages/viewer/src/runtime.ts`](../../packages/viewer/src/runtime.ts)、[`packages/viewer/src/render-surface.ts`](../../packages/viewer/src/render-surface.ts) 与 [`packages/browser-dom/src/render-viewer-tree.ts`](../../packages/browser-dom/src/render-viewer-tree.ts)。
+Markup is accepted only as an opaque `SanitizedMarkup` token created and consumed by the same browser capability scope. Imperative DOM requires the same named `imperative-dom` capability in both the Viewer facet and the host policy, and every mount returns a deterministic disposer.
+
+## 6.4 Virtualization, print, and export
+
+Interactive virtualization changes only which committed page DOM nodes are retained. It never changes resource readiness, measurement, layout, pagination, page identity, or shared facet lifetime. Print and export take a committed reader lease and materialize every committed page for the duration of the operation, then restore the interactive retention set.
+
+Implementation entry points are `packages/viewer/src/runtime.ts`, `packages/viewer/src/layout-runtime.ts`, `packages/viewer/src/render-surface.ts`, and `packages/browser-dom/src/render-viewer-tree.ts`.

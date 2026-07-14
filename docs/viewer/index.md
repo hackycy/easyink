@@ -173,13 +173,11 @@ const blob = await viewer.exportDocument({
 Viewer 允许你为某个物料 `type` 注册运行时渲染器。
 
 ```ts
-import { trustedViewerHtml } from '@easyink/core'
+import { viewerElement, viewerText } from '@easyink/core'
 
 viewer.registerMaterial('my-widget', { kind: 'none' }, {
   render(node, context) {
-    return {
-      html: trustedViewerHtml('<div>Custom Widget</div>'),
-    }
+    return { tree: viewerElement('div', {}, [viewerText('Custom Widget')]) }
   },
   measure(node) {
     return {
@@ -190,7 +188,7 @@ viewer.registerMaterial('my-widget', { kind: 'none' }, {
 })
 ```
 
-`render()` 返回 `html` 或 `element`。返回 HTML 时，当前接口要求你用 `trustedViewerHtml()` 明确标记这段内容是可信 Viewer HTML。
+`render()` 返回 `ViewerRenderTree`。普通文本和元素使用 `viewerText()`、`viewerElement()` 和 `viewerFragment()` 构造；SVG 等 markup 必须通过声明过的 sanitized-markup capability，不能返回原始 HTML 字符串。
 
 `measure()` 是可选的。只有需要运行时测量尺寸的物料才需要实现它。
 
