@@ -13,13 +13,11 @@ description: '@easyink/viewer 是独立的渲染运行时，接收 Schema 和数
 先看一段最小代码：
 
 ```ts
-import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+import { compileBuiltinMaterialProfile } from '@easyink/builtin/all'
 import { createViewer } from '@easyink/viewer'
 
-const viewer = createViewer({ iframe: iframeElement })
-registerBuiltinViewerMaterials((type, binding, extension) => {
-  viewer.registerMaterial(type, binding, extension)
-})
+const profile = compileBuiltinMaterialProfile('all')
+const viewer = createViewer({ iframe: iframeElement, profile })
 
 await viewer.open({
   schema: documentSchema,
@@ -33,27 +31,28 @@ viewer.destroy()
 
 这段代码做了三件事：
 
-- `createViewer({ iframe })` 创建运行时，并把渲染目标放进 iframe。
-- `registerBuiltinViewerMaterials()` 注册内置物料渲染器。
-- `open({ schema, data })` 校验 Schema、归一化 Schema，然后渲染页面。
-- `destroy()` 清理当前 Host 挂载内容、注册表和字体缓存。
+- `compileBuiltinMaterialProfile('all')` 编译不可变内置物料 profile。
+- `createViewer({ iframe, profile })` 创建运行时，并把渲染目标放进 iframe。
+- `open({ schema, data })` 通过 profile admission 加载文档，然后进入 Viewer 管线。
+- `destroy()` 清理当前 Host 挂载内容、facet runtime 和字体缓存。
 
-Viewer 不会自动内置官方物料；如果你的模板使用内置物料，需要先从 `@easyink/builtin/all` 或 `@easyink/builtin/basic` 注册对应渲染器。
+Viewer 不会隐式选择官方物料集合；模板使用哪些物料由创建时传入的 compiled profile 决定。
 
 ## 创建 Viewer {#create-viewer}
 
 `createViewer()` 接收一个 `ViewerOptions` 对象。
 
 ```ts
-const iframeViewer = createViewer({ iframe: iframeElement })
-const domViewer = createViewer({ container: containerElement })
-const customViewer = createViewer({ host })
+const iframeViewer = createViewer({ iframe: iframeElement, profile })
+const domViewer = createViewer({ container: containerElement, profile })
+const customViewer = createViewer({ host, profile })
 ```
 
 常用选项是这几个：
 
 | 选项 | 作用 |
 | --- | --- |
+| `profile` | 必填的不可变 `CompiledMaterialProfile` |
 | `iframe` | 快捷创建 Iframe Host |
 | `container` | 快捷创建 Browser Host |
 | `host` | 传入你自己创建的 `ViewerHost` |
@@ -102,15 +101,11 @@ console.log(result.diagnostics)
 当前实现的渲染流程是：
 
 ```text
-校验 Schema
-  -> beforeSchemaNormalize hook
-  -> 归一化 Schema
-  -> 加载字体
-  -> 解析绑定
-  -> 测量需要运行时尺寸的物料
-  -> 布局和分页
-  -> 复制每页重复元素
-  -> 渲染页面 DOM
+compiled profile -> document admission -> effective output
+  -> facet activation / runtime model resolution
+  -> resource readiness -> MeasureService -> MaterialLayoutPlan
+  -> document layout -> core pagination -> page overlays
+  -> ViewerRenderTree / imperative host -> browser DOM
 ```
 
 `render()` 返回 `ViewerRenderResult`：
@@ -168,29 +163,26 @@ const blob = await viewer.exportDocument({
 
 完整用法继续看 [打印与导出](./print-export)。
 
-## 注册物料渲染器 {#register-material}
+## 配置物料 profile {#register-material}
 
-Viewer 允许你为某个物料 `type` 注册运行时渲染器。
+Viewer 运行时不接受可变物料注册。自定义物料要先发布 manifest，再把 manifest 所在的物料包编译进 profile：
 
 ```ts
-import { viewerElement, viewerText } from '@easyink/core'
+import { compileMaterialProfile, EASYINK_ENGINE_VERSION } from '@easyink/core'
 
-viewer.registerMaterial('my-widget', { kind: 'none' }, {
-  render(node, context) {
-    return { tree: viewerElement('div', {}, [viewerText('Custom Widget')]) }
-  },
-  measure(node) {
-    return {
-      width: node.width,
-      height: node.height,
-    }
-  },
+const profile = compileMaterialProfile({
+  id: 'acme-viewer',
+  engineVersion: EASYINK_ENGINE_VERSION,
+  packages: [{
+    packageId: '@acme/easyink-materials',
+    kind: 'external',
+    required: true,
+    manifests: [myWidgetMaterialManifest],
+  }],
 })
 ```
 
-`render()` 返回 `ViewerRenderTree`。普通文本和元素使用 `viewerText()`、`viewerElement()` 和 `viewerFragment()` 构造；SVG 等 markup 必须通过声明过的 sanitized-markup capability，不能返回原始 HTML 字符串。
-
-`measure()` 是可选的。只有需要运行时测量尺寸的物料才需要实现它。
+manifest 的 Viewer facet 通过 `MaterialViewerExtension.render()` 返回 `ViewerRenderTree`；需要内容驱动尺寸时，通过 `MaterialViewerLayoutFacet.measure(request)` 发布 `MaterialLayoutPlan`。运行时只激活 compiled profile 中的 facet。
 
 自定义物料的完整开发方式继续看 [自定义物料开发](/advanced/custom-materials)。
 

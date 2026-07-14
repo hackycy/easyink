@@ -6,7 +6,7 @@ import { getNodeModel } from '@easyink/schema'
 
 export function renderImage(node: MaterialNode, context: ViewerRenderContext | string = 'mm') {
   const props = getNodeModel<ImageProps>(node)
-  const unit = typeof context === 'string' ? context : context.unit
+  const unit = typeof context === 'string' ? context : context.cssUnit
   const frameStyle = {
     'width': '100%',
     'height': '100%',

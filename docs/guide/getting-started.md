@@ -150,7 +150,7 @@ Viewer 是命令式运行时。你创建实例，调用 `open({ schema, data })`
 ```vue
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+import { compileBuiltinMaterialProfile } from '@easyink/builtin/all'
 import { createViewer } from '@easyink/viewer'
 
 const props = defineProps<{
@@ -165,9 +165,9 @@ onMounted(async () => {
   if (!iframeRef.value)
     return
 
-  viewer = createViewer({ iframe: iframeRef.value })
-  registerBuiltinViewerMaterials((type, binding, extension) => {
-    viewer?.registerMaterial(type, binding, extension)
+  viewer = createViewer({
+    iframe: iframeRef.value,
+    profile: compileBuiltinMaterialProfile('all'),
   })
   await viewer.open({
     schema: props.schema as never,
@@ -213,7 +213,7 @@ const blob = await viewer.exportDocument({
 
 - 用 `EasyInkDesigner` 编辑模板。
 - 用 `dataSources` 给模板提供设计时字段树。
-- 用 `createViewer().open({ schema, data })` 预览同一份模板。
+- 用 `createViewer({ profile, ...host }).open({ schema, data })` 预览同一份模板。
 
 关于 EasyInk，目前先掌握这些就够用了。继续往下读时，建议按这个顺序走：
 

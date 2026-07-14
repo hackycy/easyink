@@ -10,7 +10,7 @@ export function renderRating(node: MaterialNode, context?: ViewerRenderContext) 
     ...getNodeModel<RatingProps>(node),
     ...(context?.resolvedModel ?? {}),
   })
-  const unit = context?.unit ?? 'mm'
+  const unit = context?.cssUnit ?? 'mm'
   const label = `${formatRatingValue(props.value)}/100`
 
   return {

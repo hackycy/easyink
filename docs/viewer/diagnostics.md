@@ -145,18 +145,20 @@ await viewer.open({
 物料测量和物料渲染有不同处理。
 
 ```ts
-viewer.registerMaterial('my-widget', { kind: 'none' }, {
+const failingWidgetViewerExtension = {
   render() {
     throw new Error('render failed')
   },
-})
+}
 ```
+
+该 extension 必须由 material manifest 声明，并在 Viewer 创建前编译进 profile。
 
 `render()` 抛错时，Viewer 会发出 `MATERIAL_RENDER_ERROR`，并用错误占位内容替代这个节点。整页不会因为一个节点失败而直接中断。
 
-`measure()` 抛错时，Viewer 会发出 `MATERIAL_MEASURE_ERROR`，并跳过这个节点的运行时测量结果。
+layout facet 的 `measure(request)` 抛错时，Viewer 会发出测量诊断，并隔离该物料实例。
 
-如果某个物料类型没有注册，当前注册表会渲染一个 `[Unknown: type]` 占位内容。这个路径不会自动发诊断事件。
+如果某个物料类型不在 compiled profile 中，document admission 会隔离该节点并发布诊断，后续阶段只渲染安全占位内容。
 
 ## 打印与导出 {#print-export}
 
@@ -193,7 +195,7 @@ viewer.hooks.diagnosticsEmitted.tap(async () => {
 
 如果 `diagnosticsEmitted` hook 自己失败，Viewer 会向 `open()` 注册的诊断回调发出 `DIAGNOSTIC_HOOK_ERROR`。
 
-`beforeSchemaNormalize` 或 `beforePagePlan` 失败时，当前渲染流程会抛出原始错误，并发出对应 hook 错误诊断。
+Viewer 的 document admission、测量、布局与分页管线不提供 Schema mutation hook。运行期扩展失败通过对应阶段的稳定诊断或任务失败结果报告。
 
 ## 接入策略 {#handling-strategy}
 

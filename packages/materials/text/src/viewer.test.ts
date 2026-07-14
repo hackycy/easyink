@@ -1,10 +1,15 @@
 import type { MaterialTextMeasureInput, ViewerElementTree, ViewerTextTree } from '@easyink/core'
 import { createTestViewerRenderContext } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
+import { textMaterialManifest } from './manifest'
 import { createTextNode, migrateTextModelV0ToV1 } from './schema'
 import { renderText, textViewerLayout } from './viewer'
 
 describe('renderText', () => {
+  it('declares visible outer overflow while the render tree owns the model-specific clipping policy', () => {
+    expect(textMaterialManifest.common.layout.overflow).toBe('visible')
+  })
+
   it('renders vertical writing mode with native vertical styles', () => {
     const node = createTextNode({
       model: {
@@ -45,7 +50,7 @@ describe('renderText', () => {
         borderColor: '#000000',
       },
     })
-    const context = createTestViewerRenderContext({ unit: 'pt' })
+    const context = createTestViewerRenderContext({ unit: 'pt', cssUnit: 'pt' })
 
     const tree = renderText(node, context).tree as ViewerElementTree
     const span = tree.children[0] as ViewerElementTree

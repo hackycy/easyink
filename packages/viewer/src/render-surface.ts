@@ -1,11 +1,12 @@
 import type { BrowserDomCapabilities, RenderViewerTreeOptions, ViewerTreeMount, ViewerTreePolicy } from '@easyink/browser-dom'
-import type { MaterialFragmentPlan, MaterialRenderBudgetToken, MaterialRenderNodeKind, ViewerRenderTree } from '@easyink/core'
+import type { LayoutConstraints, MaterialFragmentPlan, MaterialRenderBudgetToken, MaterialRenderNodeKind, ViewerRenderTree } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { CommittedPagePlan, RuntimeMaterialInstancePlan } from './layout-runtime'
 import type { ProfileMaterialRuntime } from './material-runtime'
 import type { ViewerDiagnosticEvent, ViewerRenderContext } from './types'
 import { createBrowserDomCapabilities, createBrowserDomFallbackCapabilities, createBrowserDomHostMount, renderViewerTree } from '@easyink/browser-dom'
 import { assertViewerRenderTree, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerFragment, viewerText } from '@easyink/core'
+import { toViewerCssUnit } from './css-unit'
 import { safeSummarizeThrown } from './safe-thrown'
 
 const deniedRenderCapabilities: ViewerRenderContext['capabilities'] = Object.freeze({
@@ -192,7 +193,7 @@ export interface MountCommittedMaterialOptions {
   readonly fragmentPlan: MaterialFragmentPlan
   readonly materials: ProfileMaterialRuntime
   readonly pageIndex: number
-  readonly unit: string
+  readonly unit: LayoutConstraints['unit']
   readonly zoom: number
   readonly viewerMaxNodes?: number
   readonly browserDom?: {
@@ -359,6 +360,7 @@ function mountCommittedInstance(
     renderBudget: state.renderBudget.token,
     pageIndex: input.pageIndex,
     unit: input.unit,
+    cssUnit: toViewerCssUnit(input.unit),
     zoom: input.zoom,
     capabilities: facetCapabilities?.sanitizedMarkup ? capabilities : deniedRenderCapabilities,
     reportDiagnostic: (diagnostic: Parameters<NonNullable<ViewerRenderContext['reportDiagnostic']>>[0]) => input.diagnostics.push({

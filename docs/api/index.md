@@ -53,8 +53,6 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 |------|------|------|
 | `createViewer` | Function | 创建 ViewerRuntime |
 | `ViewerRuntime` | Class | 核心运行时 |
-| `MaterialRendererRegistry` | Class | 物料渲染注册表 |
-| `renderPages` | Function | 渲染页面 DOM |
 | `createThumbnails` | Function | 生成缩略图 |
 | `collectFontFamilies` | Function | 收集字体引用 |
 | `loadAndInjectFonts` | Function | 加载并注入字体到 Viewer host document |
@@ -83,16 +81,12 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 
 | 导出 | 类型 | 说明 |
 |------|------|------|
-| `builtinDesignerMaterialBundle` | Object | 可传给 `runtimeConfig.materials.bundles` 的设计态物料包；根入口等同 all 集合 |
-| `builtinDesignerMaterials` | Array | 当前入口包含的设计态物料列表 |
-| `builtinViewerMaterialBundle` | Object | 当前入口包含的 Viewer 渲染物料包 |
-| `builtinViewerMaterials` | Array | 当前入口包含的 Viewer 渲染物料列表 |
-| `registerBuiltinViewerMaterials` | Function | 将当前入口的 Viewer 渲染物料注册到 `ViewerRuntime` |
-| `builtinAllDesignerMaterialBundle` / `builtinBasicDesignerMaterialBundle` / `builtinNoneDesignerMaterialBundle` | Object | 仅根入口导出：显式选择 all/basic/none 设计态物料包 |
-| `builtinAllViewerMaterialBundle` / `builtinBasicViewerMaterialBundle` / `builtinNoneViewerMaterialBundle` | Object | 仅根入口导出：显式选择 all/basic/none Viewer 物料包 |
-| `registerAllBuiltinViewerMaterials` / `registerBasicBuiltinViewerMaterials` / `registerNoneBuiltinViewerMaterials` | Function | 仅根入口导出：注册指定内置物料集合的 Viewer 渲染器 |
+| `builtinAllMaterialPackage` / `builtinBasicMaterialPackage` / `builtinNoneMaterialPackage` | Object | 根入口导出的不可变内置物料包 |
+| `getBuiltinMaterialPackage` | Function | 按 all/basic/none 选择物料包 |
+| `compileBuiltinMaterialProfile` | Function | 编译不可变内置物料 profile |
+| `builtinMaterialPackage` | Object | all/basic/none 子入口对应的物料包 |
 
-类型导出：`BuiltinMaterialSet`, `BuiltinDesignerMaterialBundle`, `BuiltinDesignerMaterialRegistration`, `BuiltinDesignerCatalogGroupRegistration`, `BuiltinDesignerCatalogRegistration`, `BuiltinViewerMaterialBundle`, `BuiltinViewerMaterialRegistration`, `BuiltinViewerRegistrar`, `BuiltinLocaleMessages`
+类型导出：`BuiltinMaterialSet`
 
 ## @easyink/schema
 

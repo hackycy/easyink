@@ -1,4 +1,4 @@
-import type { MaterialFragmentAdapter, MaterialLayoutBudgetToken, MaterialMeasureRequest, MaterialViewerLayoutFacet, ViewerRenderContext, ViewerRenderOutput } from '@easyink/core'
+import type { LayoutPlanDiagnostic, MaterialFragmentAdapter, MaterialLayoutBudgetToken, MaterialMeasureRequest, MaterialViewerLayoutFacet, ViewerRenderContext, ViewerRenderOutput } from '@easyink/core'
 import type { TableCellSchema, TableRowSchema } from '@easyink/material-table-kernel'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { JsonValue } from '@easyink/shared'
@@ -57,10 +57,11 @@ function resolveRuntimeLayout(
   const projection = projectTableTopology(node)
   const { topology } = projection
   if (budget) {
-    const rowCount = countExpandedRows(topology.rows, node, data)
-    budget.reserveRuntimeRows(rowCount)
-    budget.reserveLayoutFacts('row', rowCount)
-    budget.reserveLayoutFacts('custom', Math.max(0, rowCount - 1))
+    const facts = countExpandedLayoutFacts(topology.rows, node, data)
+    budget.reserveRuntimeRows(facts.rows)
+    budget.reserveLayoutFacts('row', facts.rows)
+    budget.reserveLayoutFacts('cell', facts.cells)
+    budget.reserveLayoutFacts('custom', Math.max(0, facts.rows - 1))
   }
   const expandedRows = expandRepeatTemplateRows(topology.rows, projection.rowIds, node, data, reportDiagnostic)
   const visibleRows = filterVisibleRows(expandedRows, true, true)
@@ -141,7 +142,12 @@ export const tableDataViewerLayout: MaterialViewerLayoutFacet = Object.freeze({
     const data = request.mode === 'authoritative'
       ? await createMeasureDataSnapshot(request, node)
       : {}
-    const layout = resolveRuntimeLayout(node, data, request.node.height, undefined, request.budget)
+    const diagnostics: LayoutPlanDiagnostic[] = []
+    const layout = resolveRuntimeLayout(node, data, request.node.height, diagnostic => diagnostics.push({
+      ...diagnostic,
+      instanceKey: request.instanceKey,
+      nodeId: diagnostic.nodeId ?? request.node.id,
+    }), request.budget)
     const facts = createTableLayoutFacts(layout)
     const borderBox = {
       x: request.node.x,
@@ -158,29 +164,33 @@ export const tableDataViewerLayout: MaterialViewerLayoutFacet = Object.freeze({
       contentBox: borderBox,
       slotBoxes: [],
       breakOpportunities: facts.breakOpportunities,
-      diagnostics: [],
+      diagnostics,
       payload: facts.payload,
     })
   },
   fragment: tableDataFragmentAdapter,
 })
 
-function countExpandedRows(
+function countExpandedLayoutFacts(
   rows: readonly TableRowSchema[],
   node: MaterialNode<unknown>,
   data: Record<string, unknown>,
-): number {
+): Readonly<{ rows: number, cells: number }> {
   const model = getTableMaterialModel(node)
   const collectionBinding = model.kind === 'data' ? bindingAt(node, model.data.collectionPort) : undefined
   const collectionData = collectionBinding ? resolveBindingValue(collectionBinding, data) : undefined
   const recordCount = Array.isArray(collectionData) && collectionData.length > 0 ? collectionData.length : 1
-  let count = 0
-  for (const row of rows)
-    count += row.role === 'repeat-template' ? recordCount : 1
-  return count
+  let rowCount = 0
+  let cellCount = 0
+  for (const row of rows) {
+    const instances = row.role === 'repeat-template' ? recordCount : 1
+    rowCount += instances
+    cellCount += row.cells.length * instances
+  }
+  return { rows: rowCount, cells: cellCount }
 }
 
-export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRenderContext): ViewerRenderOutput {
+export function renderTableData(node: MaterialNode<unknown>, context: ViewerRenderContext): ViewerRenderOutput {
   if (node.type !== 'table-data') {
     return {
       tree: viewerElement('div', { style: { 'width': '100%', 'height': '100%', 'display': 'flex', 'align-items': 'center', 'justify-content': 'center', 'background': '#f9f9f9', 'color': '#999', 'font-size': '12px' } }, [viewerText('[Data Table]')]),
@@ -188,17 +198,12 @@ export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRen
   }
 
   const props: TableDataProps = { ...TABLE_DATA_DEFAULTS, ...resolveTableBaseProps(node) }
-  const data = context?.data ?? {}
-  const tableNode = node
+  const committedLayout = readCommittedRuntimeLayout(context.layoutPlan.payload, context.layoutPlan.borderBox.height)
+  if (!committedLayout)
+    throw new Error('TABLE_DATA_COMMITTED_LAYOUT_REQUIRED')
+  const { rows: runtimeRows, rowSources: runtimeRowSources, columnIds, rowHeights: runtimeRowHeights, totalHeight } = committedLayout
 
-  const { rows: runtimeRows, rowSources: runtimeRowSources, columnIds, rowHeights: runtimeRowHeights, totalHeight } = resolveRuntimeLayout(
-    tableNode,
-    data,
-    node.height,
-    context?.reportDiagnostic,
-  )
-
-  const fragmentRows = readTableFragmentRows(context?.fragmentPlan.renderPayload)
+  const fragmentRows = readTableFragmentRows(context.fragmentPlan.renderPayload)
   const selectedIndices = fragmentRows?.map(row => row.rowIndex)
     ?? runtimeRows.map((_, index) => index)
   const visibleRows = selectedIndices.flatMap(index => runtimeRows[index] ? [runtimeRows[index]!] : [])
@@ -214,13 +219,13 @@ export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRen
     node,
     topology: { columns: projectTableTopology(node).topology.columns, rows: sizedRows },
     props,
-    unit: context?.unit ?? 'mm',
-    elementHeight: fragmentRows ? context!.fragmentPlan.box.height : totalHeight,
-    slotOutputs: context?.slotOutputs,
+    unit: context.cssUnit,
+    elementHeight: fragmentRows ? context.fragmentPlan.box.height : totalHeight,
+    slotOutputs: context.slotOutputs,
     canonicalRowIds: rowSources.map(source => source.canonicalRowId),
     canonicalColumnIds: columnIds,
     sourceRowKeys: rowSources.map(source => source.sourceRowKey),
-    renderBudget: context?.renderBudget,
+    renderBudget: context.renderBudget,
     cellText: cell => cell.content?.text || '',
     cellBackground: (ri) => {
       const row = sizedRows[ri]
@@ -398,6 +403,7 @@ function createTableLayoutFacts(layout: ResolvedRuntimeLayout) {
       rowStartOffsets: rows.map(row => row.startBlockOffset),
       rowEndOffsets: rows.map(row => row.endBlockOffset),
       rows,
+      renderRows: layout.rows,
     },
   }
 }
@@ -500,6 +506,48 @@ function readTableLayoutRows(payload: unknown): TableLayoutRowFact[] | undefined
     rows.push(candidate as unknown as TableLayoutRowFact)
   }
   return rows
+}
+
+function readCommittedRuntimeLayout(payload: unknown, totalHeight: number): ResolvedRuntimeLayout | undefined {
+  if (!isRecord(payload)
+    || payload.kind !== 'table-data-layout'
+    || !Array.isArray(payload.renderRows)
+    || !Array.isArray(payload.columnIds)
+    || !payload.columnIds.every(columnId => typeof columnId === 'string')
+    || !Number.isFinite(totalHeight)
+    || totalHeight < 0) {
+    return undefined
+  }
+  const facts = readTableLayoutRows(payload)
+  if (!facts || facts.length !== payload.renderRows.length)
+    return undefined
+
+  const rows: TableRowSchema[] = []
+  const rowHeights: number[] = []
+  for (const [index, candidate] of payload.renderRows.entries()) {
+    const fact = facts[index]!
+    if (!isRecord(candidate)
+      || typeof candidate.height !== 'number'
+      || !Number.isFinite(candidate.height)
+      || typeof candidate.role !== 'string'
+      || !Array.isArray(candidate.cells)
+      || fact.rowIndex !== index) {
+      return undefined
+    }
+    const height = fact.endBlockOffset - fact.startBlockOffset
+    if (!Number.isFinite(height) || height < 0)
+      return undefined
+    rows.push(candidate as unknown as TableRowSchema)
+    rowHeights.push(height)
+  }
+
+  return {
+    rows,
+    rowSources: facts.map(fact => ({ canonicalRowId: fact.canonicalRowId, sourceRowKey: fact.sourceRowKey })),
+    columnIds: [...payload.columnIds] as string[],
+    rowHeights,
+    totalHeight,
+  }
 }
 
 function readTableFragmentRows(payload: unknown): TableLayoutRowFact[] | undefined {

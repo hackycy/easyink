@@ -11,7 +11,7 @@
 - 页面模型覆盖 `mode / width / height / pages / scale / radius / offsetX / offsetY / copies / blankPolicy / grid / font / background / print / pageModel / layout / pagination / reflow`，并兼容 benchmark 输入里的 `viewer / xOffset / yOffset / blank`
 - 数据源协议覆盖 `id / name / tag / title / icon / expand / headless / fields / use / props / format / displayFormat / union / bindIndex / meta`，字段节点可声明 `format / displayFormat`
 - 数据绑定分为普通 `BindingRef` 和物料级 `data-contract`：普通元素消费字段路径，图表等结构化物料声明目标数据模型，binding 只保存 source path 到目标字段的映射，关系由 Resolver 推导
-- 条件渲染是默认物料能力，Schema 以组内 AND、组间 OR 的条件组保存规则，Viewer 在绑定、测量、布局与分页前生成派生运行时 Schema；物料仅在需要时显式收窄或禁用能力
+- 条件渲染是默认物料能力，Schema 以组内 AND、组间 OR 的条件组保存规则；Viewer 将条件结果发布为不可变 effective output state，`reserve` 参与测量与布局但不绘制，也不修改持久化 Schema 或 `editorState`
 - 顶部物料栏建模为"高频直达物料 + 分组目录物料"的混合入口
 - `table`、`chart`、`svg` 都是一级结构系统
 - 属性面板在同一窗口壳层中互斥展示"元素属性"与"页面属性"，支持 PropertyPanelOverlay 动态叠加层

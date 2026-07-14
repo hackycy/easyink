@@ -108,11 +108,11 @@ interface RenderCondition {
 
 Designer 必须在摘要中明确显示“无条件，始终显示”或“无条件，始终隐藏”，避免空配置产生隐蔽行为。
 
-`hidden` 与条件的优先级：
+Designer 的 `editorState.hidden` 与条件输出正交：
 
-- `hidden: true` 始终优先，不再求值 `renderCondition`。
-- 静态 `hidden` 保留占位，等价于 `reserve`。
-- 条件不能让静态隐藏节点重新显示。
+- `editorState.hidden` 只影响设计态可见性和交互，不参与 Viewer 条件求值。
+- Viewer 的 `reserve` 是不可变 effective output state，不写入 `editorState.hidden`。
+- 条件结果不能修改任何持久化 Designer authoring state。
 
 ## 26.4 条件组与条件行
 
@@ -387,13 +387,13 @@ show -> include
 hide -> whenHidden, default remove
 ```
 
-Viewer 在绑定前通过纯函数 `resolveConditionalSchema(schema, data, registry)` 生成派生 Schema，原始 Schema 始终不修改：
+Viewer 在 profile admission 后通过纯函数求值条件，并发布按节点索引的不可变 effective output state；canonical document 始终是持久化输入：
 
-- `include`：沿用原节点。
-- `remove`：从派生 Schema 的 `elements` 中过滤。
-- `reserve`：克隆节点并设置运行时 `hidden: true`。
+- `include`：参与绑定、测量、布局、分页与绘制。
+- `remove`：不参与测量、布局、分页或绘制。
+- `reserve`：参与绑定、测量、布局与分页，但跳过绘制。
 
-后续绑定、测量、布局、分页与 RenderSurface 全部消费派生 Schema。
+后续 runtime model resolution、`MeasureService`、document layout、core pagination 与 RenderSurface 同时消费 canonical document 和 effective output state。条件求值不会克隆或改写 Schema，也不会借用 Designer 的 `editorState.hidden` 表示 `reserve`。
 
 固定资源限制：
 
@@ -522,7 +522,7 @@ Condition Dialog 采用事务式草稿：
 
 1. Schema：定义 `RenderCondition/ConditionGroup/ConditionRow`、validation 和 codec 往返。
 2. Core：复用统一字段路径解析，实现完整路径读取、值转换、三值条件组求值器、集合量化和复杂度预算。
-3. Viewer：扩展条件诊断与 Material Registry，在绑定前生成派生运行时 Schema。
+3. Viewer：在 profile admission 后求值条件，发布不可变 effective output state，再进入 runtime model、测量、布局与分页。
 4. 物料：移除内置物料的默认条件能力白名单，仅保留未来需要收窄或禁用时的覆盖入口。
 5. Designer 基础：增加 `UpdateRenderConditionCommand`、属性面板摘要、启停、移除和条件图标。
 6. Designer Dialog：实现条件组表格、字段选择器、单判断方式选项、草稿校验、复制删除与保存事务。
@@ -538,7 +538,7 @@ Condition Dialog 采用事务式草稿：
 - 行为：条件成立时显示/隐藏、条件不成立的反向结果、unknown 策略、remove/reserve。
 - Designer 属性面板：能力显隐、启停、摘要、空条件警示、移除和条件图标。
 - Condition Dialog：添加组、添加条件、复制、删除、字段选择、类型输入、草稿取消、校验定位、单次保存与撤销重做。
-- Viewer：静态 hidden 优先、诊断去重、`updateData()` 重算和派生 Schema 不修改原 Schema。
+- Viewer：`editorState.hidden` 正交、诊断去重、`updateData()` 重算 effective output state，且不修改 canonical document。
 - 物料：验证未声明条件覆盖的物料默认支持 `remove/reserve`，显式 `condition: false` 或收窄隐藏效果时 Designer 与 Viewer 行为一致。
 - 集成场景：两个重叠二维码按互斥条件切换；自动高度文本在 `reserve` 下保留测量空间；订单明细中任意金额满足阈值时显示节点。
 

@@ -20,7 +20,7 @@ export function renderFlowRow(node: MaterialNode, context: ViewerRenderContext) 
       context.renderBudget.reserveNodes('text', rowCount * cellsPerRow)
     },
   })
-  const unit = context.unit ?? 'mm'
+  const unit = context.cssUnit
   const children = model.rows.map(row => viewerElement('div', { style: {
     'display': 'flex',
     'flex-direction': 'column',

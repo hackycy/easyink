@@ -8,21 +8,22 @@ Material work spans this chain:
 Designer material catalog
   -> createDefaultNode(partial?, unit?)
   -> schema.elements[]
-  -> FontProvider / FontManager preload and injection for referenced page or element fonts
   -> MaterialDesignerExtension.renderContent()
-  -> viewer.open({ schema, data })
-  -> collectFontFamilies(schema) and loadAndInjectFonts() into the Viewer host document
-  -> conditional schema resolution (default material capability unless explicitly disabled or narrowed)
-  -> ordinary binding projection / material data contract resolution
-  -> material measure()
-  -> runLayoutPipeline()
-  -> runPagination()
-  -> repeated page overlays
-  -> MaterialViewerExtension.render()
-  -> print and export reuse Viewer DOM and metrics
+  -> compile immutable material profile
+  -> document admission
+  -> effective output state
+  -> facet activation / runtime model resolution
+  -> resource readiness
+  -> MeasureService
+  -> MaterialLayoutPlan
+  -> document layout / core pagination
+  -> page overlays
+  -> ViewerRenderTree / imperative host
+  -> browser DOM
+  -> print and export reuse committed Viewer pages and metrics
 ```
 
-If one link is missing, the failure mode is usually direct: no Designer registration means it cannot be dragged in; no Viewer registration means `[Unknown: type]`; no stable default node means drag and auto-create paths produce blank or invalid templates.
+If one link is missing, the failure mode is direct: no Designer registration means it cannot be dragged in; a manifest absent from the compiled Viewer profile is quarantined during admission; no stable default node means drag and auto-create paths produce blank or invalid templates.
 
 ## State Boundaries
 
@@ -63,9 +64,9 @@ Default combinations:
 Material rules:
 
 - `MaterialNode.x/y/width/height` are document coordinates, not output page or editor-surface coordinates.
-- `measure()`, reflow, pagination, and repeated overlays can create runtime nodes/fragments, but must not silently write those results into source schema.
+- `MaterialViewerLayoutFacet`, document layout, core pagination, and repeated overlays publish runtime plans and fragments without writing results into source Schema.
 - Do not add new behavior branches keyed only on `page.mode`; read the owning page strategy field: `page.pageModel`, `page.layout`, `page.reflow`, or `page.pagination`.
-- New runtime behavior should go through `runLayoutPipeline()` and `runPagination()`.
+- New Viewer layout behavior should publish `MaterialLayoutPlan` facts through `MeasureService`; core owns document layout and pagination.
 
 `page.layers` is separate from those behavior fields. It is a page-level render-layer array for non-element, non-editable, non-bindable page decorations such as text watermarks. It is resolved by `@easyink/core` into layer render plans and consumed by Designer/Viewer. Material code should not use `page.layers` as a material feature hook or custom extension point.
 
@@ -141,8 +142,8 @@ Designer owns edit-time font loading:
 Viewer owns output-time font loading:
 
 - `ViewerRuntime` creates its own `FontManager` from `ViewerOptions.fontProvider`.
-- Before binding, measurement, layout, pagination, and DOM render, it calls `collectFontFamilies(schema)` and `loadAndInjectFonts()` for the Viewer host document.
-- Font failures emit Viewer diagnostics with `scope: 'font'`, but rendering continues with browser font behavior.
+- Manifest schema-adapter introspection publishes material-owned font and asset references; Viewer combines them with the page font and prepares the bounded set through its resource-readiness coordinator.
+- The coordinator publishes a terminal `resourceRevision` before `MeasureService` runs. Font failures emit Viewer diagnostics, increment terminal resource state, and still allow browser fallback rendering.
 
 Material code should only store and render font family names. It should not call `FontProvider`, create `FontManager`, inject `@font-face`, or serialize font sources.
 
@@ -159,50 +160,46 @@ Implement `MaterialViewerExtension` with:
 
 Viewer runtime stages:
 
-1. Normalize/validate schema and load fonts.
-2. Resolve bindings through the profile port policy into frozen runtime models and scopes.
-3. Run material `measure()` with resolved props applied to a temporary node.
-4. Exclude repeated/page-aware nodes from layout inputs.
-5. Run `runLayoutPipeline()` and `runPagination()`.
-6. Copy repeated/page-aware elements into each output page and inject `__pageNumber` / `__totalPages`.
-7. Render DOM through `MaterialRendererRegistry`.
-8. Cache `ViewerPageMetrics` for print/export.
+1. Compile the immutable material profile and admit input through `loadDocumentWithProfile()`.
+2. Resolve effective output state, activate Viewer facets, and publish frozen runtime models and scopes.
+3. Reach terminal font and asset resource revisions.
+4. Run `MeasureService`; layout facets publish `MaterialLayoutPlan` facts and optional fragment adapters.
+5. Run document layout and core pagination; core selects break opportunities and owns page placement.
+6. Add repeated elements as page overlays after pagination.
+7. Render committed facts as `ViewerRenderTree` or through a capability-gated imperative host, then mount browser DOM.
+8. Cache committed `ViewerPageMetrics` for print/export reader leases.
 
 ## Registration
 
 Custom material hosts:
 
 - Designer: pass the bundle through `runtimeConfig.materials.bundles`, or call `registerMaterialBundle(store, bundle)` inside `EasyInkDesigner` `setupStore`.
-- Viewer: call `viewer.registerMaterial(type, binding, extension)` with the same material type and binding definition that Designer uses.
+- Viewer: include the material manifest in the profile input and compile that profile before creating or opening the Viewer. Runtime activation comes only from the immutable compiled profile; there is no mutable Viewer material registry.
 - Heavy Designer renderers may use `lazyFactory` on the Designer material entry. Keep material metadata synchronous; only the `MaterialDesignerExtension` factory should live in the lazy chunk.
 
 Built-in materials:
 
-- Add package imports and entries in `packages/builtin/src/designer.ts`.
-- Add Viewer registration in `packages/builtin/src/viewer.ts`.
+- Export one complete material manifest from the material package, then add that manifest to the appropriate immutable package in `packages/builtin/src/index.ts`.
 - Do not add default condition capability registrations. Conditional rendering is a framework default for all materials. Only set `condition: false` to opt out, or set a `hiddenEffects` override to narrow `remove/reserve` support.
-- Keep the public `@easyink/builtin` export surface aligned. `package.json` only exposes the root entry plus `./all`, `./basic`, `./none`, and `./package.json`; `src/designer.ts`, `src/viewer.ts`, and `src/bindings.ts` are internal sources, not public subpaths.
-- Root exports should expose the all-set legacy aliases plus explicit all/basic/none bundle aliases and Viewer registration helpers. `@easyink/builtin/all` exposes every built-in material; `@easyink/builtin/basic` must only import the reduced set it registers; `@easyink/builtin/none` must stay empty.
-- Add `aiDescriptor` to the Designer material registration when generation should know it. Assistant consumes the live Designer material manifest; do not add material-specific prompt rules.
+- Keep the public `@easyink/builtin` export surface aligned. The root exports `builtinAllMaterialPackage`, `builtinBasicMaterialPackage`, `builtinNoneMaterialPackage`, `getBuiltinMaterialPackage()`, and `compileBuiltinMaterialProfile()`; `@easyink/builtin/all`, `/basic`, and `/none` each expose `builtinMaterialPackage` plus the profile compiler.
+- `@easyink/builtin/all` contains every built-in manifest; `@easyink/builtin/basic` contains the reduced set; `@easyink/builtin/none` stays empty. Hosts compile the selected package before constructing Viewer.
+- Add the material's AI descriptor to its manifest facet when generation should know it. Assistant consumes the admitted material manifest; do not add material-specific prompt rules.
 - Add `@easyink/material-x` dependency to `packages/builtin/package.json`.
 
 ## Catalog and Capabilities
 
-`DesignerMaterialRegistration` defines:
+`MaterialManifest` defines the cross-surface contract:
 
-- `type`: stable Schema identity.
-- `name`: display label or i18n key.
-- `icon`: Vue icon component.
-- `category`: primary material category.
-- `capabilities`: controls binding, rotation, resizing, children, animation, union drop, page-aware, multi-binding, and aspect lock.
-- `condition`: optional condition capability override. Omit it for normal materials; the framework default supports `remove` and `reserve`. Use `false` only to ignore `renderCondition`, or a definition only to narrow `hiddenEffects`.
-- `binding`: material binding definition: `none`, `ordinary`, `custom`, or `data-contract`. Data-contract definitions include the target model contract and make Designer write `node.binding.kind='data-contract'` mappings instead of ordinary whole-element `BindingRef`.
-- `createDefaultNode`: default schema factory.
-- `factory`: synchronous Designer extension factory or a lightweight placeholder when `lazyFactory` is present.
-- `lazyFactory`: optional async Designer factory loader for heavyweight renderers. Do not use it for Viewer registration or material metadata.
-- `propSchemas`: the complete material-owned property schema list for the material. Use `@easyink/prop-schemas` only for shared option arrays and layout behavior helpers.
-- `localeMessages`: material-owned Designer locale messages for catalog labels, property labels, material-local actions, placeholders, history labels, and data-contract labels.
-- `sectionFilter`: hide or show property panel sections.
+- root `type`: stable Schema identity.
+- `common.nameKey`, `common.iconKey`, and `common.category`: catalog metadata.
+- `common.interaction`: rotation, resizing, aspect ratio, animation, and union-drop capabilities.
+- `common.condition`: optional condition capability override. Omit it for the framework default; use `false` to opt out or a definition to narrow hidden effects.
+- `common.binding`: either `kind: 'none'` or `kind: 'ports'` with exact, prefix, or model-derived port policies and an optional data contract.
+- `common.defaultNode`: immutable default geometry, unit, model, bindings, and output state.
+- `common.properties`: the complete material-owned property descriptor list.
+- `facets.designer`: Designer extension factory plus catalog order and locale messages.
+- `facets.viewer`: Viewer render extension, optional layout facet, and capability gates.
+- `facets.ai`: generation declaration and optional descriptor consumed by Assistant.
 
 `catalogs` creates material panel groups. Each group owns a stable `id`, a translatable `label`, optional ordering, and item entries. Register catalog label keys in the same bundle locale messages when the group is custom or when the host may omit the built-in bundle. A built-in material can be fully registered for Designer and Viewer but still be invisible in the material panel if its type is missing from every catalog group; add a regression test when introducing a new built-in material.
 

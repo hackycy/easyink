@@ -21,7 +21,7 @@ export const ellipseMaterialManifest = defineStandardMaterialManifest({
   schemaAdapter: recordSchemaAdapter(1),
   designerFactory: createEllipseExtension,
   localeMessages: ellipseLocaleMessages,
-  viewerExtension: { render: (node, context) => renderEllipse(node, context.unit) },
+  viewerExtension: { render: (node, context) => renderEllipse(node, context.cssUnit) },
   aiDescriptor: ellipseAIMaterialDescriptor,
   generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/fillColor'] },
 })

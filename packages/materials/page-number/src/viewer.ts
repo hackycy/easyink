@@ -28,13 +28,13 @@ export function renderPageNumber(node: MaterialNode, context: ViewerRenderContex
     } }, [viewerElement('span', { style: {
       'width': '100%',
       'text-align': props.textAlign,
-      'font-size': `${props.fontSize}${context.unit}`,
+      'font-size': `${props.fontSize}${context.cssUnit}`,
       ...(props.fontFamily ? { 'font-family': props.fontFamily } : {}),
       'font-weight': props.fontWeight,
       'font-style': props.fontStyle,
       'color': props.color,
       'line-height': props.lineHeight,
-      ...(props.letterSpacing ? { 'letter-spacing': `${props.letterSpacing}${context.unit}` } : {}),
+      ...(props.letterSpacing ? { 'letter-spacing': `${props.letterSpacing}${context.cssUnit}` } : {}),
     } }, [viewerText(display)])]),
   }
 }

@@ -17,7 +17,7 @@ export const textMaterialManifest = defineStandardMaterialManifest({
   interaction: { rotatable: true, resizable: true, supportsAnimation: true, supportsUnionDrop: true },
   binding: { kind: 'ports', ports: [{ id: 'value', key: { kind: 'exact', value: 'value' }, role: 'display', valueShape: 'scalar', modelPath: '/model/content', formatEditor: { tabs: ['preset'] } }] },
   condition: TEXT_CONDITION,
-  layout: { intrinsicSize: 'height', fragmentation: 'none', pageRepeat: 'none', overflow: 'clip' },
+  layout: { intrinsicSize: 'height', fragmentation: 'none', pageRepeat: 'none', overflow: 'visible' },
   properties: textDesignerPropSchemas,
   schemaAdapter: textSchemaAdapter,
   designerFactory: createTextExtension,

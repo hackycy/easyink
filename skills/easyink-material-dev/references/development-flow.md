@@ -114,10 +114,10 @@ The layout facet runs before document layout and pagination. It returns frozen d
 
 Font-dependent Viewer behavior:
 
-- Viewer loads and injects fonts before `measure()` and `render()`, so text measurement can assume requested fonts have been attempted.
-- Material `measure()` must still tolerate browser font metrics when a font failed to load.
+- Viewer reaches terminal font readiness before `MaterialViewerLayoutFacet.measure(request)` and `render()`, so text measurement can assume requested fonts have been attempted.
+- Material layout measurement must still tolerate browser font metrics when a font failed to load.
 - Material `render()` should emit only the `font-family` declaration needed for its own content. Page-level inheritance is handled by the Viewer page root from `schema.page.font`.
-- If a material stores fonts in nested data, add or update tests around `collectFontFamilies()` so preloading still happens before measurement and render.
+- If a material stores fonts in nested model data, publish those paths from schema-adapter resource introspection and test terminal readiness before measurement and render.
 
 ## Page Layout and Behavior Rules
 
@@ -146,7 +146,7 @@ The Viewer owns layout, pagination, page overlay cloning, page number context, a
 
 Use a control policy when:
 
-- runtime data or Viewer `measure()` owns an element dimension,
+- runtime data or `MaterialViewerLayoutFacet.measure(request)` owns an element dimension,
 - a material should keep width editable but make height runtime-controlled,
 - a property panel field or group should be disabled/hidden by material state,
 - or an internal kernel behavior must follow the same allow/deny rule as the visible handle.
@@ -182,7 +182,7 @@ Use `propSchemas` for simple `node.props` fields:
 For font properties:
 
 - Use `type: 'font'` instead of a string enum or free text field when the value should be selected from the host font catalog.
-- Keep the normal key as `fontFamily` when possible. `collectFontFamilies()` currently scans `schema.page.font` and `node.props.fontFamily`.
+- Keep the normal model key as `fontFamily` when possible, and publish its path from schema-adapter resource introspection.
 - Do not implement custom font preload logic in material-local property editors. The shared property panel prevents preview writes for font fields, loads the family on commit, and rolls back when loading fails.
 - The empty string means default/inherited font. Do not replace it with a hardcoded browser font unless the material intentionally owns that default.
 
@@ -206,14 +206,14 @@ For a new built-in material:
 1. Create the package under `packages/materials/...`.
 2. Ensure `pnpm-workspace.yaml` already includes the path pattern. SVG subpackages belong under `packages/materials/svg/*`.
 3. Add package dependency to `packages/builtin/package.json`.
-4. Import and register Designer entry in `packages/builtin/src/designer.ts`.
-5. Import and register Viewer entry in `packages/builtin/src/viewer.ts`.
-6. Update the public `@easyink/builtin` entries. `package.json` exposes only the root entry plus `./all`, `./basic`, `./none`, and `./package.json`; do not add or depend on public `./designer`, `./viewer`, or `./bindings` subpaths. Root exports must keep the all-set aliases plus explicit all/basic/none bundle aliases and Viewer registration helpers aligned. `all` must include the new material; `basic` includes it only if it belongs in the reduced set and must import only that reduced dependency set; `none` remains empty.
+4. Export one complete manifest containing the common contract and Designer, Viewer, and optional AI facets.
+5. Import that manifest into `packages/builtin/src/index.ts` and add it to `builtinAllMaterialPackage`; add it to `builtinBasicMaterialPackage` only when it belongs in the reduced set.
+6. Keep `getBuiltinMaterialPackage()` and `compileBuiltinMaterialProfile()` behavior aligned across the root, `/all`, `/basic`, and `/none` public entry points. The none package remains empty.
 7. Leave `condition` omitted unless this material explicitly opts out or narrows hidden effects; do not register the framework default.
 8. If Designer rendering is heavy, register metadata synchronously and use `lazyFactory` for the Designer extension chunk only; keep Viewer registration synchronous.
-9. Pass the material-local AI descriptor as `aiDescriptor` in Designer registration. `packages/builtin/src/ai.ts` is derived from the Designer bundle; do not hand-maintain a second descriptor list.
-10. Add `src/locale.ts` in the material package and pass it as `localeMessages` on the Designer material entry. Keep `@easyink/locales` for Designer common strings only.
-11. Add the material to the appropriate `catalogs` group in `packages/builtin/src/designer.ts`. If you add a new group id, register `materials.catalog.<id>` in the bundle locale messages.
+9. Put the material-local AI descriptor in the manifest AI facet. `packages/builtin/src/ai.ts` derives descriptors from `builtinAllMaterialPackage`; do not hand-maintain a second list.
+10. Add `src/locale.ts` in the material package and expose it through the manifest Designer facet. Keep `@easyink/locales` for Designer common strings only.
+11. Declare catalog group and order metadata in the manifest Designer facet. If you add a new group id, include `materials.catalog.<id>` in the material locale messages.
 12. Update tests or snapshots affected by built-in type lists, catalog grouping, lazy registration, root/subpath exports, package-size boundaries, condition overrides, or binding format tabs. Include a root-entry check when aliases or registration helpers change so consumers are not forced onto unpublished source subpaths.
 13. Run focused package tests and then broader validation when registration, descriptors, or shared Designer/Viewer behavior changed.
 
@@ -226,14 +226,14 @@ Every material change should be checked through Viewer because both export and p
 - If a material depends on fonts, runtime data, page-aware props, measured height, or fragment pagination, verify those are reflected in Viewer DOM before debugging exporter or printer code.
 - For formal print paths, confirm material dimensions are stable in the schema unit and convert to the print system unit at the driver boundary.
 
-If export/print fails for a custom material, first confirm Viewer registration, render output, page plan shape, and rendered page metrics. Only then inspect exporter or driver bridge logic.
+If export/print fails for a custom material, first confirm its manifest was admitted by the compiled Viewer profile, then inspect render output, page plan shape, and rendered page metrics. Only then inspect exporter or driver bridge logic.
 
 ## Custom Host Checklist
 
 For a host-owned custom material outside built-ins:
 
 - Register Designer through `setupStore`.
-- Register Viewer through the created Viewer runtime with `viewer.registerMaterial(type, binding, extension)`.
+- Publish the Viewer facet in the same manifest, include it in an external `MaterialPackageRegistration`, and compile the host profile before creating Viewer.
 - Keep the same `type` string in both.
 - Ship the default-node factory, Designer factory, Viewer extension, icons, prop schemas, and any host locale messages together.
 - Verify templates using that `type` cannot reach Viewer without the host registration.

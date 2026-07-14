@@ -25,6 +25,7 @@ import { BrowserTextMeasureService, snapshotViewerTreePolicy } from '@easyink/br
 import { createInternalHooks, FontManager, groupPageLayerPlansByPlacement, loadDocumentWithProfile, MeasureService, PAGE_CONTENT_LAYER_STACK_INDEX, resolvePageLayerPlans, resolvePageLayerStackIndex, VIEWER_TREE_ABSOLUTE_MAX_NODES, walkMaterialNodes } from '@easyink/core'
 import { cloneJsonValue, deepFreezeJsonValue, UNIT_FACTOR } from '@easyink/shared'
 import { createCommittedPageSlotRegistry } from './committed-page-slots'
+import { toViewerCssUnit } from './css-unit'
 import { resolveEffectiveOutputStates } from './effective-output-state'
 import { createFontPreparationAdapter } from './font-loader'
 import { assertViewerPerformanceBudget, createDefaultLayoutRuntime, DEFAULT_VIEWER_PERFORMANCE_BUDGET } from './layout-runtime'
@@ -830,7 +831,7 @@ export class ViewerRuntime {
       return
     }
 
-    const unit = this._schema.unit
+    const unit = toViewerCssUnit(this._schema.unit)
     container.style.paddingLeft = `${ox}${unit}`
     container.style.paddingTop = `${oy}${unit}`
   }
@@ -1106,7 +1107,7 @@ function mountCommittedPage(input: {
     width: input.page.width,
     height: input.page.height,
   }))
-  appendCommittedPageLayers(pageElement, pageLayers.underContent, input.page.index, input.document.unit, input.diagnostics)
+  appendCommittedPageLayers(pageElement, pageLayers.underContent, input.page.index, toViewerCssUnit(input.document.unit), input.diagnostics)
   pageElement.appendChild(content)
   const mounts: ReturnType<typeof mountCommittedMaterial>[] = []
   try {
@@ -1133,7 +1134,8 @@ function mountCommittedPage(input: {
         fragment.node,
         fragment.fragmentPlan.box,
         input.page.yOffset,
-        input.document.unit,
+        toViewerCssUnit(input.document.unit),
+        input.materials.getLayoutOverflow(fragment.node.type),
       )
       const diagnosticCount = input.diagnostics.length
       const mount = mountCommittedMaterial(wrapper, {
@@ -1159,8 +1161,8 @@ function mountCommittedPage(input: {
       content.appendChild(wrapper)
       input.checkpoint()
     }
-    appendCommittedPageLayers(pageElement, pageLayers.overContent, input.page.index, input.document.unit, input.diagnostics)
-    appendCommittedPageLayers(pageElement, pageLayers.top, input.page.index, input.document.unit, input.diagnostics)
+    appendCommittedPageLayers(pageElement, pageLayers.overContent, input.page.index, toViewerCssUnit(input.document.unit), input.diagnostics)
+    appendCommittedPageLayers(pageElement, pageLayers.top, input.page.index, toViewerCssUnit(input.document.unit), input.diagnostics)
     input.slot.appendChild(pageElement)
     input.checkpoint()
   }
@@ -1216,14 +1218,15 @@ function createCommittedPageElement(
   zoom: number,
 ): HTMLElement {
   const element = document.createElement('div')
+  const cssUnit = toViewerCssUnit(schema.unit)
   element.className = 'ei-viewer-page'
   element.setAttribute('data-page-index', String(page.index))
   element.style.position = 'relative'
-  element.style.width = `${page.width}${schema.unit}`
-  element.style.height = `${page.height}${schema.unit}`
+  element.style.width = `${page.width}${cssUnit}`
+  element.style.height = `${page.height}${cssUnit}`
   element.style.overflow = 'hidden'
   element.style.boxSizing = 'border-box'
-  applyCommittedPageBackground(element, schema.page.background, schema.unit)
+  applyCommittedPageBackground(element, schema.page.background, cssUnit)
   if (schema.page.font)
     element.style.fontFamily = schema.page.font
   if (schema.page.radius)
@@ -1332,6 +1335,7 @@ function createCommittedElementWrapper(
   box: Readonly<{ x: number, y: number, width: number, height: number }>,
   pageOffset: number,
   unit: string,
+  overflow: 'visible' | 'clip',
 ): HTMLElement {
   const wrapper = document.createElement('div')
   wrapper.className = 'ei-viewer-element'
@@ -1342,7 +1346,7 @@ function createCommittedElementWrapper(
   wrapper.style.top = `${box.y - pageOffset}${unit}`
   wrapper.style.width = `${box.width}${unit}`
   wrapper.style.height = `${box.height}${unit}`
-  wrapper.style.overflow = 'hidden'
+  wrapper.style.overflow = overflow === 'visible' ? 'visible' : 'hidden'
   wrapper.style.zIndex = String(node.zIndex ?? 0)
   if (node.rotation) {
     wrapper.style.transform = `rotate(${node.rotation}deg)`

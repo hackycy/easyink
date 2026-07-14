@@ -11,7 +11,7 @@ description: EasyInk 自定义物料开发：同时覆盖 Schema、Designer 和 
 ```ts
 import type { DesignerMaterialBundle, DesignerStore, MaterialDesignerExtension } from '@easyink/designer'
 import type { MaterialNode } from '@easyink/schema'
-import type { ViewerRuntime } from '@easyink/viewer'
+import type { MaterialViewerExtension } from '@easyink/core'
 import { viewerElement, viewerText } from '@easyink/core'
 import { registerMaterialBundle } from '@easyink/designer'
 import { IconText } from '@easyink/icons'
@@ -155,23 +155,17 @@ export function registerPriceTagDesigner(store: DesignerStore) {
   registerMaterialBundle(store, priceTagDesignerBundle)
 }
 
-export function registerPriceTagViewer(viewer: ViewerRuntime) {
-  viewer.registerMaterial(PRICE_TAG_TYPE, {
-    kind: 'ordinary',
-    primaryProp: 'amount',
-    formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' },
-  }, {
-    render(_node, context) {
-      const props = context.resolvedModel
-      return {
-        tree: viewerElement('div', {}, [viewerText(`${String(props.label ?? '')}: ${String(props.amount ?? '')}`)]),
-      }
-    },
-  })
+export const priceTagViewerExtension: MaterialViewerExtension = {
+  render(_node, context) {
+    const props = context.resolvedModel
+    return {
+      tree: viewerElement('div', {}, [viewerText(`${String(props.label ?? '')}: ${String(props.amount ?? '')}`)]),
+    }
+  },
 }
 ```
 
-这段代码做了三件事：定义一个稳定的 `type`，把它注册到 Designer 的物料面板，再用同一个 `type` 注册 Viewer 渲染器。
+这段代码定义稳定的 `type`、Designer bundle 和 Viewer extension。发布时把它们组装进同一个 material manifest，再由宿主在初始化阶段编译 profile。
 
 如果这些概念看起来有点密，没关系。先记住一句话：Designer 负责拖入和编辑，Viewer 负责最终渲染，Schema 负责保存中间结果。
 
@@ -362,7 +356,7 @@ registerMaterialBundle(store, {
 
 `lazyFactory` 只延迟加载 `MaterialDesignerExtension`。物料面板、属性面板、绑定面板和 AI manifest 需要的元数据仍然同步注册，所以 `type`、`name`、`icon`、`category`、`capabilities`、`binding`、`createDefaultNode`、`propSchemas` 和 `localeMessages` 不要放到懒加载 chunk 里。
 
-懒加载过程中，画布会先显示内置 loading 状态；加载完成后 Designer 会重新 mount 对应物料。Viewer 仍然需要在渲染前同步 `viewer.registerMaterial()`，不要假设 Viewer 会自动跟随 Designer 的懒加载注册。
+懒加载过程中，画布会先显示内置 loading 状态；加载完成后 Designer 会重新 mount 对应物料。Viewer facet 必须预先包含在 compiled profile 的 manifest 中；Designer 的懒加载不会改变已经编译的 Viewer profile。
 
 ## 属性值输入增强 {#prop-value-input}
 
@@ -433,28 +427,27 @@ export function createPriceTagDesignerExtension(): MaterialDesignerExtension {
 
 关于 `geometry`、`behaviors`、`resize` 和 `datasourceDrop`，目前知道它们是高级能力就够了。第一次做自定义物料，先让画布上能稳定显示。
 
-## 注册到 Viewer {#register-viewer}
+## 编译 Viewer profile {#register-viewer}
 
-Viewer 需要按同一个 `type` 再注册一次：
+Viewer 从不可变 compiled profile 激活物料 facet。把自定义 manifest 放入外部物料包，并在创建 Viewer 前编译：
 
 ```ts
-import { viewerElement, viewerText } from '@easyink/core'
+import { compileMaterialProfile, EASYINK_ENGINE_VERSION } from '@easyink/core'
 import { createViewer } from '@easyink/viewer'
+import { priceTagMaterialManifest } from '@acme/easyink-material-price-tag'
 
-const viewer = createViewer({ container })
-
-viewer.registerMaterial(PRICE_TAG_TYPE, {
-  kind: 'ordinary',
-  primaryProp: 'amount',
-  formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' },
-}, {
-  render(_node, context) {
-    const props = context.resolvedModel
-    return {
-      tree: viewerElement('div', { attributes: { class: 'price-tag' } }, [viewerText(String(props.amount ?? ''))]),
-    }
-  },
+const profile = compileMaterialProfile({
+  id: 'acme-reporting',
+  engineVersion: EASYINK_ENGINE_VERSION,
+  packages: [{
+    packageId: '@acme/easyink-material-price-tag',
+    kind: 'external',
+    required: true,
+    manifests: [priceTagMaterialManifest],
+  }],
 })
+
+const viewer = createViewer({ container, profile })
 ```
 
 这里最值得记住的是 `context.resolvedModel`。绑定、默认值和运行时属性会在 Viewer 渲染前合成并冻结，你的渲染器直接消费它就行。
@@ -515,7 +508,7 @@ viewer.open({
 
 ### 结构化数据物料 {#data-contract}
 
-如果物料消费的不是单个字段，而是一组目标 records，例如柱状图、折线图、透视卡片，可以声明 `binding.kind='data-contract'` 并在其中放入 contract。此时物料说清楚自己需要什么目标模型，节点 binding 只保存用户从数据源拖来的映射。
+如果物料消费的不是单个字段，而是一组目标 records，例如柱状图、折线图、透视卡片，可以在 `MaterialManifest.common.binding` 使用 `kind: 'ports'`，并设置 `dataContract`。此时物料说清楚自己需要什么目标模型，节点 binding 只保存用户从数据源拖来的映射。
 
 ```ts
 import type { MaterialDataContract } from '@easyink/core'
@@ -542,44 +535,33 @@ export const SALES_CHART_CONTRACT = {
 } satisfies MaterialDataContract
 ```
 
-注册物料时把 contract 放到 `MaterialDefinition.binding`：
+把 contract 放到 `MaterialManifest.common.binding.dataContract`，并用语义端口声明节点 binding key：
 
 ```ts
-registerMaterialBundle(store, {
-  materials: [{
-    type: 'sales-chart',
-    name: 'materials.salesChart.name',
-    icon: IconChart,
-    category: 'chart',
-    capabilities: { bindable: true, resizable: true },
-    binding: {
-      kind: 'data-contract',
-      contract: SALES_CHART_CONTRACT,
-      formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
-    },
-    propSchemas: [],
-    localeMessages: salesChartLocaleMessages,
-    createDefaultNode: createSalesChartNode,
-    factory: createSalesChartDesignerExtension,
+import type { MaterialBindingDefinition } from '@easyink/core'
+
+export const salesChartBinding = {
+  kind: 'ports',
+  dataContract: SALES_CHART_CONTRACT,
+  ports: [{
+    id: 'data',
+    key: { kind: 'exact', value: 'value' },
+    role: 'semantic',
+    valueShape: 'record-array',
+    formatEditor: false,
   }],
-  catalogs: [{
-    id: 'chart',
-    label: 'materials.catalog.chart',
-    items: [{ type: 'sales-chart' }],
-  }],
-})
+} satisfies MaterialBindingDefinition
+
+// Use this object as the `binding` field when defining salesChartMaterialManifest.
 ```
 
 Viewer 渲染器里由物料自己消费 contract 解析结果：
 
 ```ts
+import type { MaterialViewerExtension } from '@easyink/core'
 import { resolveMaterialDataContract } from '@easyink/core'
 
-viewer.registerMaterial('sales-chart', {
-  kind: 'data-contract',
-  contract: SALES_CHART_CONTRACT,
-  formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
-}, {
+export const salesChartViewerExtension: MaterialViewerExtension = {
   render(node, context) {
     const resolution = resolveMaterialDataContract(
       SALES_CHART_CONTRACT,
@@ -597,7 +579,7 @@ viewer.registerMaterial('sales-chart', {
 
     return renderSalesChart(points)
   },
-})
+}
 ```
 
 保持这几个边界会让物料更容易扩展：
@@ -626,14 +608,14 @@ viewer.registerMaterial('sales-chart', {
 manifest 的 `common.layout.pageRepeat: 'every-output-page'` 表示这个物料要在 core 分页后复制到每一页。重复物料不参与内容 flow 或页数计算。
 
 ```ts
-viewer.registerMaterial('page-badge', { kind: 'none' }, {
+export const pageBadgeViewerExtension: MaterialViewerExtension = {
   render(_node, context) {
     const props = context.resolvedModel
     return {
       tree: viewerText(`第 ${String(props.__pageNumber ?? '')} / ${String(props.__totalPages ?? '')} 页`),
     }
   },
-})
+}
 ```
 
 它适合页码、页眉、页脚、水印这类“每页都出现”的元素。它不负责重新分页，也不会替你改变 layout 或 reflow。
@@ -651,8 +633,8 @@ registerPriceTagDesigner(store)
 // 2. Schema 里有稳定 type
 schema.elements.some(node => node.type === PRICE_TAG_TYPE)
 
-// 3. Viewer 能渲染同一个 type
-viewer.registerMaterial(PRICE_TAG_TYPE, priceTagViewerExtension)
+// 3. compiled profile 包含同一个 type 的 Viewer facet
+profile.getManifest(PRICE_TAG_TYPE)?.facets.viewer
 ```
 
 然后再检查这些结果：

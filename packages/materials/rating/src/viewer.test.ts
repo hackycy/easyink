@@ -1,4 +1,5 @@
 import type { ViewerElementTree, ViewerTextTree } from '@easyink/core'
+import { createTestViewerRenderContext } from '@easyink/core/testing'
 import { describe, expect, it } from 'vitest'
 import { getRatingCharacterFills } from './rendering'
 import { createRatingNode } from './schema'
@@ -13,5 +14,15 @@ describe('renderRating', () => {
 
   it('calculates partial fills', () => {
     expect(getRatingCharacterFills(50, 5).map(item => item.fillPercent)).toEqual([100, 100, 50, 0, 0])
+  })
+
+  it('uses the CSS in unit for an inch document', () => {
+    const context = createTestViewerRenderContext({ unit: 'inch' })
+    const tree = renderRating(createRatingNode({}, 'inch'), context).tree as ViewerElementTree
+    const character = tree.children[0] as ViewerElementTree
+
+    expect(context.cssUnit).toBe('in')
+    expect(character.style['font-size']).toMatch(/in$/)
+    expect(JSON.stringify(tree)).not.toContain('inch')
   })
 })

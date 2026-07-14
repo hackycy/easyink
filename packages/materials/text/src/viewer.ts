@@ -6,7 +6,7 @@ import { getTextDisplayValue, getTextProps } from './layout'
 export function renderText(node: MaterialNode, contextOrData?: ViewerRenderContext | Record<string, unknown>, unit = 'mm') {
   const props = getTextProps(node)
   const context = isViewerRenderContext(contextOrData) ? contextOrData : undefined
-  const resolvedUnit = context?.unit ?? unit
+  const resolvedUnit = context?.cssUnit ?? unit
   const raw = props.content == null ? '' : String(props.content)
   const display = `${props.prefix || ''}${raw}${props.suffix || ''}`
   const vertical = props.writingMode === 'vertical'

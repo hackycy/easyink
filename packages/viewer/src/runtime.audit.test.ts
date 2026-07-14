@@ -1,4 +1,4 @@
-import type { MaterialLayoutPlan, MaterialManifest, MaterialMeasureRequest, MaterialRuntimeScope, MaterialViewerExtension, ViewerFacetCapabilities, ViewerRenderContext } from '@easyink/core'
+import type { MaterialLayoutPlan, MaterialManifest, MaterialMeasureRequest, MaterialRuntimeScope, MaterialViewerExtension, MaterialViewerLayoutFacet, ViewerFacetCapabilities, ViewerRenderContext } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { CommittedPagePlan, LayoutRuntimeInput } from './layout-runtime'
 import type { ViewerRuntime } from './runtime'
@@ -7,8 +7,9 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
 import { DEFAULT_VIEWER_TREE_POLICY } from '@easyink/browser-dom'
 import { compileBuiltinMaterialProfile } from '@easyink/builtin'
-import { createLayoutConstraintKey, createModelPropertyAccessor, defineMaterialFacetFactory, defineMaterialManifest, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
+import { createLayoutConstraintKey, createModelPropertyAccessor, defineMaterialFacetFactory, defineMaterialManifest, freezeMaterialLayoutPlan, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
+import { convertUnit } from '@easyink/shared'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createCustomViewerHost, createIframeViewerHost, createViewer as createProfileViewer } from './index'
 
@@ -20,11 +21,12 @@ function viewerManifest(
   extension: MaterialViewerExtension,
   pageRepeat: 'none' | 'every-output-page' = 'none',
   capabilities: ViewerFacetCapabilities = {},
+  overflow: 'visible' | 'clip' = 'clip',
 ): MaterialManifest {
   const base = createTestMaterialManifest({ type, viewer: () => ({ extension, capabilities }) })
   return defineMaterialManifest({
     ...base,
-    common: { ...base.common, layout: { ...base.common.layout, pageRepeat } },
+    common: { ...base.common, layout: { ...base.common.layout, pageRepeat, overflow } },
   })
 }
 
@@ -173,6 +175,7 @@ describe('viewer architecture source guards', () => {
     const architectureSources = [
       '.github/architecture/README.md',
       '.github/architecture/24-page-layout-orthogonal-system.md',
+      '.github/architecture/26-conditional-rendering.md',
       'skills/easyink-material-dev/references/architecture.md',
     ].map(sourceFile)
     const allSources = [...coreSources, ...viewerSources, ...architectureSources]
@@ -188,6 +191,14 @@ describe('viewer architecture source guards', () => {
       'fragmentPaginator',
       'paginateFragment',
       'resolveFragmentPaginator',
+      'conditional schema resolution',
+      'material measure()',
+      'temporary node',
+      'MaterialRendererRegistry',
+      'viewer.registerMaterial(',
+      '派生运行时 Schema',
+      'resolveConditionalSchema(',
+      '运行时 `hidden: true`',
     ])
     expectForbiddenSources(viewerSources.filter(source => source.path.endsWith('render-surface.ts')), ['innerHTML'])
   })
@@ -215,6 +226,7 @@ describe('viewer architecture source guards', () => {
       'docs/advanced/custom-materials.md',
       '.github/architecture/README.md',
       '.github/architecture/24-page-layout-orthogonal-system.md',
+      '.github/architecture/26-conditional-rendering.md',
       'skills/easyink-material-dev/references/architecture.md',
     ].map(sourceFile)
 
@@ -228,6 +240,46 @@ describe('viewer architecture source guards', () => {
       'measureText(node',
       'viewerExtension.measure',
       'MaterialViewerExtension.render / measure',
+    ])
+  })
+
+  it('documents immutable Viewer profile bootstrap without a mutable material registry', () => {
+    const sources = [
+      sourceFile('README.md'),
+      ...markdownSources('.github/architecture'),
+      ...markdownSources('docs').filter(source => !source.path.includes('docs/superpowers/')),
+      ...markdownSources('skills/easyink-material-dev'),
+    ]
+
+    expectForbiddenSources(sources, [
+      'viewer.registerMaterial(',
+      'MaterialRendererRegistry',
+      'registerBuiltinViewerMaterials',
+      'resolveConditionalSchema(',
+      'beforeSchemaNormalize',
+      'renderPages(',
+      'ViewerMeasureContext',
+      'ViewerMeasureResult',
+      'ViewerRenderSize',
+      'getRenderSize(',
+      'createViewer({ container })',
+      'createViewer({ host })',
+      'createViewer({ container: containerElement })',
+      'createViewer({ iframe: iframeElement })',
+      'createViewer({ host: customHost })',
+      'createViewer().open(',
+      'Viewer `measure()`',
+      '`MaterialDefinition.binding`',
+      '`packages/builtin/src/designer.ts`',
+      '`packages/builtin/src/viewer.ts`',
+      '`packages/builtin/src/bindings.ts`',
+      'Viewer registration helpers',
+      'legacy aliases',
+      '`collectFontFamilies(schema)`',
+      '`loadAndInjectFonts()`',
+      '`runLayoutPipeline()` to create measured fragments',
+      'Return document-unit width and height.',
+      'Report diagnostics through `context.reportDiagnostic`.',
     ])
   })
 
@@ -260,6 +312,25 @@ function productionSources(directoryPath: string): AuditedSource[] {
         continue
       }
       if (entry.isFile() && path.endsWith('.ts') && !path.endsWith('.test.ts'))
+        files.push({ path: relative(resolve(), path).replaceAll('\\', '/'), text: readFileSync(path, 'utf8') })
+    }
+  }
+  return files
+}
+
+function markdownSources(directoryPath: string): AuditedSource[] {
+  const directory = resolve(directoryPath)
+  const files: AuditedSource[] = []
+  const stack = [directory]
+  while (stack.length > 0) {
+    const current = stack.pop()!
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const path = resolve(current, entry.name)
+      if (entry.isDirectory()) {
+        stack.push(path)
+        continue
+      }
+      if (entry.isFile() && path.endsWith('.md'))
         files.push({ path: relative(resolve(), path).replaceAll('\\', '/'), text: readFileSync(path, 'utf8') })
     }
   }
@@ -410,6 +481,100 @@ describe('viewer audit risk regressions', () => {
     })).rejects.toThrow(/maximum|limit/i)
     await viewer.open({ schema: fixedSchema([]), data: {}, dataRevision: 7 })
     expect(viewer.currentRevisions.dataRevision).toBe(7)
+  })
+
+  it.each(['mm', 'pt', 'px', 'inch'] as const)('commits the full layout, pagination, and render matrix in %s', async (unit) => {
+    const pageWidth = convertUnit(100, 'mm', unit)
+    const pageHeight = convertUnit(30, 'mm', unit)
+    const elementWidth = convertUnit(40, 'mm', unit)
+    const elementHeight = convertUnit(50, 'mm', unit)
+    const breakOffset = convertUnit(25, 'mm', unit)
+    const measured: MaterialMeasureRequest[] = []
+    const renderedRanges: Array<Readonly<{ startBlockOffset: number, endBlockOffset: number }>> = []
+    const layout: MaterialViewerLayoutFacet = {
+      async measure(request) {
+        measured.push(request)
+        const borderBox = { x: request.node.x, y: request.node.y, width: request.node.width, height: elementHeight }
+        return freezeMaterialLayoutPlan({
+          instanceKey: request.instanceKey,
+          nodeId: request.node.id,
+          nodeRevision: request.nodeRevision,
+          constraintKey: createLayoutConstraintKey(request.constraints),
+          borderBox,
+          contentBox: borderBox,
+          slotBoxes: [],
+          breakOpportunities: [{ id: 'middle', blockOffset: breakOffset, penalty: 0 }],
+          diagnostics: [],
+        })
+      },
+      fragment: {
+        createFragment(request) {
+          return {
+            inlineSize: request.plan.borderBox.width,
+            blockSize: request.endBlockOffset - request.startBlockOffset,
+            consumedRange: { startBlockOffset: request.startBlockOffset, endBlockOffset: request.endBlockOffset },
+            diagnostics: [],
+          }
+        },
+      },
+    }
+    const extension: MaterialViewerExtension = {
+      render(_node, context) {
+        context.renderBudget.reserveNodes('element', 1)
+        renderedRanges.push(context.fragmentPlan.consumedRange)
+        expect(context.unit).toBe(unit)
+        return { tree: viewerElement('div', { attributes: { 'data-unit-content': unit }, style: { width: `${breakOffset}${context.cssUnit}` } }) }
+      },
+    }
+    const base = createTestMaterialManifest({ type: 'unit-matrix', viewer: () => ({ extension, layout, capabilities: {} }) })
+    const manifest = defineMaterialManifest({
+      ...base,
+      common: { ...base.common, layout: { ...base.common.layout, fragmentation: 'break-opportunities' } },
+    })
+    const profile = createTestCompiledMaterialProfile([manifest])
+    const node = profile.createNode('unit-matrix', {
+      id: 'unit-matrix',
+      x: convertUnit(5, 'mm', unit),
+      y: 0,
+      width: elementWidth,
+      height: elementHeight,
+    })
+    const schema: DocumentSchema = {
+      version: '1.0.0',
+      unit,
+      page: {
+        mode: 'fixed',
+        width: pageWidth,
+        height: pageHeight,
+        pageModel: { kind: 'paged-paper', paper: { width: pageWidth, height: pageHeight } },
+        layout: { strategy: 'absolute' },
+        reflow: { strategy: 'measure-only' },
+        pagination: { strategy: 'auto-sheets' },
+      },
+      guides: { x: [], y: [] },
+      elements: [node],
+    }
+    const container = document.createElement('div')
+    const viewer = createViewer({ container, profile })
+
+    await viewer.open({ schema })
+
+    expect(measured).toHaveLength(1)
+    expect(measured[0]!.constraints).toEqual({ availableWidth: elementWidth, availableHeight: pageHeight, unit, writingMode: 'horizontal-tb' })
+    expect(measured[0]!.node.width).toBe(elementWidth)
+    expect(renderedRanges).toEqual([
+      { startBlockOffset: 0, endBlockOffset: breakOffset },
+      { startBlockOffset: breakOffset, endBlockOffset: elementHeight },
+    ])
+    expect(container.querySelectorAll('.ei-viewer-page')).toHaveLength(2)
+    const cssUnit = unit === 'inch' ? 'in' : unit
+    const pageStyleWidth = (container.querySelector('.ei-viewer-page') as HTMLElement).style.width
+    expect(pageStyleWidth.endsWith(cssUnit)).toBe(true)
+    expect(Number.parseFloat(pageStyleWidth)).toBeCloseTo(pageWidth, 5)
+    expect(container.querySelectorAll('[data-element-id="unit-matrix"]')).toHaveLength(2)
+    const contentStyleWidth = (container.querySelector('[data-unit-content]') as HTMLElement).style.width
+    expect(contentStyleWidth.endsWith(cssUnit)).toBe(true)
+    expect(Number.parseFloat(contentStyleWidth)).toBeCloseTo(breakOffset, 5)
   })
 
   it('measures once and paints the exact committed layout and fragment facts', async () => {
@@ -1882,6 +2047,26 @@ describe('viewer audit risk regressions', () => {
 
     expect(result).toBeUndefined()
     expect(host.document.querySelector('[data-element-id="hosted"]')).not.toBeNull()
+  })
+
+  it('permits manifest-declared text overflow only inside the clipped committed page', async () => {
+    const container = document.createElement('div')
+    const extension: MaterialViewerExtension = { render: (_node, context) => ({ tree: viewerText(String(context.resolvedModel.content ?? '')) }) }
+    const profile = createTestCompiledMaterialProfile([
+      viewerManifest('visible-overflow-text', extension, 'none', {}, 'visible'),
+      viewerManifest('clipped-material', extension),
+    ])
+    const visible = { ...textNode('visible-text', undefined, { content: 'visible overflow' }), type: 'visible-overflow-text' }
+    const clipped = { ...textNode('clipped-material', undefined, { content: 'clipped' }), type: 'clipped-material', y: 20 }
+    const viewer = createViewer({ container, profile })
+
+    await viewer.open({
+      schema: fixedSchema([visible, clipped]),
+    })
+
+    expect((container.querySelector('[data-element-id="visible-text"]') as HTMLElement).style.overflow).toBe('visible')
+    expect((container.querySelector('[data-element-id="clipped-material"]') as HTMLElement).style.overflow).toBe('hidden')
+    expect((container.querySelector('.ei-viewer-page') as HTMLElement).style.overflow).toBe('hidden')
   })
 
   it('resolves bindings from runtime data without data source descriptors', async () => {

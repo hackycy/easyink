@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createFlowRowNode } from './schema'
 import { flowRowViewerLayout, renderFlowRow } from './viewer'
 
-const context = createTestViewerRenderContext({ capabilities: {} as never }) satisfies ViewerRenderContext
+const context = createTestViewerRenderContext({ capabilities: {} as never, cssUnit: 'mm' }) satisfies ViewerRenderContext
 
 describe('flow-row viewer', () => {
   it('reserves authoritative runtime rows before reading record cells or building row arrays', async () => {

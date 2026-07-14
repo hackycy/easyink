@@ -1,7 +1,7 @@
-import type { MaterialViewerExtension, ViewerRenderContext } from '@easyink/core'
+import type { MaterialMeasureRequest, MaterialViewerExtension, MaterialViewerLayoutFacet, ViewerRenderContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { LineProps } from './schema'
-import { viewerElement } from '@easyink/core'
+import { createLayoutConstraintKey, createNonFragmentingMaterialPlans, viewerElement } from '@easyink/core'
 import { getNodeModel } from '@easyink/schema'
 
 import { getLineThickness } from './schema'
@@ -36,15 +36,35 @@ export function renderLine(node: MaterialNode, _context: ViewerRenderContext) {
   const p = getNodeModel<Partial<LineProps>>(node)
   const lineColor = p.lineColor || '#000000'
   const lineType = p.lineType || 'solid'
-  const thickness = resolveLineRenderHeight(node)
+  const width = _context.layoutPlan.borderBox.width
+  const thickness = _context.layoutPlan.borderBox.height
+  if (!Number.isFinite(width) || width < 0 || !Number.isFinite(thickness) || thickness <= 0)
+    throw new Error('LINE_COMMITTED_LAYOUT_REQUIRED')
   return {
     tree: viewerElement('svg', {
       namespace: 'svg',
-      attributes: { width: '100%', height: '100%', viewBox: `0 0 ${node.width} ${thickness}`, preserveAspectRatio: 'none' },
+      attributes: { width: '100%', height: '100%', viewBox: `0 0 ${width} ${thickness}`, preserveAspectRatio: 'none' },
       style: { 'display': 'block', 'width': '100%', 'height': '100%', 'overflow': 'hidden', 'shape-rendering': 'crispEdges' },
-    }, buildShapeTree(lineType, node.width, thickness, lineColor)),
+    }, buildShapeTree(lineType, width, thickness, lineColor)),
   }
 }
+
+export const lineViewerLayout: MaterialViewerLayoutFacet = Object.freeze({
+  async measure(request: MaterialMeasureRequest) {
+    const node = Object.freeze({ ...request.node, model: request.resolvedModel }) as MaterialNode
+    const thickness = resolveLineRenderHeight(node)
+    const borderBox = { x: request.node.x, y: request.node.y, width: Math.max(0, request.node.width), height: thickness }
+    return createNonFragmentingMaterialPlans({
+      instanceKey: request.instanceKey,
+      nodeId: request.node.id,
+      nodeRevision: request.nodeRevision,
+      constraintKey: createLayoutConstraintKey(request.constraints),
+      pageIndex: 0,
+      borderBox,
+      fragmentBox: borderBox,
+    }).layoutPlan
+  },
+})
 
 export function createLineViewerExtension(): MaterialViewerExtension {
   return {

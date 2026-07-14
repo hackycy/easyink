@@ -20,7 +20,7 @@ export const svgHeartMaterialManifest = defineStandardMaterialManifest({
   schemaAdapter: recordSchemaAdapter(1),
   designerFactory: createSvgHeartExtension,
   localeMessages: svgHeartLocaleMessages,
-  viewerExtension: { render: (node, context) => renderSvgHeart(node, context.unit) },
+  viewerExtension: { render: (node, context) => renderSvgHeart(node, context.cssUnit) },
   aiDescriptor: svgHeartAIMaterialDescriptor,
   generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/fillColor'] },
 })

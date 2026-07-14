@@ -74,54 +74,46 @@ await viewer.print({
 
 如果你使用官方高层打印器，不需要自己注册 `PrintDriver`。打印器会创建一个托管 Viewer，渲染完成后再把页面交给对应驱动。
 
-模板使用官方内置物料时，在 `setupViewer` 里注册：
+模板使用官方内置物料时，把 compiled profile 交给托管 Viewer：
 
 ```ts
-import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+import { compileBuiltinMaterialProfile } from '@easyink/builtin/all'
 import { createEasyInkPrinter } from '@easyink/print-integration-easyink-printer'
 
 const printer = createEasyInkPrinter({
   serviceUrl: 'http://localhost:18080',
   viewer: 'iframe',
-  setupViewer(viewer) {
-    registerBuiltinViewerMaterials((type, binding, extension) => {
-      viewer.registerMaterial(type, binding, extension)
-    })
-  },
+  profile: compileBuiltinMaterialProfile('all'),
 })
 
 await printer.print({ schema, data })
 ```
 
-`setupViewer` 会在 `viewer.open()` 之前执行。也就是说，内置物料、企业物料和你自己的物料都可以在这里通过 `viewer.registerMaterial()` 注册。
+托管 Viewer 在创建时固定使用该 profile。企业物料和自定义物料需要在调用打印 SDK 前编译进同一个 profile。
 
 HiPrint 和 LODOP 的高层打印器也使用同一个入口：
 
 ```ts
-import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+import { compileBuiltinMaterialProfile } from '@easyink/builtin/all'
 import { createHiPrintPrinter } from '@easyink/print-integration-hiprint'
 import { createLodopPrinter } from '@easyink/print-integration-lodop'
 
-function setupViewer(viewer) {
-  registerBuiltinViewerMaterials((type, binding, extension) => {
-    viewer.registerMaterial(type, binding, extension)
-  })
-}
+const profile = compileBuiltinMaterialProfile('all')
 
 const hiPrintPrinter = createHiPrintPrinter({
   client: hiPrintClient,
   viewer: 'iframe',
-  setupViewer,
+  profile,
 })
 
 const lodopPrinter = createLodopPrinter({
   client: lodopClient,
   viewer: 'iframe',
-  setupViewer,
+  profile,
 })
 ```
 
-打印包不会自动引入 `@easyink/builtin`。如果你的模板只使用自定义物料，就把自定义注册逻辑放进同一个 `setupViewer` 里。
+打印包不会自动选择 `@easyink/builtin`。如果模板只使用自定义物料，传入只包含对应 external package 的 compiled profile。
 
 ## 打印任务回调 {#print-callbacks}
 

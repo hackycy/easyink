@@ -2,23 +2,23 @@
 
 ## Font Loading
 
-Viewer loads fonts before ordinary runtime binding projection, measurement, layout, pagination, and DOM rendering.
+Viewer reaches terminal resource readiness before measurement, layout, pagination, and DOM rendering.
 
 The chain is:
 
-1. `ViewerRuntime.render()` calls its font-loading stage.
-2. `collectFontFamilies(schema)` collects `schema.page.font` and every traversed `node.props.fontFamily`.
-3. `loadAndInjectFonts(families, fontManager, host.document)` calls `FontManager.ensureFontLoaded({ family }, target)`.
-4. `FontManager` asks the host `FontProvider.loadFont()` for a URL or `ArrayBuffer`, caches the result, and injects one `@font-face` style per target and font key. Catalog entries with `source: 'system'` are treated as already loaded and skip this resource-loading step.
-5. Viewer continues with binding projection, measurement, layout, pagination, and rendering.
+1. Each admitted material's schema adapter publishes font and asset references through manifest resource introspection.
+2. Viewer combines those declarations with the page font and sends the bounded set to its resource-readiness coordinator.
+3. The coordinator prepares fonts through `FontManager` and the Viewer host target, prepares assets through the host adapter, and records a terminal result for every declared resource.
+4. Viewer publishes the resulting `resourceRevision` to `MeasureService`; measurement and committed layout depend on that revision.
+5. Font failures produce Viewer diagnostics and terminal failed resource facts, while rendering can continue with browser font behavior.
 
 Rules for material developers:
 
-- Store font references as family strings, usually `node.props.fontFamily`, or inherit from `schema.page.font`.
+- Store font references as family strings in the material model, or inherit from `schema.page.font`.
 - Render CSS such as `font-family:${escapeHtml(props.fontFamily)}` only after escaping or via DOM style APIs.
-- Do not call `FontProvider`, `FontManager`, or `loadAndInjectFonts()` from material `render()` or `measure()`.
+- Do not call `FontProvider` or `FontManager` from material `render()` or layout measurement.
 - Do not serialize font URLs, `ArrayBuffer`s, loaded/error status, style elements, or generated `@font-face` text into Schema.
-- When adding a new font-bearing prop outside `node.props.fontFamily`, also update `collectFontFamilies()` or the schema traversal model so Viewer and Designer can preload it.
+- Publish every material-owned font or asset path from the schema adapter's `introspect()` result so Viewer can prepare it before measurement.
 - Font load diagnostics are warnings. Materials should still render with browser font behavior when a font is unavailable.
 
 ## Binding Projection
@@ -45,7 +45,7 @@ Multi-binding requires explicit mapping in `binding-projector.ts` unless the mat
 
 ## Material Data Contract
 
-Use `DataContractBinding` when a material consumes a structured target model instead of projecting one field into one prop. Chart-like materials are the reference case: the material declares `binding.kind='data-contract'` with a contract, while `node.binding` stores mappings from source paths to target fields.
+Use `DataContractBinding` when a material consumes a structured target model instead of projecting one field into one model path. Chart-like materials are the reference case: `MaterialManifest.common.binding` declares `kind: 'ports'`, a `dataContract`, and its semantic port, while the matching entry in `node.bindings` stores mappings from source paths to target fields.
 
 The contract describes the target model:
 
@@ -103,7 +103,7 @@ Implement `datasourceDrop` when the material owns internal drop zones:
 
 `table-data` uses this pattern to bind fields into cells. It rejects hidden rows and rejects repeat-template fields from a different collection prefix than existing repeat-template cells.
 
-Materials that declare `MaterialDefinition.binding.kind='data-contract'` usually do not need a custom `datasourceDrop` just to bind whole-element data. Designer fills unbound target fields in contract order on canvas drop and exposes a MaterialDataBindingEditor for dropping a field onto a specific target field. The Designer should not reject different collections for data-contract mappings; the resolver owns runtime relation diagnostics.
+Materials whose `MaterialManifest.common.binding` uses `kind: 'ports'` with a `dataContract` usually do not need a custom `datasourceDrop` just to bind whole-element data. Designer fills unbound target fields in contract order on canvas drop and exposes a MaterialDataBindingEditor for dropping a field onto a specific target field. The Designer should not reject different collections for data-contract mappings; the resolver owns runtime relation diagnostics.
 
 ## Table-Data Runtime Expansion
 
@@ -129,23 +129,24 @@ Empty or non-array data renders a single placeholder row, not a schema mutation.
 
 ## Measurement
 
-Implement `measure()` only when runtime content can change dimensions. Good examples:
+Implement `async MaterialViewerLayoutFacet.measure(request)` only when runtime content can change dimensions. Good examples:
 
 - data table expands to N runtime rows,
 - rich text expands with wrapped content,
 - custom nested material grows based on children,
 - flow/flex row reflows columns from runtime data.
 
-For fixed-size materials, omit `measure()`.
+For fixed-size materials, omit the layout facet measurement function.
 
-`measure()` runs after binding projection and before layout/reflow/pagination. Its result is used by `runLayoutPipeline()` to create measured fragments and by the Viewer render path to keep output in sync.
+The asynchronous layout facet runs through `MeasureService` after binding projection and terminal resource readiness. It returns a frozen `MaterialLayoutPlan`; core document layout and pagination consume that committed plan rather than invoking material layout again during paint.
 
 When implementing a measured material:
 
-- Do not mutate the source schema object from `measure()`.
-- Return document-unit width and height.
-- Report diagnostics through `context.reportDiagnostic`.
-- Ensure `render()` uses the same layout assumptions as `measure()`.
+- Do not mutate the source node or runtime model from `measure(request)`.
+- Honor `request.signal` and reserve rows and layout facts through `request.budget` before publishing them.
+- Return a frozen `MaterialLayoutPlan` containing border/content boxes, diagnostics, optional break opportunities, and bounded payload facts needed by render.
+- Use the request's measurement services, publish diagnostics in the returned plan, and let the runtime forward that committed diagnostic path; do not create a separate paint-time channel.
+- Ensure `render()` consumes the committed layout and fragment facts produced from the same plan.
 - Add a Designer control policy when measurement owns width or height.
 - Test the relevant page strategy: `flow-y` reflow, `none` continuous output, `fixed-sheets`, or `auto-sheets`.
 

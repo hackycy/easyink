@@ -6,9 +6,9 @@ Use this reference when a material should be generated, selected, repaired, or r
 
 - `packages/shared/src/ai-generation.ts`: source types for `AIMaterialDescriptor` and `MaterialKnowledgeDescriptor`.
 - `packages/designer/src/materials/registry.ts`: stores each registered Designer material's optional `aiDescriptor`.
-- `packages/builtin/src/designer.ts`: built-in Designer registration must pass `aiDescriptor` on the material entry.
-- `packages/builtin/src/index.ts`, `packages/builtin/src/all.ts`, `packages/builtin/src/basic.ts`, and `packages/builtin/src/none.ts`: public entry points expose the selected built-in Designer bundle and matching Viewer registrations. `package.json` only publishes the root entry plus `./all`, `./basic`, `./none`, and `./package.json`; `src/designer.ts`, `src/viewer.ts`, and `src/bindings.ts` remain internal sources.
-- `packages/builtin/src/ai.ts`: derived descriptor list from the built-in Designer bundle, not a second hand-maintained registry.
+- Each material manifest carries its Designer, Viewer, and optional AI facets.
+- `packages/builtin/src/index.ts`, `packages/builtin/src/all.ts`, `packages/builtin/src/basic.ts`, and `packages/builtin/src/none.ts`: public entry points expose immutable built-in material packages and `compileBuiltinMaterialProfile()`.
+- `packages/builtin/src/ai.ts`: derives descriptor data from the manifests in `builtinAllMaterialPackage`, not a second hand-maintained registry.
 - `packages/assistant/designer-bridge/src/material-manifest.ts`: exports the live Designer store as `AssistantMaterialManifest`; props and binding definitions are serialized, and `material.aiDescriptor` becomes `manifest.materials[].ai`.
 - `packages/assistant/designer-bridge/src/contribution.ts`: passes `materialManifest` through a getter so Assistant sees newly registered materials without restart.
 - `packages/assistant/capabilities/src/types.ts`: runtime zod shape for `AssistantMaterialManifest` and `AssistantAIMaterialDescriptorSchema`.
@@ -150,8 +150,8 @@ The `sizing` field in knowledge is always declared in mm (internal reference). T
 Built-in materials:
 
 1. Export `xAIMaterialDescriptor` from the material package.
-2. Add `aiDescriptor: xAIMaterialDescriptor` to the material entry in `packages/builtin/src/designer.ts`.
-3. Keep root `@easyink/builtin`, `@easyink/builtin/all`, and any applicable reduced-set entry point aligned so the live Designer material manifest reflects what the host registered. Do not route consumers through unpublished `@easyink/builtin/designer`, `@easyink/builtin/viewer`, or `@easyink/builtin/bindings` subpaths.
+2. Add the descriptor to the material manifest's AI facet.
+3. Add the complete manifest to `builtinAllMaterialPackage` and, when applicable, `builtinBasicMaterialPackage`; keep the `/all`, `/basic`, and `/none` package entry points aligned.
 4. Do not add material-specific prompt text. Assistant reads the live material manifest, including binding and data-contract target fields.
 5. Keep Designer capabilities, prop schemas, Viewer behavior, and AI descriptor claims aligned.
 
@@ -193,7 +193,7 @@ Current flow:
 - Array/detail-list materials use collection binding and examples with slash-separated child paths.
 - `schemaRules` describe the canonical schema shape when the material has specialized schema.
 - `knowledge.sizing.defaultSize` matches `createXNode()` defaults in mm.
-- `knowledge.sizing.growAxis` matches Viewer `measure()` and page layout behavior.
+- `knowledge.sizing.growAxis` matches `MaterialViewerLayoutFacet.measure(request)` and page layout behavior.
 - `composability` does not promise child support unless the material supports children end to end.
 - Built-ins are registered in Designer and Viewer when Assistant should see them; Assistant consumes Designer's live material manifest.
 - Custom materials register `aiDescriptor` with Designer.

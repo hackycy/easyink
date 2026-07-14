@@ -74,6 +74,10 @@ export class ProfileMaterialRuntime {
     return resolveMaterialConditionCapability(this.profile.getManifest(type)?.common.condition)
   }
 
+  getLayoutOverflow(type: string): 'visible' | 'clip' {
+    return this.profile.getManifest(type)?.common.layout.overflow ?? 'clip'
+  }
+
   dispose(): Promise<readonly FacetDiagnostic[]> {
     return this.facetHost.dispose()
   }

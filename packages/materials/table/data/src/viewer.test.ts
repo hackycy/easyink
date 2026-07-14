@@ -1,6 +1,6 @@
 import type { MaterialLayoutPlan, MaterialMeasureRequest, ViewerElementTree, ViewerRenderTree } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
-import { createFragmentFromNode, createLayoutConstraintKey, createNonFragmentingMaterialPlans, freezeMaterialLayoutPlan, runLayoutPipeline, runPagination, viewerText } from '@easyink/core'
+import { commitMaterialFragment, createFragmentFromNode, createLayoutConstraintKey, createNonFragmentingMaterialPlans, freezeMaterialLayoutPlan, runLayoutPipeline, runPagination, viewerText } from '@easyink/core'
 import { createTestViewerRenderContext } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { createDefaultDataTableModel } from './schema'
@@ -195,7 +195,7 @@ describe('tableDataFragmentAdapter', () => {
       measureSlot: vi.fn(),
     } as unknown as MaterialMeasureRequest
 
-    const plan = await tableDataViewerLayout.measure!(request)
+    const plan = freezeMaterialLayoutPlan(await tableDataViewerLayout.measure!(request)) as MaterialLayoutPlan
 
     expect(openCollection).not.toHaveBeenCalled()
     const payload = plan.payload as {
@@ -211,7 +211,117 @@ describe('tableDataFragmentAdapter', () => {
     expect(Object.isFrozen(plan)).toBe(true)
     expect(request.budget.reserveRuntimeRows).toHaveBeenCalledWith(3)
     expect(request.budget.reserveLayoutFacts).toHaveBeenNthCalledWith(1, 'row', 3)
-    expect(request.budget.reserveLayoutFacts).toHaveBeenNthCalledWith(2, 'custom', 2)
+    expect(request.budget.reserveLayoutFacts).toHaveBeenNthCalledWith(2, 'cell', 9)
+    expect(request.budget.reserveLayoutFacts).toHaveBeenNthCalledWith(3, 'custom', 2)
+  })
+
+  it('renders provider rows from committed layout and fragment facts', async () => {
+    const node = createNode()
+    const model = tableModel(node)
+    const detail = model.bands.find(band => band.role === 'detail')!.rows[0]!
+    detail.cells[0]!.content = { kind: 'text', text: '', bindingPort: 'detail:name' }
+    node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
+    node.bindings['detail:name'] = { sourceId: 'invoice', fieldPath: 'items/name' }
+    const records = [{ name: 'Alpha' }, { name: 'Beta' }]
+    const close = vi.fn(async () => {})
+    const request = {
+      mode: 'authoritative',
+      instanceKey: node.id,
+      node,
+      scope: { key: 'document', data: {} },
+      resolvedModel: node.model,
+      nodeRevision: 1,
+      dataRevision: 1,
+      resourceRevision: 1,
+      constraints: { availableWidth: 100, availableHeight: 100, unit: 'mm', writingMode: 'horizontal-tb' },
+      signal: new AbortController().signal,
+      budget: {
+        maxRuntimeRows: 10,
+        maxLayoutFacts: 100,
+        runtimeRowsUsed: 0,
+        layoutFactsUsed: 0,
+        reserveRuntimeRows: vi.fn(),
+        reserveLayoutFacts: vi.fn(),
+      },
+      resolveBinding: () => ({ status: 'missing' }),
+      formatBinding: () => ({ status: 'missing' }),
+      openCollection: vi.fn(async () => ({
+        status: 'opened',
+        cursor: {
+          declaredRowCount: records.length,
+          keyMultiplicity: 'unknown',
+          readNext: vi.fn(async () => ({ records, done: true })),
+          close,
+        },
+      })),
+      schedule: {} as never,
+      measureText: vi.fn(),
+      measureSlot: vi.fn(),
+    } as unknown as MaterialMeasureRequest
+
+    const plan = freezeMaterialLayoutPlan(await tableDataViewerLayout.measure!(request)) as MaterialLayoutPlan
+    const fragmentRequest = {
+      plan,
+      startBlockOffset: 0,
+      endBlockOffset: plan.borderBox.height,
+      availableHeight: plan.borderBox.height,
+      pageIndex: 0,
+    }
+    const fragmentPlan = commitMaterialFragment(
+      fragmentRequest,
+      tableDataFragmentAdapter.createFragment(fragmentRequest),
+      { x: 0, y: 0 },
+    )
+    const output = renderTableData(node, createTestViewerRenderContext({
+      data: {},
+      resolvedModel: node.model,
+      layoutPlan: plan,
+      fragmentPlan,
+    })).tree
+
+    expect(close).toHaveBeenCalledOnce()
+    expect(bodyRows(output)).toHaveLength(2)
+    expect(JSON.stringify(output)).toContain('Alpha')
+    expect(JSON.stringify(output)).toContain('Beta')
+  })
+
+  it('rejects paint without committed runtime rows before reading context data', () => {
+    const node = createNode()
+    node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
+    const data = new Proxy({}, {
+      get() {
+        throw new Error('paint must not read context data')
+      },
+    })
+
+    expect(() => renderTableData(node, createTestViewerRenderContext({ data })))
+      .toThrow('TABLE_DATA_COMMITTED_LAYOUT_REQUIRED')
+  })
+
+  it('commits the empty provider placeholder without consulting paint-time data', async () => {
+    const node = createNode()
+    node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
+
+    const output = await renderCommitted(node, { items: [] })
+
+    expect(bodyRows(output.tree)).toHaveLength(1)
+    expect(JSON.stringify(output.tree)).not.toContain('items')
+  })
+
+  it('recovers from an empty provider result only after the next measured data revision commits', async () => {
+    const node = createNode()
+    const detail = tableModel(node).bands.find(band => band.role === 'detail')!.rows[0]!
+    detail.cells[0]!.content = { kind: 'text', text: '', bindingPort: 'detail:name' }
+    node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
+    node.bindings['detail:name'] = { sourceId: 'invoice', fieldPath: 'items/name' }
+
+    const empty = await renderCommitted(node, { items: [] }, { dataRevision: 1 })
+    const recovered = await renderCommitted(node, { items: [{ name: 'Recovered' }] }, { dataRevision: 2 })
+
+    expect(bodyRows(empty.tree)).toHaveLength(1)
+    expect(JSON.stringify(empty.tree)).not.toContain('Recovered')
+    expect(bodyRows(recovered.tree)).toHaveLength(1)
+    expect(JSON.stringify(recovered.tree)).toContain('Recovered')
   })
 
   it('lets core commit 200 monotonic ranges with stable identities across 50+ pages', () => {
@@ -226,13 +336,13 @@ describe('tableDataFragmentAdapter', () => {
     expect(second).toEqual(first)
   })
 
-  it('expands records from the configured collection port without requiring detail cell bindings', () => {
+  it('expands records from the configured collection port without requiring detail cell bindings', async () => {
     const node = createNode()
     const model = tableModel(node)
     model.data.collectionPort = 'orders'
     node.bindings.orders = { sourceId: 'invoice', fieldPath: 'orders' }
 
-    const output = renderTableData(node, renderContext({ orders: [{ id: 1 }, { id: 2 }] })).tree
+    const output = (await renderCommitted(node, { orders: [{ id: 1 }, { id: 2 }] })).tree
 
     expect(bodyRows(output)).toHaveLength(2)
   })
@@ -261,7 +371,7 @@ describe('tableDataFragmentAdapter', () => {
     expect(model).toEqual(before)
   })
 
-  it('reuses canonical detail slots for every expanded record without shifting footer identities', () => {
+  it('reuses canonical detail slots for every expanded record without shifting footer identities', async () => {
     const node = createNode()
     const model = tableModel(node)
     const detail = model.bands.find(band => band.role === 'detail')!.rows[0]!
@@ -270,10 +380,7 @@ describe('tableDataFragmentAdapter', () => {
     hosted.content = { kind: 'materials', slotId: `cell:${hosted.id}` }
     node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
 
-    const output = renderTableData(node, createTestViewerRenderContext({
-      data: { items: [{ name: 'A' }, { name: 'B' }] },
-      resolvedModel: {},
-      capabilities: { sanitizeMarkup: () => { throw new Error('unused') } },
+    const output = (await renderCommitted(node, { items: [{ name: 'A' }, { name: 'B' }] }, {
       slotOutputs: { [`cell:${hosted.id}`]: [viewerText('HOSTED')] },
     })).tree
     const json = JSON.stringify(output)
@@ -290,7 +397,7 @@ describe('tableDataFragmentAdapter', () => {
     expect(footerCells.every(cell => !bodyCells.some(body => body.attributes.id === cell.attributes.id))).toBe(true)
   })
 
-  it('keeps keyed row and cell ids stable when records reorder', () => {
+  it('keeps keyed row and cell ids stable when records reorder', async () => {
     const node = createNode()
     const model = tableModel(node)
     model.data.collectionPort = 'orders'
@@ -301,42 +408,43 @@ describe('tableDataFragmentAdapter', () => {
     node.bindings.orderId = { sourceId: 'invoice', fieldPath: 'orders/id' }
     node.bindings['detail:name'] = { sourceId: 'invoice', fieldPath: 'orders/name' }
 
-    const first = renderTableData(node, renderContext({ orders: [{ id: 'a', name: 'Alpha' }, { id: 'b', name: 'Beta' }] })).tree
-    const second = renderTableData(node, renderContext({ orders: [{ id: 'b', name: 'Beta' }, { id: 'a', name: 'Alpha' }] })).tree
+    const first = (await renderCommitted(node, { orders: [{ id: 'a', name: 'Alpha' }, { id: 'b', name: 'Beta' }] })).tree
+    const second = (await renderCommitted(node, { orders: [{ id: 'b', name: 'Beta' }, { id: 'a', name: 'Alpha' }] })).tree
 
     expect(rowIdentityByText(second)).toEqual(rowIdentityByText(first))
   })
 
-  it('uses unique deterministic fallbacks and reports duplicate or missing detail keys', () => {
+  it('uses unique deterministic fallbacks and reports duplicate or missing detail keys', async () => {
     const node = createNode()
     const model = tableModel(node)
     model.data.detailKeyPort = 'detailKey'
     node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
     node.bindings.detailKey = { sourceId: 'invoice', fieldPath: 'items/id' }
-    const diagnostics: Array<{ code: string }> = []
     const data = { items: [{ id: 'same' }, { id: 'same' }, { name: 'missing' }] }
 
-    const first = renderTableData(node, renderContext(data, diagnostic => diagnostics.push(diagnostic))).tree
-    const second = renderTableData(node, renderContext(data)).tree
+    const firstResult = await renderCommitted(node, data)
+    const secondResult = await renderCommitted(node, data)
+    const first = firstResult.tree
+    const second = secondResult.tree
     const firstIds = bodyRows(first).map(row => row.attributes.id)
 
     expect(new Set(firstIds).size).toBe(3)
     expect(bodyRows(second).map(row => row.attributes.id)).toEqual(firstIds)
-    expect(diagnostics.map(item => item.code)).toEqual([
+    expect(firstResult.plan.diagnostics.map(item => item.code)).toEqual([
       'TABLE_DATA_DETAIL_KEY_DUPLICATE',
       'TABLE_DATA_DETAIL_KEY_DUPLICATE',
       'TABLE_DATA_DETAIL_KEY_MISSING',
     ])
   })
 
-  it('does not disturb keyed row metadata while contributing a range', () => {
+  it('does not disturb keyed row metadata while contributing a range', async () => {
     const node = createNode()
     const model = tableModel(node)
     model.data.detailKeyPort = 'detailKey'
     node.bindings.records = { sourceId: 'invoice', fieldPath: 'items' }
     node.bindings.detailKey = { sourceId: 'invoice', fieldPath: 'items/id' }
     const data = { items: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] }
-    const before = bodyRows(renderTableData(node, renderContext(data)).tree).map(row => row.attributes.id)
+    const before = bodyRows((await renderCommitted(node, data)).tree).map(row => row.attributes.id)
     const plan = createTestFragment(node).plan
 
     tableDataFragmentAdapter.createFragment({
@@ -346,19 +454,95 @@ describe('tableDataFragmentAdapter', () => {
       availableHeight: 20,
       pageIndex: 0,
     })
-    const after = bodyRows(renderTableData(node, renderContext(data)).tree).map(row => row.attributes.id)
+    const after = bodyRows((await renderCommitted(node, data)).tree).map(row => row.attributes.id)
 
     expect(after).toEqual(before)
   })
 })
 
-function renderContext(data: Record<string, unknown>, reportDiagnostic?: (diagnostic: any) => void) {
-  return createTestViewerRenderContext({
-    data,
-    resolvedModel: {},
-    capabilities: { sanitizeMarkup: () => { throw new Error('unused') } },
-    reportDiagnostic,
+async function renderCommitted(
+  node: MaterialNode,
+  data: Record<string, unknown>,
+  options: Readonly<{ slotOutputs?: Record<string, readonly ViewerRenderTree[]>, dataRevision?: number }> = {},
+) {
+  const model = tableModel(node)
+  const collectionPort = model.data.collectionPort
+  const collectionBinding = node.bindings[collectionPort]
+  const collectionPath = collectionBinding && !Array.isArray(collectionBinding) && !('kind' in collectionBinding)
+    ? collectionBinding.fieldPath
+    : undefined
+  const records = collectionPath ? resolveTestPath(data, collectionPath) : undefined
+  let cursorDone = false
+  const request = {
+    mode: 'authoritative',
+    instanceKey: node.id,
+    node,
+    scope: { key: 'document', data: {} },
+    resolvedModel: node.model,
+    nodeRevision: 1,
+    dataRevision: options.dataRevision ?? 1,
+    resourceRevision: 1,
+    constraints: { availableWidth: node.width, availableHeight: 100, unit: 'mm', writingMode: 'horizontal-tb' },
+    signal: new AbortController().signal,
+    budget: {
+      maxRuntimeRows: 1_000,
+      maxLayoutFacts: 10_000,
+      runtimeRowsUsed: 0,
+      layoutFactsUsed: 0,
+      reserveRuntimeRows: vi.fn(),
+      reserveLayoutFacts: vi.fn(),
+    },
+    resolveBinding: () => ({ status: 'missing' }),
+    formatBinding: () => ({ status: 'missing' }),
+    openCollection: vi.fn(async () => Array.isArray(records)
+      ? {
+          status: 'opened',
+          cursor: {
+            declaredRowCount: records.length,
+            keyMultiplicity: 'unknown',
+            readNext: vi.fn(async () => {
+              if (cursorDone)
+                return { records: [], done: true }
+              cursorDone = true
+              return { records, done: true }
+            }),
+            close: vi.fn(async () => {}),
+          },
+        }
+      : { status: 'missing' }),
+    schedule: {} as never,
+    measureText: vi.fn(),
+    measureSlot: vi.fn(),
+  } as unknown as MaterialMeasureRequest
+  const plan = freezeMaterialLayoutPlan(await tableDataViewerLayout.measure!(request)) as MaterialLayoutPlan
+  const fragmentRequest = {
+    plan,
+    startBlockOffset: 0,
+    endBlockOffset: plan.borderBox.height,
+    availableHeight: plan.borderBox.height,
+    pageIndex: 0,
+  }
+  const fragmentPlan = commitMaterialFragment(
+    fragmentRequest,
+    tableDataFragmentAdapter.createFragment(fragmentRequest),
+    { x: plan.borderBox.x, y: plan.borderBox.y },
+  )
+  const context = createTestViewerRenderContext({
+    data: {},
+    resolvedModel: node.model,
+    layoutPlan: plan,
+    fragmentPlan,
+    slotOutputs: options.slotOutputs,
   })
+  return { ...renderTableData(node, context), plan }
+}
+
+function resolveTestPath(data: Record<string, unknown>, path: string): unknown {
+  return path.split('/').filter(Boolean).reduce<unknown>((value, segment) => (
+    typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)[segment]
+      : undefined
+  ), data)
 }
 
 function createTestFragment(node: MaterialNode) {

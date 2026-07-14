@@ -36,13 +36,21 @@ export interface ViewerRenderContext {
   readonly renderSlot: (slotInstanceKey: string) => ViewerRenderTree
   readonly renderBudget: MaterialRenderBudgetToken
   readonly pageIndex: number
-  /** Document unit: 'mm' | 'pt' | 'px'. CSS unit suffix equals this value. */
-  readonly unit: string
+  /** Canonical document unit used for geometry and conversion. */
+  readonly unit: LayoutConstraints['unit']
+  /** Browser CSS length unit. Canonical `inch` is emitted as CSS `in`. */
+  readonly cssUnit: ViewerCssUnit
   readonly zoom: number
   readonly capabilities: ViewerRenderCapabilities
   /** Host-rendered slot output keyed by the manifest slot key. */
   readonly slotOutputs?: Readonly<Record<string, readonly ViewerRenderTree[]>>
   readonly reportDiagnostic?: (diagnostic: BindingFormatDiagnostic & { nodeId?: string }) => void
+}
+
+export type ViewerCssUnit = 'mm' | 'pt' | 'px' | 'in'
+
+function toViewerCssUnit(unit: LayoutConstraints['unit']): ViewerCssUnit {
+  return unit === 'inch' ? 'in' : unit
 }
 
 export interface FallbackViewerRenderContextInput {
@@ -93,6 +101,7 @@ export function createFallbackViewerRenderContext(input: FallbackViewerRenderCon
     renderBudget: createFallbackRenderBudget(input.maxNodes),
     pageIndex: input.pageIndex,
     unit: input.unit,
+    cssUnit: toViewerCssUnit(input.unit),
     zoom: input.zoom,
     capabilities: input.capabilities,
     slotOutputs: input.slotOutputs,

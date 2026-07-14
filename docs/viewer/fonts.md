@@ -46,6 +46,7 @@ import { createViewer } from '@easyink/viewer'
 
 const viewer = createViewer({
   iframe: iframeElement,
+  profile,
   fontProvider,
 })
 ```
@@ -68,7 +69,7 @@ await viewer.open({
 })
 ```
 
-当前 Viewer 会先从 Schema 里收集字体族，再调用内部的 `loadAndInjectFonts()`。如果没有配置 `fontProvider`、没有 Host，或者模板里没有字体引用，这一步会直接跳过。
+当前 Viewer 通过各物料 manifest 的 schema-adapter introspection 收集字体和资产引用，并把它们与页面字体一起交给 resource-readiness coordinator。协调器会为每个声明资源记录终态，并在测量前发布 `resourceRevision`；没有 `fontProvider`、没有 Host 或没有字体引用时，也会走明确的终态降级路径。
 
 目前预加载按 `family` 收集。`FontProvider.loadFont(family, weight, style)` 的 `weight` 和 `style` 参数属于通用字体接口，Viewer 这条预加载路径不保证一定传入它们。
 
@@ -79,11 +80,13 @@ await viewer.open({
 ```ts
 const iframeViewer = createViewer({
   iframe: iframeElement,
+  profile,
   fontProvider,
 })
 
 const domViewer = createViewer({
   container: containerElement,
+  profile,
   fontProvider,
 })
 ```

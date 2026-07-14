@@ -4,7 +4,7 @@ import { createLineExtension } from './designer'
 import { lineLocaleMessages } from './locale'
 import { lineDesignerPropSchemas } from './prop-schemas'
 import { createLineNode, LINE_CONDITION, LINE_TYPE } from './schema'
-import { createLineViewerExtension } from './viewer'
+import { createLineViewerExtension, lineViewerLayout } from './viewer'
 
 export const lineMaterialManifest = defineStandardMaterialManifest({
   type: LINE_TYPE,
@@ -22,6 +22,7 @@ export const lineMaterialManifest = defineStandardMaterialManifest({
   designerFactory: createLineExtension,
   localeMessages: lineLocaleMessages,
   viewerExtension: createLineViewerExtension(),
+  viewerLayout: lineViewerLayout,
   aiDescriptor: lineAIMaterialDescriptor,
   generation: { enabled: true, modelSchema: 'infer-from-default', bindingShape: 'infer-from-binding', examples: 'default-model', requiredModelPaths: ['/lineColor'] },
 })
