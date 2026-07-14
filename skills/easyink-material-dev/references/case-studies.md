@@ -193,7 +193,7 @@ Copy this pattern for mostly fixed-size, model-only materials.
 
 Use as the page-aware reference:
 
-- `createPageNumberNode()` sets `output.placement: { mode: 'fixed' }`.
+- `createPageNumberNode()` sets `output.placement: { mode: 'fixed' }` and `output.repeat: { scope: 'every-output-page' }`.
 - The manifest sets `common.layout.pageRepeat='every-output-page'`, making default repetition explicit.
 - Runtime removes it from layout inputs, replicates it after pagination, and injects `__pageNumber` and `__totalPages`.
 - Rendering uses the resolved runtime model, not schema-time page counts.

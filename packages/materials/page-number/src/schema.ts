@@ -53,6 +53,7 @@ export function createPageNumberNode(partial?: Partial<MaterialNode>, unit?: str
       ...output,
       visibility: 'include',
       placement: { mode: 'fixed' },
+      repeat: { scope: 'every-output-page' },
     },
   })
 }
