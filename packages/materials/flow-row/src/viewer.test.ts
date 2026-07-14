@@ -1,12 +1,30 @@
-import type { ViewerElementTree, ViewerRenderContext, ViewerRenderTree } from '@easyink/core'
+import type { MaterialRenderBudgetToken, ViewerElementTree, ViewerRenderContext, ViewerRenderTree } from '@easyink/core'
 import { createTestViewerRenderContext } from '@easyink/core/testing'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createFlowRowNode } from './schema'
 import { measureFlowRow, renderFlowRow } from './viewer'
 
 const context = createTestViewerRenderContext({ capabilities: {} as never }) satisfies ViewerRenderContext
 
 describe('flow-row viewer', () => {
+  it('reserves owned element and text nodes before building the tree', () => {
+    const reserveNodes = vi.fn()
+    const renderBudget: MaterialRenderBudgetToken = {
+      maxNodes: 20,
+      nodesUsed: 0,
+      reserveNodes,
+    }
+    const node = createFlowRowNode({ model: { columns: [
+      { id: 'a', ratio: 1, textAlign: 'left', wrapMode: 'block', content: 'A' },
+      { id: 'b', ratio: 1, textAlign: 'left', wrapMode: 'inline', content: 'B' },
+    ] } })
+
+    renderFlowRow(node, createTestViewerRenderContext({ renderBudget }))
+
+    expect(reserveNodes).toHaveBeenNthCalledWith(1, 'element', 7)
+    expect(reserveNodes).toHaveBeenNthCalledWith(2, 'text', 2)
+  })
+
   it('renders block and inline columns as semantic text in order', () => {
     const node = createFlowRowNode({ model: { columns: [
       { id: 'a', ratio: 1, textAlign: 'left', wrapMode: 'block', content: 'Long item' },

@@ -846,7 +846,7 @@ describe('material measurement integration', () => {
     const host = globalThis.document.createElement('div')
 
     mountCommittedMaterial(host, {
-      committedPlan: { runtimeInstances: measured.instances },
+      committedPlan: { documentRevision: 5, dataRevision: 2, runtimeInstances: measured.instances },
       fragmentPlan: rootFragment,
       materials: harness.materials,
       pageIndex: 0,
@@ -1210,21 +1210,50 @@ describe('material measurement integration', () => {
 
 describe('measurement budgets and flattening', () => {
   it('reserves layout and render budgets atomically with bounded positive safe integer limits', () => {
-    const layout = createMaterialLayoutBudgetToken({ maxRuntimeRows: 2, maxLayoutFacts: 3 })
+    const identity = {
+      instanceKey: 'budget-instance',
+      nodeId: 'budget-node',
+      documentRevision: 4,
+      dataRevision: 7,
+    }
+    const signal = new AbortController().signal
+    const layout = createMaterialLayoutBudgetToken({
+      ...identity,
+      maxRuntimeRows: 2,
+      maxLayoutFacts: 3,
+      signal,
+      reportDiagnostic: vi.fn(),
+    })
     layout.reserveRuntimeRows(2)
     layout.reserveLayoutFacts('row', 3)
     expect(layout).toMatchObject({ runtimeRowsUsed: 2, layoutFactsUsed: 3 })
-    expect(() => layout.reserveRuntimeRows(1)).toThrow('MATERIAL_LAYOUT_RUNTIME_ROW_LIMIT')
+    expect(() => layout.reserveRuntimeRows(1)).toThrow('VIEWER_RUNTIME_ROW_BUDGET_EXCEEDED')
     expect(layout.runtimeRowsUsed).toBe(2)
-    expect(() => layout.reserveLayoutFacts('cell', 1)).toThrow('MATERIAL_LAYOUT_FACT_LIMIT')
+    expect(() => layout.reserveLayoutFacts('cell', 1)).toThrow('VIEWER_LAYOUT_FACT_BUDGET_EXCEEDED')
     expect(layout.layoutFactsUsed).toBe(3)
 
-    const render = createMaterialRenderBudgetToken(2)
+    const render = createMaterialRenderBudgetToken({
+      ...identity,
+      maxNodes: 2,
+      signal,
+      reportDiagnostic: vi.fn(),
+    })
     render.reserveNodes('element', 2)
-    expect(() => render.reserveNodes('text', 1)).toThrow('MATERIAL_RENDER_NODE_LIMIT')
+    expect(() => render.reserveNodes('text', 1)).toThrow('VIEWER_RENDER_TREE_BUDGET_EXCEEDED')
     expect(render.nodesUsed).toBe(2)
-    expect(() => createMaterialLayoutBudgetToken({ maxRuntimeRows: 0, maxLayoutFacts: 1 })).toThrow('MATERIAL_LAYOUT_BUDGET_INVALID')
-    expect(() => createMaterialRenderBudgetToken(1.5)).toThrow('MATERIAL_RENDER_BUDGET_INVALID')
+    expect(() => createMaterialLayoutBudgetToken({
+      ...identity,
+      maxRuntimeRows: 0,
+      maxLayoutFacts: 1,
+      signal,
+      reportDiagnostic: vi.fn(),
+    })).toThrow('MATERIAL_LAYOUT_BUDGET_LIMIT_INVALID')
+    expect(() => createMaterialRenderBudgetToken({
+      ...identity,
+      maxNodes: 1.5,
+      signal,
+      reportDiagnostic: vi.fn(),
+    })).toThrow('MATERIAL_RENDER_BUDGET_LIMIT_INVALID')
   })
 
   it('flattens only inherited measurable branches without recomputing conditions', () => {

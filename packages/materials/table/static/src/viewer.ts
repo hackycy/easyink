@@ -22,6 +22,7 @@ export function renderTableStatic(node: MaterialNode<unknown>, contextOrUnit: Vi
     unit,
     elementHeight: node.height,
     slotOutputs: context?.slotOutputs,
+    renderBudget: context?.renderBudget,
     cellText: (cell) => {
       if (cell.staticBinding) {
         const raw = resolveBindingValue(cell.staticBinding, data)

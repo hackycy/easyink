@@ -1,12 +1,39 @@
-import type { ViewerElementTree, ViewerRenderTree } from '@easyink/core'
+import type { MaterialRenderBudgetToken, ViewerElementTree, ViewerRenderTree } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { TableModel } from './model'
 import type { TableTopologySchema } from './projection-types'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { TABLE_BASE_DEFAULTS } from './types'
 import { renderTableTree } from './viewer-tree'
 
 describe('table viewer DOM identities', () => {
+  it('reserves the complete owned tree before constructing cell text', () => {
+    const reservations: Array<readonly [string, number]> = []
+    const renderBudget: MaterialRenderBudgetToken = {
+      maxNodes: 20,
+      get nodesUsed() { return reservations.reduce((sum, [, count]) => sum + count, 0) },
+      reserveNodes: vi.fn((kind, count) => reservations.push([kind, count])),
+    }
+    const cellText = vi.fn(() => {
+      expect(reservations).toEqual([['element', 6], ['text', 2]])
+      return 'cell'
+    })
+
+    renderTableTree({
+      node: createNode(),
+      topology: { columns: [{ ratio: 1 }, { ratio: 1 }], rows: [{ role: 'header', height: 5, cells: [{}, {}] }] },
+      props: TABLE_BASE_DEFAULTS,
+      unit: 'mm',
+      elementHeight: 5,
+      canonicalRowIds: ['row:a:b'],
+      canonicalColumnIds: ['column:a:b', 'column:a_b'],
+      renderBudget,
+      cellText,
+    })
+
+    expect(cellText).toHaveBeenCalledTimes(2)
+  })
+
   it('encodes canonical and repeated source identities injectively and stably', () => {
     const node = createNode()
     const topology: TableTopologySchema = {

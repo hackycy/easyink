@@ -25,6 +25,7 @@ import type { EffectiveOutputState } from './effective-output-state'
 import type { ProfileMaterialRuntime } from './material-runtime'
 import type { PreparedCollectionBudget, PreparedCollectionProvider } from './prepared-collections'
 import type { ResolvedRuntimeModel, RuntimeModelResolutionCache } from './runtime-model-resolver'
+import type { ViewerPerformanceBudget } from './types'
 import {
   commitMaterialFragment,
   createLayoutConstraintKey,
@@ -34,6 +35,7 @@ import {
   planRepeatedOverlays,
   runLayoutPipeline,
   runPagination,
+  VIEWER_TREE_ABSOLUTE_MAX_NODES,
   walkMaterialNodes,
 } from '@easyink/core'
 import { assertJsonValue, cloneJsonValue, deepFreezeJsonValue } from '@easyink/shared'
@@ -42,6 +44,29 @@ import { resolveEffectiveOutputStates } from './effective-output-state'
 import { createMaterialCollectionOpener } from './prepared-collections'
 import { createReadonlyMap } from './readonly-map'
 import { resolveRuntimeModelInstance, resolveRuntimeModels } from './runtime-model-resolver'
+
+export const DEFAULT_VIEWER_PERFORMANCE_BUDGET: Readonly<ViewerPerformanceBudget> = Object.freeze({
+  measureCacheEntries: 512,
+  maxMeasureInFlight: 8,
+  pageDomOverscan: 1,
+  maxInlineDataNodes: 100_000,
+  maxInlineDataStringBytes: 4 * 1024 * 1024,
+  maxRuntimeRows: 100_000,
+  maxLayoutFactsPerMaterial: 500_000,
+  maxRenderTreeNodesPerMaterial: 50_000,
+})
+
+interface RuntimeBudgetDiagnostic {
+  readonly code: string
+  readonly detail: unknown
+}
+
+interface MaterialBudgetIdentity {
+  readonly instanceKey: string
+  readonly nodeId: string
+  readonly documentRevision: number
+  readonly dataRevision: number
+}
 
 export interface LayoutRuntimeInput {
   readonly document: DocumentSchema
@@ -379,146 +404,203 @@ async function measureInstance(context: {
   if (model.status === 'quarantined' && model.diagnostic?.code === 'MATERIAL_BINDING_SCOPE_INVALID')
     deps.measureService.invalidateNode(node.id)
 
-  const plan = await deps.measureService.measure({
-    mode: 'authoritative',
-    profile: deps.profile,
-    materialType: node.type,
-    instanceKey,
-    nodeId: node.id,
-    nodeRevision: model.nodeRevision,
-    dataRevision: input.dataRevision,
-    resourceRevision: input.resourceRevision,
-    constraintKey,
-    signal,
-    measure: async (measureSignal) => {
-      callbackRan = true
-      const budget = createMaterialLayoutBudgetToken({
-        maxRuntimeRows: deps.budget.maxRuntimeRows,
-        maxLayoutFacts: deps.budget.maxLayoutFacts,
-      })
-      const resolveBinding = createMaterialBindingResolver({
-        node: nodeSnapshot,
-        bindingDefinition: manifest.common.binding,
-        baseScope: scope,
-        reportDiagnostic,
-      })
-      const formatBinding = createMaterialDisplayBindingResolver({
-        node: nodeSnapshot,
-        bindingDefinition: manifest.common.binding,
-        baseScope: scope,
-        reportDiagnostic,
-      })
-      const collections = createMaterialCollectionOpener({
-        node: nodeSnapshot,
-        dataRevision: input.dataRevision,
-        resolveBinding,
-        provider: deps.preparedCollections,
-        budget: deps.budget,
-        reportDiagnostic,
-      })
-      try {
-        const facet = deps.materials.get(node.type)
-        const customMeasure = model.status === 'ready' && facet?.state === 'active'
-          ? facet.value?.layout?.measure
-          : undefined
-        if (!customMeasure) {
-          const fallback = createNonFragmentingMaterialPlans({
+  const nodeController = createLinkedAbortController(signal)
+  let budgetFailure: RuntimeBudgetDiagnostic | undefined
+  let plan: MaterialLayoutPlan
+  try {
+    plan = await deps.measureService.measure({
+      mode: 'authoritative',
+      profile: deps.profile,
+      materialType: node.type,
+      instanceKey,
+      nodeId: node.id,
+      nodeRevision: model.nodeRevision,
+      dataRevision: input.dataRevision,
+      resourceRevision: input.resourceRevision,
+      constraintKey,
+      signal: nodeController.signal,
+      measure: async (measureSignal) => {
+        callbackRan = true
+        const reportBudgetDiagnostic = (diagnostic: RuntimeBudgetDiagnostic): void => {
+          budgetFailure = diagnostic
+          nodeController.abort(new Error(diagnostic.code))
+          reportDiagnostic(diagnostic)
+        }
+        const budget = createMaterialLayoutBudgetToken({
+          instanceKey,
+          nodeId: node.id,
+          documentRevision: input.documentRevision,
+          dataRevision: input.dataRevision,
+          maxRuntimeRows: deps.budget.maxRuntimeRows,
+          maxLayoutFacts: deps.budget.maxLayoutFacts,
+          signal: measureSignal,
+          reportDiagnostic: reportBudgetDiagnostic,
+        })
+        const resolveBinding = createMaterialBindingResolver({
+          node: nodeSnapshot,
+          bindingDefinition: manifest.common.binding,
+          baseScope: scope,
+          reportDiagnostic,
+        })
+        const formatBinding = createMaterialDisplayBindingResolver({
+          node: nodeSnapshot,
+          bindingDefinition: manifest.common.binding,
+          baseScope: scope,
+          reportDiagnostic,
+        })
+        const collections = createMaterialCollectionOpener({
+          node: nodeSnapshot,
+          dataRevision: input.dataRevision,
+          resolveBinding,
+          provider: deps.preparedCollections,
+          budget: deps.budget,
+          reportDiagnostic,
+        })
+        try {
+          const facet = deps.materials.get(node.type)
+          const customMeasure = model.status === 'ready' && facet?.state === 'active'
+            ? facet.value?.layout?.measure
+            : undefined
+          if (!customMeasure) {
+            const fallback = createNonFragmentingMaterialPlans({
+              instanceKey,
+              nodeId: node.id,
+              nodeRevision: model.nodeRevision,
+              constraintKey,
+              pageIndex: 0,
+              borderBox: { x: node.x, y: node.y, width: node.width, height: node.height },
+              fragmentBox: { x: node.x, y: node.y, width: node.width, height: node.height },
+            })
+            embeddedFragmentPlan = fallback.fragmentPlan
+            return fallback.layoutPlan
+          }
+
+          fragmentAdapter = facet?.value?.layout?.fragment
+
+          const measuredPlan = await customMeasure(Object.freeze({
+            mode: 'authoritative',
+            instanceKey,
+            node: nodeSnapshot,
+            scope,
+            resolvedModel,
+            nodeRevision: model.nodeRevision,
+            dataRevision: input.dataRevision,
+            resourceRevision: input.resourceRevision,
+            constraints,
+            signal: measureSignal,
+            budget,
+            resolveBinding,
+            formatBinding,
+            openCollection: collections.open,
+            schedule: deps.scheduler,
+            measureText: (text: MaterialTextMeasureInput) => deps.textMeasure(text, input.resourceRevision, measureSignal),
+            measureSlot: async (
+              slotInput: Parameters<MaterialMeasureRequest['measureSlot']>[0],
+              slotSignal: AbortSignal,
+            ): Promise<MaterialSlotInstancePlan> => {
+              throwIfAborted(measureSignal)
+              throwIfAborted(slotSignal)
+              if (slotSignal !== measureSignal)
+                throw new Error('MATERIAL_SLOT_MEASURE_SIGNAL_MISMATCH')
+              const children = (node.slots[slotInput.slot] ?? [])
+                .filter(child => input.outputStates.get(child.id)?.shouldMeasure === true)
+              const slotInstanceKey = JSON.stringify([
+                'material-slot',
+                instanceKey,
+                slotInput.slot,
+                slotInput.scope.key,
+              ])
+              const childTrees = await deps.scheduler.mapOrdered(children, async (child, index) => {
+                const childInstanceKey = JSON.stringify([
+                  'material-slot-child',
+                  slotInstanceKey,
+                  index,
+                  child.id,
+                ])
+                const childModel = resolveRuntimeModelInstance({
+                  instanceKey: childInstanceKey,
+                  scope: slotInput.scope,
+                  node: child,
+                  dataRevision: input.dataRevision,
+                  nodeRevision: input.documentRevision,
+                  admissionState: input.nodeStates.get(child.id),
+                  cache: deps.runtimeModelCache,
+                  materials: deps.materials,
+                  reportDiagnostic,
+                })
+                return measureInstance({
+                  deps,
+                  input,
+                  node: child,
+                  instanceKey: childInstanceKey,
+                  scope: slotInput.scope,
+                  model: childModel,
+                  constraints: slotInput.constraints,
+                  signal: measureSignal,
+                  ancestorNodeIds,
+                  artifacts: context.artifacts,
+                  artifactRetryAvailable: true,
+                })
+              }, measureSignal)
+              for (const childTree of childTrees)
+                descendants.push(...childTree.entries)
+              slotChildren[slotInstanceKey] = Object.freeze(childTrees.map(tree => tree.instance.instanceKey))
+              return Object.freeze({
+                instanceKey: slotInstanceKey,
+                contentBounds: unionPlanBounds(childTrees.map(tree => tree.plan)),
+                childPlans: Object.freeze(childTrees.map(tree => tree.plan)),
+              })
+            },
+          }))
+          throwIfAborted(signal)
+          const observed = auditMaterialLayoutPlan(measuredPlan, {
+            maxRuntimeRows: deps.budget.maxRuntimeRows,
+            maxLayoutFacts: deps.budget.maxLayoutFacts,
+          })
+          const accepted = enforceRuntimeBudget({
             instanceKey,
             nodeId: node.id,
-            nodeRevision: model.nodeRevision,
-            constraintKey,
-            pageIndex: 0,
-            borderBox: { x: node.x, y: node.y, width: node.width, height: node.height },
-            fragmentBox: { x: node.x, y: node.y, width: node.width, height: node.height },
+            documentRevision: input.documentRevision,
+            dataRevision: input.dataRevision,
+            observedRows: observed.runtimeRows,
+            observedLayoutFacts: observed.layoutFacts,
+            observedRenderTreeNodes: 0,
+            budget: {
+              ...DEFAULT_VIEWER_PERFORMANCE_BUDGET,
+              maxRuntimeRows: deps.budget.maxRuntimeRows,
+              maxLayoutFactsPerMaterial: deps.budget.maxLayoutFacts,
+            },
+            reportDiagnostic: reportBudgetDiagnostic,
           })
-          embeddedFragmentPlan = fallback.fragmentPlan
-          return fallback.layoutPlan
+          if (!accepted)
+            throw new Error(budgetFailure?.code ?? 'VIEWER_LAYOUT_FACT_BUDGET_EXCEEDED')
+          return measuredPlan
         }
-
-        fragmentAdapter = facet?.value?.layout?.fragment
-
-        return await customMeasure(Object.freeze({
-          mode: 'authoritative',
-          instanceKey,
-          node: nodeSnapshot,
-          scope,
-          resolvedModel,
-          nodeRevision: model.nodeRevision,
-          dataRevision: input.dataRevision,
-          resourceRevision: input.resourceRevision,
-          constraints,
-          signal: measureSignal,
-          budget,
-          resolveBinding,
-          formatBinding,
-          openCollection: collections.open,
-          schedule: deps.scheduler,
-          measureText: (text: MaterialTextMeasureInput) => deps.textMeasure(text, input.resourceRevision, measureSignal),
-          measureSlot: async (
-            slotInput: Parameters<MaterialMeasureRequest['measureSlot']>[0],
-            slotSignal: AbortSignal,
-          ): Promise<MaterialSlotInstancePlan> => {
-            throwIfAborted(measureSignal)
-            throwIfAborted(slotSignal)
-            if (slotSignal !== measureSignal)
-              throw new Error('MATERIAL_SLOT_MEASURE_SIGNAL_MISMATCH')
-            const children = (node.slots[slotInput.slot] ?? [])
-              .filter(child => input.outputStates.get(child.id)?.shouldMeasure === true)
-            const slotInstanceKey = JSON.stringify([
-              'material-slot',
-              instanceKey,
-              slotInput.slot,
-              slotInput.scope.key,
-            ])
-            const childTrees = await deps.scheduler.mapOrdered(children, async (child, index) => {
-              const childInstanceKey = JSON.stringify([
-                'material-slot-child',
-                slotInstanceKey,
-                index,
-                child.id,
-              ])
-              const childModel = resolveRuntimeModelInstance({
-                instanceKey: childInstanceKey,
-                scope: slotInput.scope,
-                node: child,
-                dataRevision: input.dataRevision,
-                nodeRevision: input.documentRevision,
-                admissionState: input.nodeStates.get(child.id),
-                cache: deps.runtimeModelCache,
-                materials: deps.materials,
-                reportDiagnostic,
-              })
-              return measureInstance({
-                deps,
-                input,
-                node: child,
-                instanceKey: childInstanceKey,
-                scope: slotInput.scope,
-                model: childModel,
-                constraints: slotInput.constraints,
-                signal: measureSignal,
-                ancestorNodeIds,
-                artifacts: context.artifacts,
-                artifactRetryAvailable: true,
-              })
-            }, measureSignal)
-            for (const childTree of childTrees)
-              descendants.push(...childTree.entries)
-            slotChildren[slotInstanceKey] = Object.freeze(childTrees.map(tree => tree.instance.instanceKey))
-            return Object.freeze({
-              instanceKey: slotInstanceKey,
-              contentBounds: unionPlanBounds(childTrees.map(tree => tree.plan)),
-              childPlans: Object.freeze(childTrees.map(tree => tree.plan)),
-            })
-          },
-        }))
-      }
-      finally {
-        await collections.dispose()
-      }
-    },
-  })
-  const committedPlan = plan as MaterialLayoutPlan
+        finally {
+          await collections.dispose()
+        }
+      },
+    }) as MaterialLayoutPlan
+  }
+  catch (error) {
+    if (!budgetFailure || !isRuntimeBudgetExceeded(error))
+      throw error
+    deps.measureService.invalidateNode(node.id)
+    return createBudgetQuarantinedTree({
+      instanceKey,
+      node,
+      nodeSnapshot,
+      model,
+      scope,
+      resolvedModel,
+      constraintKey,
+      diagnostic: budgetFailure,
+    })
+  }
+  finally {
+    nodeController.dispose()
+  }
+  const committedPlan = plan
   if (!callbackRan) {
     const cached = materializeArtifact(context.artifacts.get(committedPlan), context.deps.measureService)
     if (cached)
@@ -641,51 +723,276 @@ function unionPlanBounds(plans: readonly MaterialLayoutPlan[]): Readonly<{ x: nu
 }
 
 export function createMaterialLayoutBudgetToken(input: {
+  readonly instanceKey: string
+  readonly nodeId: string
+  readonly documentRevision: number
+  readonly dataRevision: number
   readonly maxRuntimeRows: number
   readonly maxLayoutFacts: number
+  readonly signal: AbortSignal
+  readonly reportDiagnostic: (diagnostic: RuntimeBudgetDiagnostic) => void
 }): MaterialLayoutBudgetToken {
   if (![input.maxRuntimeRows, input.maxLayoutFacts].every(isPositiveSafeInteger))
-    throw new Error('MATERIAL_LAYOUT_BUDGET_INVALID')
+    throw new RangeError('MATERIAL_LAYOUT_BUDGET_LIMIT_INVALID')
+  assertBudgetIdentity(input)
   let runtimeRowsUsed = 0
   let layoutFactsUsed = 0
+  const reserve = (kind: 'rows' | MaterialLayoutFactKind, count: number): void => {
+    throwIfAborted(input.signal)
+    assertLayoutReserveCount(count)
+    const rows = kind === 'rows'
+    const used = rows ? runtimeRowsUsed : layoutFactsUsed
+    const limit = rows ? input.maxRuntimeRows : input.maxLayoutFacts
+    if (count > limit - used) {
+      const code = rows
+        ? 'VIEWER_RUNTIME_ROW_BUDGET_EXCEEDED'
+        : 'VIEWER_LAYOUT_FACT_BUDGET_EXCEEDED'
+      safeReportDiagnostic(input.reportDiagnostic, {
+        code,
+        detail: {
+          instanceKey: input.instanceKey,
+          nodeId: input.nodeId,
+          documentRevision: input.documentRevision,
+          dataRevision: input.dataRevision,
+          kind,
+          used,
+          requested: count,
+          limit,
+        },
+      })
+      throw new Error(code)
+    }
+    if (rows)
+      runtimeRowsUsed += count
+    else
+      layoutFactsUsed += count
+  }
   return Object.freeze({
     maxRuntimeRows: input.maxRuntimeRows,
     maxLayoutFacts: input.maxLayoutFacts,
     get runtimeRowsUsed() { return runtimeRowsUsed },
     get layoutFactsUsed() { return layoutFactsUsed },
     reserveRuntimeRows(count: number): void {
-      assertReserveCount(count)
-      if (runtimeRowsUsed + count > input.maxRuntimeRows)
-        throw new Error('MATERIAL_LAYOUT_RUNTIME_ROW_LIMIT')
-      runtimeRowsUsed += count
+      reserve('rows', count)
     },
     reserveLayoutFacts(kind: MaterialLayoutFactKind, count: number): void {
       if (!['row', 'cell', 'edge', 'slot', 'box', 'custom'].includes(kind))
         throw new Error('MATERIAL_LAYOUT_FACT_KIND_INVALID')
-      assertReserveCount(count)
-      if (layoutFactsUsed + count > input.maxLayoutFacts)
-        throw new Error('MATERIAL_LAYOUT_FACT_LIMIT')
-      layoutFactsUsed += count
+      reserve(kind, count)
     },
   })
 }
 
-export function createMaterialRenderBudgetToken(maxNodes: number): MaterialRenderBudgetToken {
-  if (!isPositiveSafeInteger(maxNodes))
-    throw new Error('MATERIAL_RENDER_BUDGET_INVALID')
+export function createMaterialRenderBudgetToken(input: MaterialBudgetIdentity & {
+  readonly maxNodes: number
+  readonly signal: AbortSignal
+  readonly reportDiagnostic: (diagnostic: RuntimeBudgetDiagnostic) => void
+}): MaterialRenderBudgetToken {
+  if (!isPositiveSafeInteger(input.maxNodes) || input.maxNodes > VIEWER_TREE_ABSOLUTE_MAX_NODES)
+    throw new RangeError('MATERIAL_RENDER_BUDGET_LIMIT_INVALID')
+  assertBudgetIdentity(input)
   let nodesUsed = 0
   return Object.freeze({
-    maxNodes,
+    maxNodes: input.maxNodes,
     get nodesUsed() { return nodesUsed },
     reserveNodes(kind: MaterialRenderNodeKind, count: number): void {
+      throwIfAborted(input.signal)
       if (!['element', 'text', 'fragment', 'markup', 'imperative'].includes(kind))
         throw new Error('MATERIAL_RENDER_NODE_KIND_INVALID')
-      assertReserveCount(count)
-      if (nodesUsed + count > maxNodes)
-        throw new Error('MATERIAL_RENDER_NODE_LIMIT')
+      assertRenderReserveCount(count)
+      if (count > input.maxNodes - nodesUsed) {
+        const code = 'VIEWER_RENDER_TREE_BUDGET_EXCEEDED'
+        safeReportDiagnostic(input.reportDiagnostic, {
+          code,
+          detail: {
+            instanceKey: input.instanceKey,
+            nodeId: input.nodeId,
+            documentRevision: input.documentRevision,
+            dataRevision: input.dataRevision,
+            kind,
+            used: nodesUsed,
+            requested: count,
+            limit: input.maxNodes,
+          },
+        })
+        throw new Error(code)
+      }
       nodesUsed += count
     },
   })
+}
+
+export function enforceRuntimeBudget(input: MaterialBudgetIdentity & {
+  readonly observedRows: number
+  readonly observedLayoutFacts: number
+  readonly observedRenderTreeNodes: number
+  readonly budget: ViewerPerformanceBudget
+  readonly reportDiagnostic: (diagnostic: RuntimeBudgetDiagnostic) => void
+}): boolean {
+  assertBudgetIdentity(input)
+  if (![input.observedRows, input.observedLayoutFacts, input.observedRenderTreeNodes].every(isNonNegativeSafeInteger))
+    throw new RangeError('VIEWER_RUNTIME_BUDGET_OBSERVED_INVALID')
+  assertViewerPerformanceBudget(input.budget)
+  const checks = [
+    ['VIEWER_RUNTIME_ROW_BUDGET_EXCEEDED', input.observedRows, input.budget.maxRuntimeRows],
+    ['VIEWER_LAYOUT_FACT_BUDGET_EXCEEDED', input.observedLayoutFacts, input.budget.maxLayoutFactsPerMaterial],
+    ['VIEWER_RENDER_TREE_BUDGET_EXCEEDED', input.observedRenderTreeNodes, input.budget.maxRenderTreeNodesPerMaterial],
+  ] as const
+  for (const [code, observed, limit] of checks) {
+    if (observed <= limit)
+      continue
+    safeReportDiagnostic(input.reportDiagnostic, {
+      code,
+      detail: {
+        instanceKey: input.instanceKey,
+        nodeId: input.nodeId,
+        documentRevision: input.documentRevision,
+        dataRevision: input.dataRevision,
+        limit,
+        observed,
+      },
+    })
+    return false
+  }
+  return true
+}
+
+function auditMaterialLayoutPlan(
+  plan: MaterialLayoutPlan<unknown>,
+  limits: Readonly<{ maxRuntimeRows: number, maxLayoutFacts: number }>,
+): Readonly<{ runtimeRows: number, layoutFacts: number }> {
+  let runtimeRows = 0
+  let layoutFacts = plan.slotBoxes.length + plan.breakOpportunities.length
+  if (layoutFacts > limits.maxLayoutFacts || plan.payload === undefined)
+    return Object.freeze({ runtimeRows, layoutFacts })
+
+  const factArrayKeys = new Set([
+    'rows',
+    'cells',
+    'edges',
+    'edgeSegments',
+    'boxes',
+    'facts',
+    'slotBoxes',
+    'breakOpportunities',
+  ])
+  const seen = new WeakSet<object>()
+  const stack: Array<Readonly<{ key?: string, value: unknown }>> = [{ value: plan.payload }]
+  while (stack.length > 0) {
+    const { key, value } = stack.pop()!
+    if (typeof value !== 'object' || value === null || seen.has(value))
+      continue
+    seen.add(value)
+    if (Array.isArray(value)) {
+      if (key === 'rows')
+        runtimeRows += value.length
+      if (key !== undefined && factArrayKeys.has(key))
+        layoutFacts += value.length
+      if (runtimeRows > limits.maxRuntimeRows || layoutFacts > limits.maxLayoutFacts)
+        break
+      for (let index = value.length - 1; index >= 0; index--)
+        stack.push({ value: value[index] })
+      continue
+    }
+    for (const [childKey, child] of Object.entries(value))
+      stack.push({ key: childKey, value: child })
+  }
+  return Object.freeze({ runtimeRows, layoutFacts })
+}
+
+function createBudgetQuarantinedTree(input: {
+  readonly instanceKey: string
+  readonly node: MaterialNode
+  readonly nodeSnapshot: Readonly<MaterialNode>
+  readonly model: ResolvedRuntimeModel
+  readonly scope: MaterialRuntimeScope
+  readonly resolvedModel: Readonly<Record<string, unknown>>
+  readonly constraintKey: string
+  readonly diagnostic: RuntimeBudgetDiagnostic
+}): MeasuredInstanceTree {
+  const fallback = createNonFragmentingMaterialPlans({
+    instanceKey: input.instanceKey,
+    nodeId: input.node.id,
+    nodeRevision: input.model.nodeRevision,
+    constraintKey: input.constraintKey,
+    pageIndex: 0,
+    borderBox: {
+      x: input.node.x,
+      y: input.node.y,
+      width: input.node.width,
+      height: input.node.height,
+    },
+    fragmentBox: {
+      x: input.node.x,
+      y: input.node.y,
+      width: input.node.width,
+      height: input.node.height,
+    },
+  })
+  const instance: RuntimeMaterialInstancePlan = Object.freeze({
+    instanceKey: input.instanceKey,
+    nodeId: input.node.id,
+    node: input.nodeSnapshot,
+    scopeKey: input.scope.key,
+    scopeData: input.scope.data,
+    status: 'quarantined',
+    diagnostic: copyAndFreezeJson(input.diagnostic),
+    resolvedModel: input.resolvedModel,
+    layoutPlan: fallback.layoutPlan,
+    embeddedFragmentPlan: fallback.fragmentPlan,
+    slotChildren: Object.freeze({}),
+  })
+  const own = Object.freeze({ instanceKey: input.instanceKey, plan: fallback.layoutPlan, instance })
+  return Object.freeze({
+    plan: fallback.layoutPlan,
+    instance,
+    entries: Object.freeze([own]),
+  })
+}
+
+function isRuntimeBudgetExceeded(error: unknown): boolean {
+  return error instanceof Error && [
+    'VIEWER_RUNTIME_ROW_BUDGET_EXCEEDED',
+    'VIEWER_LAYOUT_FACT_BUDGET_EXCEEDED',
+    'VIEWER_RENDER_TREE_BUDGET_EXCEEDED',
+  ].includes(error.message)
+}
+
+interface LinkedAbortController {
+  readonly signal: AbortSignal
+  readonly abort: (reason?: unknown) => void
+  readonly dispose: () => void
+}
+
+function createLinkedAbortController(parent: AbortSignal): LinkedAbortController {
+  const controller = new AbortController()
+  const onAbort = (): void => controller.abort(parent.reason)
+  if (parent.aborted)
+    controller.abort(parent.reason)
+  else
+    parent.addEventListener('abort', onAbort, { once: true })
+  return Object.freeze({
+    signal: controller.signal,
+    abort: (reason?: unknown) => controller.abort(reason),
+    dispose: () => parent.removeEventListener('abort', onAbort),
+  })
+}
+
+export function assertViewerPerformanceBudget(budget: ViewerPerformanceBudget): void {
+  const positiveLimits = [
+    budget.measureCacheEntries,
+    budget.maxMeasureInFlight,
+    budget.maxInlineDataNodes,
+    budget.maxInlineDataStringBytes,
+    budget.maxRuntimeRows,
+    budget.maxLayoutFactsPerMaterial,
+  ]
+  if (!positiveLimits.every(isPositiveSafeInteger)
+    || !isNonNegativeSafeInteger(budget.pageDomOverscan)
+    || !isPositiveSafeInteger(budget.maxRenderTreeNodesPerMaterial)
+    || budget.maxRenderTreeNodesPerMaterial > VIEWER_TREE_ABSOLUTE_MAX_NODES) {
+    throw new RangeError('VIEWER_PERFORMANCE_BUDGET_INVALID')
+  }
 }
 
 function withoutRepeatedRoots(
@@ -901,13 +1208,43 @@ function assertMeasurementDependencies(deps: MaterialMeasureNodesDependencies): 
     throw new Error('MATERIAL_MEASURE_BUDGET_INVALID')
 }
 
-function assertReserveCount(count: number): void {
-  if (!Number.isSafeInteger(count) || count < 0)
-    throw new Error('MATERIAL_BUDGET_RESERVATION_INVALID')
+function assertLayoutReserveCount(count: number): void {
+  if (!isNonNegativeSafeInteger(count))
+    throw new RangeError('MATERIAL_LAYOUT_BUDGET_COUNT_INVALID')
+}
+
+function assertRenderReserveCount(count: number): void {
+  if (!isNonNegativeSafeInteger(count))
+    throw new RangeError('MATERIAL_RENDER_BUDGET_COUNT_INVALID')
 }
 
 function isPositiveSafeInteger(value: number): boolean {
   return Number.isSafeInteger(value) && value > 0
+}
+
+function isNonNegativeSafeInteger(value: number): boolean {
+  return Number.isSafeInteger(value) && value >= 0
+}
+
+function assertBudgetIdentity(identity: MaterialBudgetIdentity): void {
+  if (typeof identity.instanceKey !== 'string' || identity.instanceKey.length === 0
+    || typeof identity.nodeId !== 'string' || identity.nodeId.length === 0
+    || !isNonNegativeSafeInteger(identity.documentRevision)
+    || !isNonNegativeSafeInteger(identity.dataRevision)) {
+    throw new RangeError('MATERIAL_BUDGET_IDENTITY_INVALID')
+  }
+}
+
+function safeReportDiagnostic(
+  reportDiagnostic: (diagnostic: RuntimeBudgetDiagnostic) => void,
+  diagnostic: RuntimeBudgetDiagnostic,
+): void {
+  try {
+    reportDiagnostic(diagnostic)
+  }
+  catch {
+    // Diagnostics observers cannot alter budget control flow.
+  }
 }
 
 function freezeCommittedPages(pages: PaginationResult['pages']): readonly PaginationResult['pages'][number][] {

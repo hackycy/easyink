@@ -30,7 +30,7 @@ import { createCommittedPageSlotRegistry } from './committed-page-slots'
 import { resolveConditionalSchema } from './conditional-schema'
 import { resolveEffectiveOutputStates } from './effective-output-state'
 import { collectFontFamilies, createFontPreparationAdapter, loadAndInjectFonts } from './font-loader'
-import { createDefaultLayoutRuntime } from './layout-runtime'
+import { assertViewerPerformanceBudget, createDefaultLayoutRuntime, DEFAULT_VIEWER_PERFORMANCE_BUDGET } from './layout-runtime'
 import { ProfileMaterialRuntime } from './material-runtime'
 import { createBoundedMeasureScheduler } from './measure-scheduler'
 import { PageDomVirtualizer } from './page-dom-virtualizer'
@@ -45,17 +45,6 @@ import { createRuntimeModelResolutionCache } from './runtime-model-resolver'
 import { safeSummarizeThrown } from './safe-thrown'
 import { createThumbnails } from './thumbnail-pipeline'
 import { createBrowserViewerHost, createIframeViewerHost } from './viewer-host'
-
-const VIEWER_PERFORMANCE_BUDGET_CEILINGS: Readonly<ViewerPerformanceBudget> = Object.freeze({
-  measureCacheEntries: 512,
-  maxMeasureInFlight: 8,
-  pageDomOverscan: 1,
-  maxInlineDataNodes: 100_000,
-  maxInlineDataStringBytes: 4 * 1024 * 1024,
-  maxRuntimeRows: 100_000,
-  maxLayoutFactsPerMaterial: 500_000,
-  maxRenderTreeNodesPerMaterial: VIEWER_TREE_ABSOLUTE_MAX_NODES,
-})
 
 interface ViewerInputState {
   readonly document?: DocumentSchema
@@ -119,11 +108,11 @@ export class ViewerRuntime {
   constructor(options: ViewerOptions) {
     if (!options?.profile)
       throw new Error('MATERIAL_PROFILE_REQUIRED')
-    this._performanceBudget = resolvePerformanceBudget(options.performanceBudget)
-    this._options = options
     const maxNodes = options.browserDom?.maxNodes ?? VIEWER_TREE_ABSOLUTE_MAX_NODES
-    if (!Number.isInteger(maxNodes) || maxNodes < 1 || maxNodes > VIEWER_TREE_ABSOLUTE_MAX_NODES)
+    if (!Number.isSafeInteger(maxNodes) || maxNodes < 1 || maxNodes > VIEWER_TREE_ABSOLUTE_MAX_NODES)
       throw new Error('VIEWER_MAX_NODES_INVALID')
+    this._performanceBudget = resolvePerformanceBudget(options.performanceBudget, maxNodes)
+    this._options = options
     const browserDom = Object.freeze({
       maxNodes,
       imperativeDom: Object.freeze([...(options.browserDom?.imperativeDom ?? [])]),
@@ -1398,14 +1387,24 @@ function appendDisposeDiagnostics(diagnostics: ViewerDiagnosticEvent[], error: u
 
 function resolvePerformanceBudget(
   configured: ViewerOptions['performanceBudget'],
+  browserMaxNodes: number,
 ): Readonly<ViewerPerformanceBudget> {
-  const result = {} as ViewerPerformanceBudget
-  for (const key of Object.keys(VIEWER_PERFORMANCE_BUDGET_CEILINGS) as Array<keyof ViewerPerformanceBudget>) {
-    const value = configured?.[key] ?? VIEWER_PERFORMANCE_BUDGET_CEILINGS[key]
-    if (!Number.isSafeInteger(value) || value <= 0)
-      throw new Error('VIEWER_PERFORMANCE_BUDGET_INVALID')
-    result[key] = Math.min(value, VIEWER_PERFORMANCE_BUDGET_CEILINGS[key])
+  const requested: ViewerPerformanceBudget = {
+    ...DEFAULT_VIEWER_PERFORMANCE_BUDGET,
+    ...configured,
   }
+  assertViewerPerformanceBudget(requested)
+  const result = {} as ViewerPerformanceBudget
+  for (const key of Object.keys(DEFAULT_VIEWER_PERFORMANCE_BUDGET) as Array<keyof ViewerPerformanceBudget>) {
+    result[key] = Math.min(requested[key], DEFAULT_VIEWER_PERFORMANCE_BUDGET[key])
+  }
+  result.maxRuntimeRows = Math.min(
+    result.maxInlineDataNodes,
+    result.maxRuntimeRows,
+    result.maxLayoutFactsPerMaterial,
+    result.maxRenderTreeNodesPerMaterial,
+    browserMaxNodes,
+  )
   return Object.freeze(result)
 }
 

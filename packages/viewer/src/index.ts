@@ -10,6 +10,12 @@ export { resolveConditionalSchema } from './conditional-schema'
 export type { ConditionalSchemaResolution } from './conditional-schema'
 export { collectFontFamilies, loadAndInjectFonts } from './font-loader'
 export type { CommittedPagePlan, RuntimeMaterialInstancePlan } from './layout-runtime'
+export {
+  createMaterialLayoutBudgetToken,
+  createMaterialRenderBudgetToken,
+  DEFAULT_VIEWER_PERFORMANCE_BUDGET,
+  enforceRuntimeBudget,
+} from './layout-runtime'
 export { ProfileMaterialRuntime } from './material-runtime'
 export type { ViewerFacetServices } from './material-runtime'
 export { PageDomVirtualizer, selectRetainedPages } from './page-dom-virtualizer'

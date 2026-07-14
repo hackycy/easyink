@@ -1,4 +1,4 @@
-import type { MaterialFragmentAdapter, MaterialMeasureRequest, MaterialViewerLayoutFacet, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput } from '@easyink/core'
+import type { MaterialFragmentAdapter, MaterialLayoutBudgetToken, MaterialMeasureRequest, MaterialViewerLayoutFacet, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput } from '@easyink/core'
 import type { TableCellSchema, TableRowSchema } from '@easyink/material-table-kernel'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { JsonValue } from '@easyink/shared'
@@ -63,9 +63,16 @@ function resolveRuntimeLayout(
   data: Record<string, unknown>,
   declaredElementHeight: number,
   reportDiagnostic?: ViewerRenderContext['reportDiagnostic'],
+  budget?: MaterialLayoutBudgetToken,
 ): ResolvedRuntimeLayout {
   const projection = projectTableTopology(node)
   const { topology } = projection
+  if (budget) {
+    const rowCount = countExpandedRows(topology.rows, node, data)
+    budget.reserveRuntimeRows(rowCount)
+    budget.reserveLayoutFacts('row', rowCount)
+    budget.reserveLayoutFacts('custom', Math.max(0, rowCount - 1))
+  }
   const expandedRows = expandRepeatTemplateRows(topology.rows, projection.rowIds, node, data, reportDiagnostic)
   const visibleRows = filterVisibleRows(expandedRows, true, true)
 
@@ -164,9 +171,7 @@ export const tableDataViewerLayout: MaterialViewerLayoutFacet = Object.freeze({
     const data = request.mode === 'authoritative'
       ? await createMeasureDataSnapshot(request, node)
       : {}
-    const layout = resolveRuntimeLayout(node, data, request.node.height)
-    request.budget.reserveRuntimeRows(layout.rows.length)
-    request.budget.reserveLayoutFacts('row', layout.rows.length)
+    const layout = resolveRuntimeLayout(node, data, request.node.height, undefined, request.budget)
     const facts = createTableLayoutFacts(layout)
     const borderBox = {
       x: request.node.x,
@@ -189,6 +194,21 @@ export const tableDataViewerLayout: MaterialViewerLayoutFacet = Object.freeze({
   },
   fragment: tableDataFragmentAdapter,
 })
+
+function countExpandedRows(
+  rows: readonly TableRowSchema[],
+  node: MaterialNode<unknown>,
+  data: Record<string, unknown>,
+): number {
+  const model = getTableMaterialModel(node)
+  const collectionBinding = model.kind === 'data' ? bindingAt(node, model.data.collectionPort) : undefined
+  const collectionData = collectionBinding ? resolveBindingValue(collectionBinding, data) : undefined
+  const recordCount = Array.isArray(collectionData) && collectionData.length > 0 ? collectionData.length : 1
+  let count = 0
+  for (const row of rows)
+    count += row.role === 'repeat-template' ? recordCount : 1
+  return count
+}
 
 export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRenderContext): ViewerRenderOutput {
   if (node.type !== 'table-data') {
@@ -231,6 +251,7 @@ export function renderTableData(node: MaterialNode<unknown>, context?: ViewerRen
     canonicalRowIds: rowSources.map(source => source.canonicalRowId),
     canonicalColumnIds: columnIds,
     sourceRowKeys: rowSources.map(source => source.sourceRowKey),
+    renderBudget: context?.renderBudget,
     cellText: cell => cell.content?.text || '',
     cellBackground: (ri) => {
       const row = sizedRows[ri]

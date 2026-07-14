@@ -209,6 +209,9 @@ describe('tableDataFragmentAdapter', () => {
     expect(payload.rowStartOffsets.every((offset, index) => index === 0 || offset > payload.rowStartOffsets[index - 1]!)).toBe(true)
     expect(payload.rowEndOffsets.every((offset, index) => index === 0 || offset > payload.rowEndOffsets[index - 1]!)).toBe(true)
     expect(Object.isFrozen(plan)).toBe(true)
+    expect(request.budget.reserveRuntimeRows).toHaveBeenCalledWith(3)
+    expect(request.budget.reserveLayoutFacts).toHaveBeenNthCalledWith(1, 'row', 3)
+    expect(request.budget.reserveLayoutFacts).toHaveBeenNthCalledWith(2, 'custom', 2)
   })
 
   it('lets core commit 200 monotonic ranges with stable identities across 50+ pages', () => {

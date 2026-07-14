@@ -1,4 +1,4 @@
-import type { ViewerRenderTree } from '@easyink/core'
+import type { MaterialRenderBudgetToken, ViewerRenderTree } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { TableCellSchema, TableRowSchema, TableTopologySchema } from './projection-types'
 import type { TableBaseProps } from './types'
@@ -22,6 +22,7 @@ export interface RenderTableTreeOptions {
   canonicalRowIds?: readonly string[]
   canonicalColumnIds?: readonly string[]
   sourceRowKeys?: readonly string[]
+  renderBudget?: MaterialRenderBudgetToken
 }
 
 export function renderTableTree(options: RenderTableTreeOptions): ViewerRenderTree {
@@ -30,6 +31,8 @@ export function renderTableTree(options: RenderTableTreeOptions): ViewerRenderTr
   const modelRows = model.bands.flatMap(band => band.rows)
   const rowsById = new Map<string, (typeof modelRows)[number]>(modelRows.map(row => [row.id, row]))
   const scale = computeRowScaleWithVirtualRows(topology.rows, options.elementHeight)
+  const spanned = coveredCells(topology)
+  reserveTableTree(options, spanned)
   const headerIds = topology.columns.map((_, ci) => {
     const ri = topology.rows.findIndex(row => row.role === 'header')
     if (ri < 0)
@@ -38,7 +41,6 @@ export function renderTableTree(options: RenderTableTreeOptions): ViewerRenderTr
     const canonicalCell = canonicalCellAt(canonicalRow, ci)
     return cellId(node.id, canonicalCell?.id, ri, ci)
   })
-  const spanned = coveredCells(topology)
   const rows = topology.rows.map((row, ri) => {
     const canonicalRow = canonicalRowAt(ri)
     const sourceRowKey = options.sourceRowKeys?.[ri]
@@ -116,6 +118,36 @@ export function renderTableTree(options: RenderTableTreeOptions): ViewerRenderTr
       ? canonicalRow?.cells.find(cell => cell.columnId === columnId)
       : canonicalRow?.cells[columnIndex]
   }
+}
+
+function reserveTableTree(options: RenderTableTreeOptions, spanned: ReadonlySet<string>): void {
+  if (!options.renderBudget)
+    return
+  const hasHeader = options.topology.rows.some(row => row.role === 'header')
+  const hasFooter = options.topology.rows.some(row => row.role === 'footer')
+  let elementNodes = 2 + options.topology.rows.length + Number(hasHeader) + Number(hasFooter)
+  let textNodes = 0
+  const model = getTableMaterialModel(options.node)
+  const modelRows = model.bands.flatMap(band => band.rows)
+  for (const [rowIndex, row] of options.topology.rows.entries()) {
+    const canonicalRowId = options.canonicalRowIds?.[rowIndex]
+    const canonicalRow = canonicalRowId
+      ? modelRows.find(candidate => candidate.id === canonicalRowId)
+      : modelRows[rowIndex]
+    for (const [columnIndex] of row.cells.entries()) {
+      if (spanned.has(`${rowIndex}:${columnIndex}`))
+        continue
+      elementNodes++
+      const columnId = options.canonicalColumnIds?.[columnIndex]
+      const canonicalCell = columnId
+        ? canonicalRow?.cells.find(candidate => candidate.columnId === columnId)
+        : canonicalRow?.cells[columnIndex]
+      if (canonicalCell?.content.kind !== 'materials' || !canonicalCell.content.slotId)
+        textNodes++
+    }
+  }
+  options.renderBudget.reserveNodes('element', elementNodes)
+  options.renderBudget.reserveNodes('text', textNodes)
 }
 
 function rowsByRole(

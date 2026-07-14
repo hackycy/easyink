@@ -11,13 +11,18 @@ export function renderFlowRow(node: MaterialNode, context: ViewerRenderContext) 
   })
   const props = getFlowRowProps(node)
   const unit = context.unit ?? 'mm'
+  const segments = buildSegments(props.columns)
+  const cellsPerRow = segments.reduce((sum, segment) => sum + segment.columns.length, 0)
+  const inlineWrappersPerRow = segments.filter(segment => segment.kind !== 'block').length
+  context.renderBudget.reserveNodes('element', 1 + model.rows.length * (1 + cellsPerRow * 2 + inlineWrappersPerRow))
+  context.renderBudget.reserveNodes('text', model.rows.length * cellsPerRow)
   const children = model.rows.map(row => viewerElement('div', { style: {
     'display': 'flex',
     'flex-direction': 'column',
     'gap': `${props.gap}${unit}`,
     'width': '100%',
     'box-sizing': 'border-box',
-  } }, buildSegments(props.columns).map((segment) => {
+  } }, segments.map((segment) => {
     const cells = segment.columns.map(({ column, index }) => viewerElement('div', {
       attributes: { 'data-flow-row-column': index },
       style: {

@@ -336,10 +336,13 @@ describe('mountCommittedMaterial', () => {
     expect('snapshot' in captured!.renderBudget).toBe(false)
     expect('restore' in captured!.renderBudget).toBe(false)
     expect(() => captured!.renderBudget.reserveNodes('text', Number.MAX_SAFE_INTEGER))
-      .toThrowError('VIEWER_RENDER_BUDGET_EXCEEDED')
-    expect(captured?.renderBudget.nodesUsed).toBe(0)
+      .toThrowError('VIEWER_RENDER_TREE_BUDGET_EXCEEDED')
+    expect(captured?.renderBudget.nodesUsed).toBe(1)
     expect(Object.isFrozen(captured)).toBe(true)
-    expect(diagnostics).toEqual([])
+    expect(diagnostics).toEqual([expect.objectContaining({
+      code: 'VIEWER_RENDER_TREE_BUDGET_EXCEEDED',
+      nodeId: 'ready',
+    })])
     mount.dispose()
     expect(() => mountCommittedMaterial(document.createElement('div'), {
       committedPlan: committedPagePlan([facts.instance]),
@@ -439,7 +442,7 @@ describe('mountCommittedMaterial', () => {
     expect(host.textContent).toBe('AB')
     expect(new Set(budgets).size).toBe(1)
     expect(budgets[0]?.maxNodes).toBe(10)
-    expect(budgets[0]?.nodesUsed).toBe(3)
+    expect(budgets[0]?.nodesUsed).toBe(5)
     expect(fragments).toEqual([childA.instance.embeddedFragmentPlan!.id, childB.instance.embeddedFragmentPlan!.id])
     expect(diagnostics).toEqual([])
   })
@@ -525,7 +528,7 @@ describe('mountCommittedMaterial', () => {
     expect(childKeyReads).toBe(2)
     expect(childRender).not.toHaveBeenCalled()
     expect(host.textContent).toContain('material unavailable')
-    expect(diagnostics).toEqual([expect.objectContaining({ code: 'VIEWER_MATERIAL_RENDER_ERROR' })])
+    expect(diagnostics).toEqual([expect.objectContaining({ code: 'VIEWER_RENDER_TREE_BUDGET_EXCEEDED' })])
   })
 
   it('indexes declared slot keys once for repeated mapped and missing lookups', async () => {
@@ -626,7 +629,7 @@ describe('mountCommittedMaterial', () => {
       .toThrowError('VIEWER_CAPABILITIES_DISPOSED')
     expect(diagnostics.map(item => item.code)).toEqual([
       'VIEWER_MATERIAL_RENDER_ERROR',
-      'VIEWER_MATERIAL_MOUNT_ERROR',
+      'VIEWER_RENDER_TREE_BUDGET_EXCEEDED',
     ])
   })
 })
