@@ -3,6 +3,7 @@ import type { MaterialConformanceOptions } from './material-conformance'
 import type { MaterialViewerFacet, ViewerRenderContext } from './material-viewer'
 import { describe, expect, it, vi } from 'vitest'
 import { assertMaterialConformance, compareMaterialConformanceIssues, runMaterialConformance } from './material-conformance'
+import { createLayoutConstraintKey, freezeMaterialLayoutPlan } from './material-layout-plan'
 import { defineMaterialFacetFactory } from './material-manifest'
 import { createTestMaterialManifest } from './testing/material-profile'
 import { viewerText } from './viewer-render-tree'
@@ -137,7 +138,67 @@ describe('material conformance', () => {
 
     const report = await runMaterialConformance(manifest, options())
 
+    expect(report).toEqual(expect.objectContaining({ valid: true, issues: [] }))
     expect(report.issues.map(issue => issue.code)).not.toContain('CONFORMANCE_VIEWER_FAILED')
+  })
+
+  it('commits authoritative layout and a full fragment before viewer conformance render', async () => {
+    const calls: string[] = []
+    const manifest = createTestMaterialManifest({
+      type: 'committed-layout-context',
+      viewer: () => ({
+        capabilities: {},
+        layout: {
+          async measure(request) {
+            calls.push(`measure:${request.mode}`)
+            request.budget.reserveRuntimeRows(1)
+            request.budget.reserveLayoutFacts('custom', 1)
+            return freezeMaterialLayoutPlan({
+              instanceKey: request.instanceKey,
+              nodeId: request.node.id,
+              nodeRevision: request.nodeRevision,
+              constraintKey: createLayoutConstraintKey(request.constraints),
+              borderBox: { x: 0, y: 0, width: 20, height: 7 },
+              contentBox: { x: 0, y: 0, width: 20, height: 7 },
+              slotBoxes: [],
+              breakOpportunities: [],
+              diagnostics: [],
+              payload: { kind: 'committed-layout' },
+            })
+          },
+          fragment: {
+            createFragment(request) {
+              calls.push(`fragment:${request.startBlockOffset}-${request.endBlockOffset}`)
+              return {
+                inlineSize: request.plan.borderBox.width,
+                blockSize: request.endBlockOffset - request.startBlockOffset,
+                consumedRange: {
+                  startBlockOffset: request.startBlockOffset,
+                  endBlockOffset: request.endBlockOffset,
+                },
+                renderPayload: { kind: 'committed-fragment' },
+                diagnostics: [],
+              }
+            },
+          },
+        },
+        extension: {
+          render: (_node, context) => {
+            calls.push(`render:${String((context.layoutPlan.payload as any)?.kind)}:${String((context.fragmentPlan.renderPayload as any)?.kind)}`)
+            return { tree: viewerText('ok') }
+          },
+        },
+      }),
+    })
+
+    const report = await runMaterialConformance(manifest, options())
+
+    expect(report).toEqual(expect.objectContaining({ valid: true, issues: [] }))
+    expect(calls).toEqual([
+      'measure:authoritative',
+      'fragment:0-7',
+      'render:committed-layout:committed-fragment',
+    ])
   })
 
   it('reports mount and repeated disposer failures with stable codes', async () => {

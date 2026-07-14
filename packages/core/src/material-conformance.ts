@@ -1,6 +1,7 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { JsonValue } from '@easyink/shared'
 import type { MaterialIdentity, MaterialIntrospection, MaterialNodeAddress } from './material-introspection'
+import type { MaterialFragmentPlan, MaterialLayoutBudgetToken, MaterialLayoutPlan, MaterialMeasureScheduler, MaterialRuntimeScope, MaterialTextMeasureInput } from './material-layout-plan'
 import type { MaterialManifest } from './material-manifest'
 import type { CompiledMaterialProfile } from './material-profile'
 import type { MaterialViewerFacet, ViewerRenderCapabilities } from './material-viewer'
@@ -8,9 +9,11 @@ import type { SchemaMigrationFixture } from './schema-adapter'
 import type { ViewerRenderTree } from './viewer-render-tree'
 import { cloneJsonValue } from '@easyink/shared'
 import { cloneMaterialSubgraph, decodeMaterialSemanticPointerValue, formatMaterialIdentityKey, readPointer } from './material-introspection'
+import { createLayoutConstraintKey, createNonFragmentingMaterialPlans } from './material-layout-plan'
 import { compileMaterialProfile, EASYINK_ENGINE_VERSION } from './material-profile'
 import { resolvePropertyAccessor } from './material-properties'
 import { createFallbackViewerRenderContext } from './material-viewer'
+import { commitMaterialFragment } from './pagination-engine'
 import { assertViewerRenderTree } from './viewer-render-tree'
 
 export interface MaterialConformanceIssue {
@@ -487,20 +490,29 @@ async function checkViewer(state: State): Promise<void> {
       ? await invokeHook(state, state.options.createRenderCapabilities, [facet], state.options) as ViewerRenderCapabilities
       : fallbackCapabilities()
     const node = state.node ?? await normalizedNode(state)
-    const context = createFallbackViewerRenderContext({
+    const resolvedModel = snapshot(node.model as Record<string, unknown>)
+    const committedPlans = await createConformanceViewerPlans(state, facet, node, resolvedModel)
+    const fallbackContext = createFallbackViewerRenderContext({
       nodeId: node.id,
       nodeRevision: node.modelVersion,
       instanceKey: node.id,
-      resolvedModel: snapshot(node.model as Record<string, unknown>),
+      resolvedModel,
       pageIndex: 0,
       unit: UNIT,
-      width: node.width,
-      height: node.height,
-      fragmentBox: { x: node.x, y: node.y, width: node.width, height: node.height },
+      width: committedPlans?.layoutPlan.borderBox.width ?? node.width,
+      height: committedPlans?.layoutPlan.borderBox.height ?? node.height,
+      fragmentBox: committedPlans?.fragmentPlan.box ?? { x: node.x, y: node.y, width: node.width, height: node.height },
       data: {},
       zoom: 1,
       capabilities,
     })
+    const context = committedPlans
+      ? Object.freeze({
+          ...fallbackContext,
+          layoutPlan: committedPlans.layoutPlan,
+          fragmentPlan: committedPlans.fragmentPlan,
+        })
+      : fallbackContext
     const output = await invokeHook(state, facet.extension.render, [node, context], facet.extension) as { tree: ViewerRenderTree }
     try {
       await invokeHook(state, validateConformanceViewerTree, [output?.tree])
@@ -537,6 +549,146 @@ async function checkViewer(state: State): Promise<void> {
     if (dispose)
       await invokeHook(state, dispose, [], facet)
   }
+}
+
+async function createConformanceViewerPlans(
+  state: State,
+  facet: MaterialViewerFacet,
+  node: MaterialNode,
+  resolvedModel: Readonly<Record<string, unknown>>,
+): Promise<Readonly<{ layoutPlan: MaterialLayoutPlan<unknown>, fragmentPlan: MaterialFragmentPlan }> | undefined> {
+  const measure = facet.layout?.measure
+  if (!measure)
+    return undefined
+
+  const data = Object.freeze({})
+  const scope: MaterialRuntimeScope = Object.freeze({ key: node.id, data })
+  const constraints = Object.freeze({
+    availableWidth: node.width,
+    availableHeight: node.height,
+    unit: UNIT,
+    writingMode: 'horizontal-tb' as const,
+  })
+  const controller = new AbortController()
+  const layoutPlan = await invokeAsyncIsolatedHook(state, measure, [Object.freeze({
+    mode: 'authoritative' as const,
+    instanceKey: node.id,
+    node,
+    scope,
+    resolvedModel,
+    nodeRevision: node.modelVersion,
+    dataRevision: 0,
+    resourceRevision: 0,
+    constraints,
+    signal: controller.signal,
+    budget: createConformanceLayoutBudget(),
+    resolveBinding: () => Object.freeze({ status: 'unbound' as const }),
+    formatBinding: () => Object.freeze({ status: 'unbound' as const }),
+    openCollection: async () => Object.freeze({ status: 'unbound' as const }),
+    schedule: createConformanceMeasureScheduler(),
+    measureText: measureConformanceText,
+    measureSlot: async (input, signal) => {
+      if (signal.aborted)
+        throw new Error('CONFORMANCE_MEASURE_ABORTED')
+      return Object.freeze({
+        instanceKey: JSON.stringify(['conformance-slot', node.id, input.slot, input.scope.key]),
+        contentBounds: Object.freeze({ x: 0, y: 0, width: input.constraints.availableWidth, height: input.constraints.availableHeight }),
+        childPlans: Object.freeze([]),
+      })
+    },
+  })], facet.layout) as MaterialLayoutPlan<unknown>
+
+  const fullFragmentRequest = Object.freeze({
+    plan: layoutPlan,
+    startBlockOffset: 0,
+    endBlockOffset: layoutPlan.borderBox.height,
+    availableHeight: layoutPlan.borderBox.height,
+    pageIndex: 0,
+  })
+  let fragmentPlan: MaterialFragmentPlan
+  if (facet.layout?.fragment) {
+    const contribution = await invokeHook(
+      state,
+      facet.layout.fragment.createFragment,
+      [fullFragmentRequest],
+      facet.layout.fragment,
+    ) as ReturnType<NonNullable<MaterialViewerFacet['layout']>['fragment']['createFragment']>
+    fragmentPlan = commitMaterialFragment(fullFragmentRequest, contribution, {
+      x: layoutPlan.borderBox.x,
+      y: layoutPlan.borderBox.y,
+    })
+  }
+  else {
+    fragmentPlan = createNonFragmentingMaterialPlans({
+      instanceKey: layoutPlan.instanceKey,
+      nodeId: layoutPlan.nodeId,
+      nodeRevision: layoutPlan.nodeRevision,
+      constraintKey: layoutPlan.constraintKey || createLayoutConstraintKey(constraints),
+      pageIndex: 0,
+      borderBox: layoutPlan.borderBox,
+      contentBox: layoutPlan.contentBox,
+      fragmentBox: layoutPlan.borderBox,
+    }).fragmentPlan
+  }
+
+  return Object.freeze({ layoutPlan, fragmentPlan })
+}
+
+function createConformanceLayoutBudget(): MaterialLayoutBudgetToken {
+  const maxRuntimeRows = 100_000
+  const maxLayoutFacts = 500_000
+  let runtimeRowsUsed = 0
+  let layoutFactsUsed = 0
+  return Object.freeze({
+    maxRuntimeRows,
+    maxLayoutFacts,
+    get runtimeRowsUsed() {
+      return runtimeRowsUsed
+    },
+    get layoutFactsUsed() {
+      return layoutFactsUsed
+    },
+    reserveRuntimeRows(count: number) {
+      assertConformanceBudgetCount(count)
+      if (runtimeRowsUsed + count > maxRuntimeRows)
+        throw new Error('CONFORMANCE_RUNTIME_ROW_BUDGET_EXCEEDED')
+      runtimeRowsUsed += count
+    },
+    reserveLayoutFacts(_kind, count: number) {
+      assertConformanceBudgetCount(count)
+      if (layoutFactsUsed + count > maxLayoutFacts)
+        throw new Error('CONFORMANCE_LAYOUT_FACT_BUDGET_EXCEEDED')
+      layoutFactsUsed += count
+    },
+  })
+}
+
+function assertConformanceBudgetCount(count: number): void {
+  if (!Number.isSafeInteger(count) || count < 0)
+    throw new Error('CONFORMANCE_LAYOUT_BUDGET_COUNT_INVALID')
+}
+
+function createConformanceMeasureScheduler(): MaterialMeasureScheduler {
+  return Object.freeze({
+    maxInFlight: 1,
+    async mapOrdered<T, R>(items: readonly T[], worker: (item: T, index: number, signal: AbortSignal) => Promise<R>, signal: AbortSignal): Promise<readonly R[]> {
+      const results: R[] = []
+      for (const [index, item] of items.entries()) {
+        if (signal.aborted)
+          throw new Error('CONFORMANCE_MEASURE_ABORTED')
+        results.push(await worker(item, index, signal))
+      }
+      return Object.freeze(results)
+    },
+  })
+}
+
+async function measureConformanceText(input: MaterialTextMeasureInput): Promise<Readonly<{ width: number, height: number }>> {
+  const lines = Math.max(1, input.text.split('\n').length)
+  return Object.freeze({
+    width: Math.min(input.availableWidth, input.text.length * input.style.fontSize * 0.5),
+    height: lines * input.style.fontSize * input.style.lineHeight,
+  })
 }
 
 async function normalizedNode(state: State): Promise<MaterialNode> {
