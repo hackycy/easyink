@@ -170,14 +170,23 @@ export class RenderSurface {
     acceptingDisposers = false
     const oldRoot = this.currentRoot
     const oldDisposers = this.currentDisposers
+    const previousChildren = [...this.host.childNodes]
     try {
       this.host.replaceChildren(root)
+      checkpoint()
     }
     catch (error) {
       root.remove()
       const cleanupErrors = disposeRenderSurfaceDisposers(disposers)
-      if (cleanupErrors.length > 0)
-        throw new AggregateError([error, ...cleanupErrors], 'RENDER_SURFACE_COMMIT_FAILED')
+      const restoreErrors: unknown[] = []
+      try {
+        this.host.replaceChildren(...previousChildren)
+      }
+      catch (restoreError) {
+        restoreErrors.push(restoreError)
+      }
+      if (cleanupErrors.length > 0 || restoreErrors.length > 0)
+        throw new AggregateError([error, ...cleanupErrors, ...restoreErrors], 'RENDER_SURFACE_COMMIT_FAILED')
       throw error
     }
     this.currentRoot = root

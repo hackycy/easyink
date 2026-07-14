@@ -1,6 +1,6 @@
-import type { MaterialConditionCapability, MaterialViewerExtension } from '@easyink/core'
+import type { MaterialConditionCapability, MaterialMeasureRequest, MaterialViewerExtension } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
-import { defineMaterialManifest, viewerElement, viewerText } from '@easyink/core'
+import { createLayoutConstraintKey, createNonFragmentingMaterialPlans, defineMaterialManifest, viewerElement, viewerText } from '@easyink/core'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { resolveConditionalSchema } from './conditional-schema'
@@ -10,7 +10,31 @@ function materialProfile(
   extension: MaterialViewerExtension = { render: () => ({ tree: viewerText('') }) },
   condition?: MaterialConditionCapability,
 ) {
-  const base = createTestMaterialManifest({ type: 'conditional', viewer: () => ({ extension, capabilities: {} }) })
+  const base = createTestMaterialManifest({ type: 'conditional', viewer: () => ({
+    extension,
+    capabilities: {},
+    ...(extension.measure
+      ? {
+          layout: {
+            async measure(request: MaterialMeasureRequest) {
+              const measured = extension.measure!(request.node as MaterialNode, {
+                data: request.scope.data,
+                unit: request.constraints.unit,
+              })
+              return createNonFragmentingMaterialPlans({
+                instanceKey: request.instanceKey,
+                nodeId: request.node.id,
+                nodeRevision: request.nodeRevision,
+                constraintKey: createLayoutConstraintKey(request.constraints),
+                pageIndex: 0,
+                borderBox: { x: request.node.x, y: request.node.y, width: measured?.width ?? request.node.width, height: measured?.height ?? request.node.height },
+                fragmentBox: { x: request.node.x, y: request.node.y, width: measured?.width ?? request.node.width, height: measured?.height ?? request.node.height },
+              }).layoutPlan
+            },
+          },
+        }
+      : {}),
+  }) })
   return createTestCompiledMaterialProfile([defineMaterialManifest({
     ...base,
     common: condition === undefined ? base.common : { ...base.common, condition },

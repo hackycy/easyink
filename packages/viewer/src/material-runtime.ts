@@ -55,8 +55,12 @@ export class ProfileMaterialRuntime {
   }
 
   render(node: MaterialNode<unknown>, context: ViewerRenderContext, admitted = true): ViewerRenderOutput {
+    const manifest = this.profile.getManifest(node.type)
+    const renderNode = manifest?.common.binding.kind !== 'none' && context.resolvedModel !== node.model
+      ? Object.freeze({ ...node, model: context.resolvedModel }) as MaterialNode<unknown>
+      : node
     return admitted
-      ? this.getExtension(node.type)?.render(node as MaterialNode, context) ?? renderUnavailableMaterial(node)
+      ? this.getExtension(node.type)?.render(renderNode as MaterialNode, context) ?? renderUnavailableMaterial(renderNode)
       : renderUnavailableMaterial(node)
   }
 

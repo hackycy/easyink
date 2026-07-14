@@ -2,6 +2,7 @@ import type { ViewerTreePolicy } from '@easyink/browser-dom'
 import type { BindingFormatDiagnostic, CompiledMaterialProfile, FontProvider, MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from '@easyink/core'
 import type { DocumentSchema, DocumentSchemaInput } from '@easyink/schema'
 import type { DiagnosticCategory, DiagnosticSeverity, ExportEntry, ExportFormat, ExportPhase } from '@easyink/shared'
+import type { PreparedCollectionProvider } from './prepared-collections'
 import type { ViewerHost } from './viewer-host'
 
 export * from '@easyink/schema'
@@ -22,15 +23,40 @@ export interface ViewerOptions {
   fontProvider?: FontProvider
   browserDom?: {
     policy?: ViewerTreePolicy
-    imperativeDom?: Iterable<string>
+    imperativeDom?: readonly string[]
     maxNodes?: number
   }
+  performanceBudget?: Partial<ViewerPerformanceBudget>
+  preparedCollections?: PreparedCollectionProvider
 }
 
 export interface ViewerOpenInput {
   schema: DocumentSchemaInput
+  documentRevision?: number
   data?: Record<string, unknown>
+  dataRevision?: number
   onDiagnostic?: (event: ViewerDiagnosticEvent) => void
+}
+
+export interface ViewerDataUpdateOptions {
+  dataRevision?: number
+}
+
+export interface ViewerRevisionSnapshot {
+  documentRevision: number
+  dataRevision: number
+  resourceRevision: number
+}
+
+export interface ViewerPerformanceBudget {
+  measureCacheEntries: number
+  maxMeasureInFlight: number
+  pageDomOverscan: number
+  maxInlineDataNodes: number
+  maxInlineDataStringBytes: number
+  maxRuntimeRows: number
+  maxLayoutFactsPerMaterial: number
+  maxRenderTreeNodesPerMaterial: number
 }
 
 // ---------------------------------------------------------------------------

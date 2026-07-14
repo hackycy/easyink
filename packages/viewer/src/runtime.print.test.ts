@@ -318,7 +318,7 @@ describe('viewer runtime print behavior', () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
     await viewer.open({ schema: createThreePageFixedSchema() })
-    const wrappers = [...container.children] as HTMLElement[]
+    const wrappers = [...container.querySelectorAll('.ei-viewer-page-slot')] as HTMLElement[]
     expect(wrappers).toHaveLength(3)
 
     observer.emit([{ target: wrappers[0]!, isIntersecting: true } as unknown as IntersectionObserverEntry])
@@ -350,7 +350,7 @@ describe('viewer runtime print behavior', () => {
       },
     })
     await viewer.open({ schema: createThreePageFixedSchema() })
-    const wrappers = [...container.children] as HTMLElement[]
+    const wrappers = [...container.querySelectorAll('.ei-viewer-page-slot')] as HTMLElement[]
     observer.emit([{ target: wrappers[2]!, isIntersecting: true } as unknown as IntersectionObserverEntry])
 
     await viewer.print({ driverId: 'capture-all-pages', throwOnError: true })
@@ -552,7 +552,7 @@ describe('viewer runtime export behavior', () => {
       },
     })
     await viewer.open({ schema: createThreePageFixedSchema() })
-    const wrappers = [...container.children] as HTMLElement[]
+    const wrappers = [...container.querySelectorAll('.ei-viewer-page-slot')] as HTMLElement[]
     observer.emit([{ target: wrappers[0]!, isIntersecting: true } as unknown as IntersectionObserverEntry])
     expect(container.querySelectorAll('.ei-viewer-page')).toHaveLength(2)
 

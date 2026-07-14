@@ -1,6 +1,6 @@
-import type { ViewerMeasureContext, ViewerRenderContext } from '@easyink/core'
+import type { MaterialMeasureRequest, MaterialViewerLayoutFacet, ViewerMeasureContext, ViewerRenderContext } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
-import { viewerElement, viewerText } from '@easyink/core'
+import { createLayoutConstraintKey, createNonFragmentingMaterialPlans, viewerElement, viewerText } from '@easyink/core'
 import { buildSegments, getFlowRowProps, measureFlowRows, resolveFlowRows } from './rendering'
 
 export function renderFlowRow(node: MaterialNode, context: ViewerRenderContext) {
@@ -69,3 +69,19 @@ export function measureFlowRow(node: MaterialNode, context: ViewerMeasureContext
     height: Math.max(node.height, measureFlowRows(node, model)),
   }
 }
+
+export const flowRowViewerLayout: MaterialViewerLayoutFacet = Object.freeze({
+  async measure(request: MaterialMeasureRequest) {
+    const node = Object.freeze({ ...request.node, model: request.resolvedModel }) as MaterialNode
+    const measured = measureFlowRow(node, { data: request.scope.data, unit: request.constraints.unit })
+    return createNonFragmentingMaterialPlans({
+      instanceKey: request.instanceKey,
+      nodeId: request.node.id,
+      nodeRevision: request.nodeRevision,
+      constraintKey: createLayoutConstraintKey(request.constraints),
+      pageIndex: 0,
+      borderBox: { x: request.node.x, y: request.node.y, width: measured.width, height: measured.height },
+      fragmentBox: { x: request.node.x, y: request.node.y, width: measured.width, height: measured.height },
+    }).layoutPlan
+  },
+})

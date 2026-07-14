@@ -255,9 +255,9 @@ export function createMaterialMeasureNodes(
 
 export function createDefaultLayoutRuntime(
   deps: DefaultLayoutRuntimeDependencies,
-): ReturnType<typeof createLayoutRuntime> {
+): ReturnType<typeof createLayoutRuntime> & Readonly<{ clear: () => void, dispose: () => Promise<void> }> {
   const measureNodes = createMaterialMeasureNodes(deps)
-  return createLayoutRuntime({
+  const runtime = createLayoutRuntime({
     resolveEffectiveOutput: input => resolveEffectiveOutputStates(
       input.document.elements,
       input.data as Record<string, unknown>,
@@ -282,8 +282,14 @@ export function createDefaultLayoutRuntime(
     measureNodes,
     layoutDocument: (document, plans) => runLayoutPipeline(document, { plans }),
     paginateDocument: (document, layout) => runPagination(document, layout, {
+      originalSchema: document,
       resolveFragmentAdapter: fragment => deps.materials.getFragmentAdapter(fragment.node.type),
     }),
+  })
+  return Object.freeze({
+    ...runtime,
+    clear: measureNodes.clear,
+    dispose: measureNodes.dispose,
   })
 }
 
@@ -309,9 +315,37 @@ async function measureInstance(context: {
   const nodeSnapshot = copyAndFreezeJson(node) as unknown as Readonly<MaterialNode>
   const resolvedModel = copyAndFreezeRecord(model.value)
   const manifest = deps.profile.getManifest(node.type)
-  if (!manifest)
-    throw new Error('MATERIAL_MANIFEST_REQUIRED')
   const constraintKey = createLayoutConstraintKey(constraints)
+  if (!manifest) {
+    const fallback = createNonFragmentingMaterialPlans({
+      instanceKey,
+      nodeId: node.id,
+      nodeRevision: model.nodeRevision,
+      constraintKey,
+      pageIndex: 0,
+      borderBox: { x: node.x, y: node.y, width: node.width, height: node.height },
+      fragmentBox: { x: node.x, y: node.y, width: node.width, height: node.height },
+    })
+    const instance: RuntimeMaterialInstancePlan = Object.freeze({
+      instanceKey,
+      nodeId: node.id,
+      node: nodeSnapshot,
+      scopeKey: scope.key,
+      scopeData: scope.data,
+      status: 'quarantined',
+      ...(model.diagnostic === undefined ? {} : { diagnostic: copyAndFreezeJson(model.diagnostic) }),
+      resolvedModel,
+      layoutPlan: fallback.layoutPlan,
+      embeddedFragmentPlan: fallback.fragmentPlan,
+      slotChildren: Object.freeze({}),
+    })
+    const ownEntry = Object.freeze({ instanceKey, plan: fallback.layoutPlan, instance })
+    return Object.freeze({
+      plan: fallback.layoutPlan,
+      instance,
+      entries: Object.freeze([ownEntry]),
+    })
+  }
   const descendants: MeasuredInstanceTree['entries'][number][] = []
   const slotChildren: Record<string, readonly string[]> = {}
   let embeddedFragmentPlan: MaterialFragmentPlan | undefined

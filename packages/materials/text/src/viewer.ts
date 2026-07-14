@@ -1,6 +1,6 @@
-import type { ViewerMeasureContext, ViewerRenderContext, ViewerRenderSize } from '@easyink/core'
+import type { MaterialMeasureRequest, MaterialViewerLayoutFacet, ViewerMeasureContext, ViewerRenderContext, ViewerRenderSize } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
-import { viewerElement, viewerText } from '@easyink/core'
+import { createLayoutConstraintKey, createNonFragmentingMaterialPlans, viewerElement, viewerText } from '@easyink/core'
 import { getTextDisplayValue, getTextProps, isTextAutoHeight, measureTextNode } from './layout'
 
 export function renderText(node: MaterialNode, contextOrData?: ViewerRenderContext | Record<string, unknown>, unit = 'mm') {
@@ -74,3 +74,19 @@ function isViewerRenderContext(value: unknown): value is ViewerRenderContext {
     && 'unit' in value && typeof value.unit === 'string'
     && 'data' in value && typeof value.data === 'object' && value.data !== null
 }
+
+export const textViewerLayout: MaterialViewerLayoutFacet = Object.freeze({
+  async measure(request: MaterialMeasureRequest) {
+    const node = Object.freeze({ ...request.node, model: request.resolvedModel }) as MaterialNode
+    const measured = measureText(node)
+    return createNonFragmentingMaterialPlans({
+      instanceKey: request.instanceKey,
+      nodeId: request.node.id,
+      nodeRevision: request.nodeRevision,
+      constraintKey: createLayoutConstraintKey(request.constraints),
+      pageIndex: 0,
+      borderBox: { x: request.node.x, y: request.node.y, width: measured.width, height: measured.height },
+      fragmentBox: { x: request.node.x, y: request.node.y, width: measured.width, height: measured.height },
+    }).layoutPlan
+  },
+})

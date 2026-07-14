@@ -1,10 +1,10 @@
-import type { MaterialManifest, MaterialViewerExtension, ViewerFacetCapabilities } from '@easyink/core'
+import type { MaterialLayoutPlan, MaterialManifest, MaterialMeasureRequest, MaterialRuntimeScope, MaterialViewerExtension, ViewerFacetCapabilities, ViewerRenderContext } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { ViewerRuntime } from './runtime'
 import type { ViewerDiagnosticEvent, ViewerOptions } from './types'
 import { DEFAULT_VIEWER_TREE_POLICY } from '@easyink/browser-dom'
 import { compileBuiltinMaterialProfile } from '@easyink/builtin'
-import { defineMaterialManifest, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
+import { defineMaterialFacetFactory, defineMaterialManifest, VIEWER_TREE_ABSOLUTE_MAX_NODES, viewerElement, viewerFragment, viewerImperativeDom, viewerSanitizedMarkup, viewerText } from '@easyink/core'
 import { createTestCompiledMaterialProfile, createTestMaterialManifest } from '@easyink/core/testing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyBindingsToProps, projectBindings } from './binding-projector'
@@ -113,12 +113,334 @@ function collectDiagnostics(): { diagnostics: ViewerDiagnosticEvent[], onDiagnos
   }
 }
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
+function statefulLayoutManifest(
+  type: string,
+  beforeMeasure: (request: MaterialMeasureRequest) => Promise<void>,
+  dispose?: () => void,
+): MaterialManifest {
+  return createTestMaterialManifest({
+    type,
+    viewer: () => ({
+      capabilities: {},
+      extension: {
+        render: (_node: MaterialNode, context: ViewerRenderContext) => ({
+          tree: viewerText(String(context.resolvedModel.label ?? 'rendered')),
+        }),
+      },
+      layout: {
+        resolveRuntimeModel: (_node: Readonly<MaterialNode>, scope: MaterialRuntimeScope) => scope.data,
+        async measure(request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> {
+          await beforeMeasure(request)
+          return {
+            instanceKey: request.instanceKey,
+            nodeId: request.node.id,
+            nodeRevision: request.nodeRevision,
+            constraintKey: '40:60:mm:horizontal-tb',
+            borderBox: { x: request.node.x, y: request.node.y, width: request.node.width, height: request.node.height },
+            contentBox: { x: request.node.x, y: request.node.y, width: request.node.width, height: request.node.height },
+            slotBoxes: [],
+            breakOpportunities: [],
+            diagnostics: [],
+          }
+        },
+      },
+      ...(dispose ? { dispose } : {}),
+    }),
+  })
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
   document.body.replaceChildren()
 })
 
 describe('viewer audit risk regressions', () => {
+  it('requires a compiled material profile before accepting a document', () => {
+    expect(() => createProfileViewer({ container: document.createElement('div') } as unknown as ViewerOptions))
+      .toThrow('MATERIAL_PROFILE_REQUIRED')
+  })
+
+  it('accepts only monotonic explicit and implicit data revisions', async () => {
+    const viewer = createViewer({ container: document.createElement('div') })
+    await viewer.open({
+      schema: fixedSchema([]),
+      documentRevision: 2,
+      data: {},
+      dataRevision: 3,
+    })
+
+    expect(viewer.currentRevisions).toMatchObject({ documentRevision: 2, dataRevision: 3 })
+    await viewer.updateData({}, { dataRevision: 5 })
+    expect(viewer.currentRevisions.dataRevision).toBe(5)
+    await expect(viewer.updateData({}, { dataRevision: 4 })).rejects.toThrow('DATA_REVISION_NOT_MONOTONIC')
+    await viewer.updateData({})
+    expect(viewer.currentRevisions.dataRevision).toBe(6)
+  })
+
+  it('validates, copies, and recursively freezes inline data before publishing revisions', async () => {
+    const input = { invoice: { title: 'original' } }
+    const viewer = createViewer({
+      container: document.createElement('div'),
+      performanceBudget: { maxInlineDataNodes: 4, maxInlineDataStringBytes: 32 },
+    })
+    await viewer.open({ schema: fixedSchema([]), data: input, dataRevision: 2 })
+    input.invoice.title = 'mutated'
+
+    expect(viewer.data).toEqual({ invoice: { title: 'original' } })
+    expect(viewer.data).not.toBe(input)
+    expect(Object.isFrozen(viewer.data)).toBe(true)
+    expect(Object.isFrozen(viewer.data.invoice)).toBe(true)
+
+    await expect(viewer.updateData({ invalid: undefined } as never, { dataRevision: 3 }))
+      .rejects
+      .toThrow(/JSON|Unsupported/)
+    await expect(viewer.updateData(null as never, { dataRevision: 3 }))
+      .rejects
+      .toThrow('VIEWER_INLINE_DATA_INVALID')
+    await viewer.updateData({ valid: true }, { dataRevision: 3 })
+    expect(viewer.currentRevisions.dataRevision).toBe(3)
+  })
+
+  it('validates and caps performance budgets before creating runtime services', async () => {
+    expect(() => createViewer({ performanceBudget: { measureCacheEntries: 0 } }))
+      .toThrow('VIEWER_PERFORMANCE_BUDGET_INVALID')
+    expect(() => createViewer({ performanceBudget: { maxRuntimeRows: Number.MAX_SAFE_INTEGER + 1 } }))
+      .toThrow('VIEWER_PERFORMANCE_BUDGET_INVALID')
+
+    const viewer = createViewer({
+      performanceBudget: { maxInlineDataNodes: 2, maxInlineDataStringBytes: 4 },
+    })
+    await expect(viewer.open({
+      schema: fixedSchema([]),
+      data: { value: '12345' },
+      dataRevision: 7,
+    })).rejects.toThrow(/maximum|limit/i)
+    await viewer.open({ schema: fixedSchema([]), data: {}, dataRevision: 7 })
+    expect(viewer.currentRevisions.dataRevision).toBe(7)
+  })
+
+  it('measures once and paints the exact committed layout and fragment facts', async () => {
+    const measured: MaterialLayoutPlan[] = []
+    const rendered: ViewerRenderContext[] = []
+    const manifest = createTestMaterialManifest({
+      type: 'committed-facts',
+      viewer: () => ({
+        capabilities: {},
+        layout: {
+          async measure(request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> {
+            const plan = {
+              instanceKey: request.instanceKey,
+              nodeId: request.node.id,
+              nodeRevision: request.nodeRevision,
+              constraintKey: '40:60:mm:horizontal-tb',
+              borderBox: { x: request.node.x, y: request.node.y, width: 31, height: 9 },
+              contentBox: { x: request.node.x, y: request.node.y, width: 31, height: 9 },
+              slotBoxes: [],
+              breakOpportunities: [],
+              diagnostics: [],
+              payload: { source: 'measured' },
+            }
+            measured.push(plan)
+            return plan
+          },
+        },
+        extension: {
+          render(_node: MaterialNode, context: ViewerRenderContext) {
+            rendered.push(context)
+            return { tree: viewerText(String((context.layoutPlan.payload as { source: string }).source)) }
+          },
+        },
+      }),
+    })
+    const node = textNode('committed')
+    node.type = 'committed-facts'
+    const container = document.createElement('div')
+    const viewer = createViewer({ container, profile: createTestCompiledMaterialProfile([manifest]) })
+
+    await viewer.open({ schema: fixedSchema([node]), documentRevision: 7, dataRevision: 4 })
+
+    expect(measured).toHaveLength(1)
+    expect(measured[0]?.nodeRevision).toBe(7)
+    expect(rendered).toHaveLength(1)
+    expect(rendered[0]?.layoutPlan).toEqual(measured[0])
+    expect(rendered[0]?.fragmentPlan.sourceInstanceKey).toBe('committed')
+    expect(container.textContent).toContain('measured')
+  })
+
+  it('lets a newer data task supersede an older deferred layout without stale publication', async () => {
+    const started = deferred<void>()
+    const release = deferred<void>()
+    const manifest = statefulLayoutManifest('overlap', async (request) => {
+      if (request.resolvedModel.label === 'old') {
+        started.resolve()
+        await release.promise
+      }
+    })
+    const node = textNode('overlap-node')
+    node.type = manifest.type
+    const container = document.createElement('div')
+    const viewer = createViewer({ container, profile: createTestCompiledMaterialProfile([manifest]) })
+
+    const older = viewer.open({
+      schema: fixedSchema([node]),
+      documentRevision: 1,
+      data: { label: 'old' },
+      dataRevision: 1,
+    })
+    await started.promise
+    await viewer.updateData({ label: 'new' }, { dataRevision: 2 })
+    release.resolve()
+    await expect(older).resolves.toBeUndefined()
+
+    expect(container.textContent).toContain('new')
+    expect(container.textContent).not.toContain('old')
+    expect(viewer.currentRevisions).toMatchObject({ documentRevision: 1, dataRevision: 2 })
+  })
+
+  it('waits for profile preparation when data supersedes an opening activation', async () => {
+    const started = deferred<void>()
+    const release = deferred<void>()
+    const base = createTestMaterialManifest({ type: 'activation-overlap' })
+    const manifest = defineMaterialManifest({
+      ...base,
+      facets: {
+        ...base.facets,
+        viewer: defineMaterialFacetFactory('async-isolated', async () => {
+          started.resolve()
+          await release.promise
+          return {
+            capabilities: {},
+            extension: {
+              render: (_node: MaterialNode, context: ViewerRenderContext) => ({
+                tree: viewerText(String(context.resolvedModel.label)),
+              }),
+            },
+            layout: {
+              resolveRuntimeModel: (_node: Readonly<MaterialNode>, scope: MaterialRuntimeScope) => scope.data,
+            },
+          }
+        }),
+      },
+    })
+    const node = textNode('activation-node')
+    node.type = manifest.type
+    const container = document.createElement('div')
+    const viewer = createViewer({ container, profile: createTestCompiledMaterialProfile([manifest]) })
+
+    const opening = viewer.open({ schema: fixedSchema([node]), data: { label: 'old' }, dataRevision: 1 })
+    await started.promise
+    const updating = viewer.updateData({ label: 'new' }, { dataRevision: 2 })
+    release.resolve()
+    await Promise.all([opening, updating])
+
+    expect(container.textContent).toContain('new')
+    expect(viewer.currentRevisions.dataRevision).toBe(2)
+  })
+
+  it('keeps committed DOM and revisions when a requested layout fails', async () => {
+    const manifest = statefulLayoutManifest('candidate-failure', async (request) => {
+      if (request.resolvedModel.fail === true)
+        throw new Error('candidate layout failed')
+    })
+    const node = textNode('candidate-node')
+    node.type = manifest.type
+    const container = document.createElement('div')
+    const viewer = createViewer({ container, profile: createTestCompiledMaterialProfile([manifest]) })
+    await viewer.open({ schema: fixedSchema([node]), data: { label: 'committed' }, dataRevision: 1 })
+    const committedChildren = [...container.childNodes]
+
+    await expect(viewer.updateData({ label: 'failed', fail: true }, { dataRevision: 2 }))
+      .rejects
+      .toThrow('candidate layout failed')
+
+    expect([...container.childNodes]).toEqual(committedChildren)
+    expect(container.textContent).toContain('committed')
+    expect(viewer.currentRevisions.dataRevision).toBe(1)
+    await expect(viewer.updateData({ label: 'stale' }, { dataRevision: 2 }))
+      .rejects
+      .toThrow('DATA_REVISION_NOT_MONOTONIC')
+    await viewer.updateData({ label: 'recovered' }, { dataRevision: 3 })
+    expect(viewer.currentRevisions.dataRevision).toBe(3)
+  })
+
+  it('lets a render-time reentrant update win without publishing the interrupted mount', async () => {
+    let viewer!: ViewerRuntime
+    let update: Promise<void> | undefined
+    let triggered = false
+    const manifest = createTestMaterialManifest({
+      type: 'render-reentrant',
+      viewer: () => ({
+        capabilities: { imperativeDom: ['reentrant-update'] },
+        extension: {
+          render: (_node: MaterialNode, context: ViewerRenderContext) => ({
+            tree: context.resolvedModel.label === 'old'
+              ? viewerImperativeDom('reentrant-update', () => {
+                  if (!triggered) {
+                    triggered = true
+                    update = viewer.updateData({ label: 'new' }, { dataRevision: 2 })
+                  }
+                  return () => {}
+                })
+              : viewerText(String(context.resolvedModel.label)),
+          }),
+        },
+        layout: {
+          resolveRuntimeModel: (_node: Readonly<MaterialNode>, scope: MaterialRuntimeScope) => scope.data,
+        },
+      }),
+    })
+    const node = textNode('reentrant-node')
+    node.type = manifest.type
+    const container = document.createElement('div')
+    viewer = createViewer({
+      container,
+      profile: createTestCompiledMaterialProfile([manifest]),
+      browserDom: { imperativeDom: ['reentrant-update'] },
+    })
+
+    await viewer.open({ schema: fixedSchema([node]), data: { label: 'old' }, dataRevision: 1 })
+    await update
+
+    expect(container.textContent).toContain('new')
+    expect(container.textContent).not.toContain('old')
+    expect(viewer.currentRevisions.dataRevision).toBe(2)
+  })
+
+  it('aborts unfinished layout and disposes the profile runtime exactly once on destroy', async () => {
+    const started = deferred<void>()
+    const release = deferred<void>()
+    const disposed = vi.fn()
+    const manifest = statefulLayoutManifest('destroy-cancel', async () => {
+      started.resolve()
+      await release.promise
+    }, disposed)
+    const node = textNode('destroy-node')
+    node.type = manifest.type
+    const container = document.createElement('div')
+    const viewer = createViewer({ container, profile: createTestCompiledMaterialProfile([manifest]) })
+    const opening = viewer.open({ schema: fixedSchema([node]) })
+    await started.promise
+
+    await viewer.destroy()
+    await viewer.destroy()
+    release.resolve()
+    await expect(opening).resolves.toBeUndefined()
+
+    expect(disposed).toHaveBeenCalledOnce()
+    expect(container.childNodes).toHaveLength(0)
+    await expect(viewer.render()).rejects.toThrow('destroyed')
+  })
+
   it('keeps the active virtualized batch when a replacement DOM swap fails', async () => {
     const container = document.createElement('div')
     const viewer = createViewer({ container })
@@ -185,7 +507,7 @@ describe('viewer audit risk regressions', () => {
 
   it('snapshots browser DOM options when the viewer is created', async () => {
     const container = document.createElement('div')
-    const imperativeDom = new Set(['chart'])
+    const imperativeDom = ['chart']
     const htmlTags = new Set(['div'])
     const policy = { ...DEFAULT_VIEWER_TREE_POLICY, htmlTags }
     const extension: MaterialViewerExtension = {
@@ -199,7 +521,7 @@ describe('viewer audit risk regressions', () => {
       profile: createTestCompiledMaterialProfile([viewerManifest('snapshot', extension, 'none', { imperativeDom: ['chart'] })]),
       browserDom: { imperativeDom, policy },
     })
-    imperativeDom.clear()
+    imperativeDom.length = 0
     htmlTags.clear()
     htmlTags.add('script')
 
@@ -223,11 +545,12 @@ describe('viewer audit risk regressions', () => {
       expect.objectContaining({ code: 'MATERIAL_TYPE_UNKNOWN', nodeId: 'unknown' }),
       expect.objectContaining({ code: 'MATERIAL_FACET_NOT_DECLARED' }),
     ]))
-    expect(container.textContent).toContain('[Unavailable: unknown-material]')
+    expect(container.textContent).toContain('[material quarantined]')
   })
 
   it('disposes nested page mounts in reverse order before rerender and destroy', async () => {
     const disposed: string[] = []
+    let committedSlotKey = ''
     const extension: MaterialViewerExtension = {
       render: node => ({ tree: viewerImperativeDom('test', (host) => {
         const mount = host.render(viewerText(node.id))
@@ -241,8 +564,35 @@ describe('viewer audit risk regressions', () => {
       type: 'owner',
       slots: [{ id: 'content', key: { kind: 'exact', value: 'content' }, coordinateSpace: 'owner', layoutParticipation: 'owner', reparent: 'allowed' }],
       viewer: () => ({
-        extension: { render: (_node: MaterialNode, context: any) => ({ tree: viewerFragment(context.slotOutputs?.content ?? []) }) },
+        extension: { render: (_node: MaterialNode, context: ViewerRenderContext) => ({ tree: context.renderSlot(committedSlotKey) }) },
         capabilities: {},
+        layout: {
+          async measure(request: MaterialMeasureRequest): Promise<MaterialLayoutPlan> {
+            const slot = await request.measureSlot({
+              slot: 'content',
+              scope: request.scope,
+              constraints: request.constraints,
+            }, request.signal)
+            committedSlotKey = slot.instanceKey
+            return {
+              instanceKey: request.instanceKey,
+              nodeId: request.node.id,
+              nodeRevision: request.nodeRevision,
+              constraintKey: '40:60:mm:horizontal-tb',
+              borderBox: { x: request.node.x, y: request.node.y, width: request.node.width, height: request.node.height },
+              contentBox: { x: request.node.x, y: request.node.y, width: request.node.width, height: request.node.height },
+              slotBoxes: [{
+                slotId: 'content',
+                slotInstanceKey: slot.instanceKey,
+                box: { x: 0, y: 0, width: request.node.width, height: request.node.height },
+                ownership: 'managed',
+                clip: true,
+              }],
+              breakOpportunities: [],
+              diagnostics: [],
+            }
+          },
+        },
       }),
     })
     const profile = createTestCompiledMaterialProfile([
@@ -368,10 +718,11 @@ describe('viewer audit risk regressions', () => {
     expect(renderRepeated).not.toHaveBeenCalled()
     expect(container.querySelectorAll('[data-element-type="repeated-invalid"]')).toHaveLength(2)
     expect(container.textContent).not.toContain('must not render')
-    expect(diagnostics.filter(item => item.code === 'MATERIAL_REPEAT_QUARANTINED')).toEqual([
-      expect.objectContaining({ nodeId: 'duplicate-id__p0', detail: { sourceNodeId: 'duplicate-id', virtualNodeId: 'duplicate-id__p0' } }),
-      expect.objectContaining({ nodeId: 'duplicate-id__p1', detail: { sourceNodeId: 'duplicate-id', virtualNodeId: 'duplicate-id__p1' } }),
-    ])
+    expect(diagnostics.filter(item => item.code === 'VIEWER_MATERIAL_INSTANCE_QUARANTINED'))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ nodeId: 'duplicate-id__p0' }),
+        expect.objectContaining({ nodeId: 'duplicate-id__p1' }),
+      ]))
     await viewer.destroy()
   })
 
@@ -413,9 +764,13 @@ describe('viewer audit risk regressions', () => {
     })).resolves.toBeUndefined()
 
     expect(container.textContent).toContain('healthy sibling')
-    expect(container.querySelectorAll('[data-render-error="true"]')).toHaveLength(badTypes.length)
-    expect(diagnostics.filter(item => item.code === 'MATERIAL_RENDER_ERROR').map(item => item.nodeId).sort())
-      .toEqual(badTypes.map(type => `${type}-node`).sort())
+    const failingTypes = badTypes.filter(type => type !== 'throw-size')
+    expect(container.querySelectorAll('[data-render-error="true"]')).toHaveLength(failingTypes.length)
+    expect(diagnostics
+      .filter(item => item.code === 'VIEWER_MATERIAL_RENDER_ERROR' || item.code === 'VIEWER_MATERIAL_MOUNT_ERROR')
+      .map(item => item.nodeId)
+      .sort())
+      .toEqual(failingTypes.map(type => `${type}-node`).sort())
   })
 
   it('contains hostile thrown values per node without invoking traps or leaking originals', async () => {
@@ -451,7 +806,7 @@ describe('viewer audit risk regressions', () => {
     await viewer.open({ schema: fixedSchema(nodes), onDiagnostic: diagnostic => diagnostics.push(diagnostic) })
 
     expect(container.textContent).toContain('healthy after hostile throws')
-    const failures = diagnostics.filter(item => item.code === 'MATERIAL_RENDER_ERROR')
+    const failures = diagnostics.filter(item => item.code === 'VIEWER_MATERIAL_RENDER_ERROR')
     expect(failures).toHaveLength(thrownValues.length)
     expect(failures.every(item => item.message.includes('Unknown thrown value'))).toBe(true)
     expect(failures.every(item => !thrownValues.includes(item.cause as object))).toBe(true)
