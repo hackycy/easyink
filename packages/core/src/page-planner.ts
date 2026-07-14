@@ -87,7 +87,7 @@ export function createPagePlan(schema: DocumentSchema, options: PagePlanOptions 
     const overlays = overlaysByPage.get(placement.pageIndex) ?? []
     overlays.push({
       ...deepClone(node),
-      id: `${node.id}__p${placement.pageIndex}`,
+      id: placement.virtualNodeId,
       y: page.yOffset + resolveRepeatedElementLocalY(node, page.height),
     })
     overlaysByPage.set(placement.pageIndex, overlays)

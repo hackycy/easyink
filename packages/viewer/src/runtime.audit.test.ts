@@ -211,6 +211,27 @@ describe('viewer audit risk regressions', () => {
     expect(viewer.currentRevisions.dataRevision).toBe(3)
   })
 
+  it('owns one recursively frozen canonical document across data-only updates', async () => {
+    const source = fixedSchema([textNode('canonical-node', undefined, { content: 'original' })])
+    const viewer = createViewer({ container: document.createElement('div') })
+    await viewer.open({ schema: source, documentRevision: 4, dataRevision: 1 })
+    const canonical = viewer.schema!
+
+    source.page.width = 99
+    ;(source.elements[0]!.model as { content: string }).content = 'caller mutation'
+    expect(canonical.page.width).toBe(80)
+    expect((canonical.elements[0]!.model as { content: string }).content).toBe('original')
+    expect(Object.isFrozen(canonical)).toBe(true)
+    expect(Object.isFrozen(canonical.page)).toBe(true)
+    expect(Object.isFrozen(canonical.elements[0]!.model)).toBe(true)
+    expect(() => canonical.page.width = 120).toThrow(TypeError)
+
+    await viewer.updateData({ next: true }, { dataRevision: 2 })
+    expect(viewer.schema).toBe(canonical)
+    expect(viewer.currentRevisions.documentRevision).toBe(4)
+    expect(viewer.schema?.page.width).toBe(80)
+  })
+
   it('validates and caps performance budgets before creating runtime services', async () => {
     expect(() => createViewer({ performanceBudget: { measureCacheEntries: 0 } }))
       .toThrow('VIEWER_PERFORMANCE_BUDGET_INVALID')
@@ -275,6 +296,32 @@ describe('viewer audit risk regressions', () => {
     expect(rendered[0]?.layoutPlan).toEqual(measured[0])
     expect(rendered[0]?.fragmentPlan.sourceInstanceKey).toBe('committed')
     expect(container.textContent).toContain('measured')
+  })
+
+  it('keeps node revision stable but remeasures when only data revision changes', async () => {
+    const revisions: Array<{ nodeRevision: number, dataRevision: number }> = []
+    const manifest = statefulLayoutManifest('data-remeasure', async (request) => {
+      revisions.push({ nodeRevision: request.nodeRevision, dataRevision: request.dataRevision })
+    })
+    const node = textNode('data-remeasure-node')
+    node.type = manifest.type
+    const viewer = createViewer({
+      container: document.createElement('div'),
+      profile: createTestCompiledMaterialProfile([manifest]),
+    })
+
+    await viewer.open({
+      schema: fixedSchema([node]),
+      documentRevision: 4,
+      data: { label: 'first' },
+      dataRevision: 1,
+    })
+    await viewer.updateData({ label: 'second' }, { dataRevision: 2 })
+
+    expect(revisions).toEqual([
+      { nodeRevision: 4, dataRevision: 1 },
+      { nodeRevision: 4, dataRevision: 2 },
+    ])
   })
 
   it('lets a newer data task supersede an older deferred layout without stale publication', async () => {
@@ -347,6 +394,71 @@ describe('viewer audit risk regressions', () => {
     expect(viewer.currentRevisions.dataRevision).toBe(2)
   })
 
+  it('prepares only admitted measurable material types and never enters quarantined nodes', async () => {
+    const allQuarantinedFactory = vi.fn(() => ({
+      capabilities: {},
+      extension: { render: () => ({ tree: viewerText('must not activate') }) },
+    }))
+    const duplicateManifest = createTestMaterialManifest({ type: 'all-quarantined', viewer: allQuarantinedFactory })
+    const duplicateA = textNode('duplicate')
+    duplicateA.type = duplicateManifest.type
+    const duplicateB = textNode('duplicate')
+    duplicateB.type = duplicateManifest.type
+    duplicateB.y = 20
+    const duplicateViewer = createViewer({
+      container: document.createElement('div'),
+      profile: createTestCompiledMaterialProfile([duplicateManifest]),
+    })
+    await duplicateViewer.open({ schema: fixedSchema([duplicateA, duplicateB]) })
+    expect(allQuarantinedFactory).not.toHaveBeenCalled()
+
+    const baseAdapter = createTestMaterialManifest({ type: 'adapter-base' }).schemaAdapter
+    const mixedFactory = vi.fn(() => ({
+      capabilities: {},
+      extension: { render: (node: MaterialNode) => ({ tree: viewerText(node.id) }) },
+    }))
+    const mixedManifest = createTestMaterialManifest({
+      type: 'mixed-admission',
+      schemaAdapter: {
+        ...baseAdapter,
+        normalize(node, context) {
+          if (node.id === 'bad')
+            throw new Error('quarantine bad')
+          return baseAdapter.normalize(node, context)
+        },
+      },
+      viewer: mixedFactory,
+    })
+    const good = textNode('good')
+    good.type = mixedManifest.type
+    const bad = textNode('bad')
+    bad.type = mixedManifest.type
+    bad.y = 20
+    const removed = textNode('removed')
+    removed.type = 'removed-only'
+    removed.output.visibility = 'remove'
+    const removedFactory = vi.fn(() => ({
+      capabilities: {},
+      extension: { render: () => ({ tree: viewerText('removed') }) },
+    }))
+    const container = document.createElement('div')
+    const viewer = createViewer({
+      container,
+      profile: createTestCompiledMaterialProfile([
+        mixedManifest,
+        createTestMaterialManifest({ type: 'removed-only', viewer: removedFactory }),
+      ]),
+    })
+
+    await viewer.open({ schema: fixedSchema([good, bad, removed]) })
+
+    expect(mixedFactory).toHaveBeenCalledOnce()
+    expect(removedFactory).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('good')
+    expect(container.textContent).not.toContain('bad')
+    expect(container.textContent).not.toContain('removed')
+  })
+
   it('keeps committed DOM and revisions when a requested layout fails', async () => {
     const manifest = statefulLayoutManifest('candidate-failure', async (request) => {
       if (request.resolvedModel.fail === true)
@@ -371,6 +483,44 @@ describe('viewer audit risk regressions', () => {
       .toThrow('DATA_REVISION_NOT_MONOTONIC')
     await viewer.updateData({ label: 'recovered' }, { dataRevision: 3 })
     expect(viewer.currentRevisions.dataRevision).toBe(3)
+  })
+
+  it('publishes diagnostic handlers only with a successful atomic candidate', async () => {
+    const oldCodes: string[] = []
+    const failedCodes: string[] = []
+    const nextCodes: string[] = []
+    const manifest = statefulLayoutManifest('diagnostic-candidate', async (request) => {
+      if (request.resolvedModel.fail === true)
+        throw new Error('candidate diagnostics failed')
+    })
+    const node = textNode('diagnostic-node')
+    node.type = manifest.type
+    const viewer = createViewer({
+      container: document.createElement('div'),
+      profile: createTestCompiledMaterialProfile([manifest]),
+    })
+    await viewer.open({
+      schema: fixedSchema([node]),
+      data: { label: 'old' },
+      onDiagnostic: event => oldCodes.push(event.code),
+    })
+
+    await expect(viewer.open({
+      schema: fixedSchema([node]),
+      data: { label: 'failed', fail: true },
+      onDiagnostic: event => failedCodes.push(event.code),
+    })).rejects.toThrow('candidate diagnostics failed')
+    await viewer.print({ driverId: 'missing' })
+    expect(oldCodes).toContain('NO_PRINT_DRIVER')
+    expect(failedCodes).not.toContain('NO_PRINT_DRIVER')
+
+    await viewer.open({
+      schema: fixedSchema([node]),
+      data: { label: 'next' },
+      onDiagnostic: event => nextCodes.push(event.code),
+    })
+    await viewer.print({ driverId: 'missing' })
+    expect(nextCodes).toContain('NO_PRINT_DRIVER')
   })
 
   it('lets a render-time reentrant update win without publishing the interrupted mount', async () => {
@@ -439,6 +589,39 @@ describe('viewer audit risk regressions', () => {
     expect(disposed).toHaveBeenCalledOnce()
     expect(container.childNodes).toHaveLength(0)
     await expect(viewer.render()).rejects.toThrow('destroyed')
+  })
+
+  it('shares one destroy promise until every asynchronous disposer settles', async () => {
+    const release = deferred<void>()
+    const disposed = vi.fn(async () => release.promise)
+    const manifest = createTestMaterialManifest({
+      type: 'deferred-dispose',
+      viewer: () => ({
+        capabilities: {},
+        extension: { render: () => ({ tree: viewerText('mounted') }) },
+        dispose: disposed,
+      }),
+    })
+    const node = textNode('deferred-dispose-node')
+    node.type = manifest.type
+    const viewer = createViewer({
+      container: document.createElement('div'),
+      profile: createTestCompiledMaterialProfile([manifest]),
+    })
+    await viewer.open({ schema: fixedSchema([node]) })
+
+    const first = viewer.destroy()
+    const second = viewer.destroy()
+    expect(second).toBe(first)
+    let settled = false
+    void second.then(() => settled = true)
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    release.resolve()
+    await first
+    expect(viewer.destroy()).toBe(first)
+    expect(disposed).toHaveBeenCalledOnce()
   })
 
   it('keeps the active virtualized batch when a replacement DOM swap fails', async () => {
@@ -543,7 +726,7 @@ describe('viewer audit risk regressions', () => {
 
     expect(diagnostics).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'MATERIAL_TYPE_UNKNOWN', nodeId: 'unknown' }),
-      expect.objectContaining({ code: 'MATERIAL_FACET_NOT_DECLARED' }),
+      expect.objectContaining({ code: 'VIEWER_MATERIAL_INSTANCE_QUARANTINED', nodeId: 'unknown' }),
     ]))
     expect(container.textContent).toContain('[material quarantined]')
   })
@@ -694,6 +877,83 @@ describe('viewer audit risk regressions', () => {
     expect(container.querySelectorAll('[data-element-type="ordinary-marker"]')).toHaveLength(1)
 
     await viewer.destroy()
+  })
+
+  it('plans repeated overlays outside flow with effective include, reserve, remove, and condition states', async () => {
+    const measures = {
+      include: vi.fn(),
+      reserve: vi.fn(),
+      remove: vi.fn(),
+      conditional: vi.fn(),
+    }
+    const repeatedManifest = (type: keyof typeof measures): MaterialManifest => {
+      const base = statefulLayoutManifest(`repeat-${type}`, async () => measures[type]())
+      return defineMaterialManifest({
+        ...base,
+        common: { ...base.common, layout: { ...base.common.layout, pageRepeat: 'every-output-page' } },
+      })
+    }
+    const manifests = {
+      include: repeatedManifest('include'),
+      reserve: repeatedManifest('reserve'),
+      remove: repeatedManifest('remove'),
+      conditional: repeatedManifest('conditional'),
+    }
+    const repeatedNode = (id: keyof typeof manifests, visibility: MaterialNode['output']['visibility']): MaterialNode => {
+      const item = textNode(`repeat-${id}`)
+      item.type = manifests[id].type
+      item.y = 190
+      item.output.visibility = visibility
+      return item
+    }
+    const include = repeatedNode('include', 'include')
+    const reserve = repeatedNode('reserve', 'reserve')
+    const remove = repeatedNode('remove', 'remove')
+    const conditional = repeatedNode('conditional', 'include')
+    conditional.output.renderCondition = {
+      whenMatched: 'show',
+      groups: [{ conditions: [{ source: { path: 'show' }, operator: { compare: 'exists' } }] }],
+      whenHidden: 'remove',
+    }
+    const firstPageContent = textNode('flow-content-first', undefined, { content: 'page one' })
+    firstPageContent.y = 10
+    const secondPageContent = textNode('flow-content-second', undefined, { content: 'page two' })
+    secondPageContent.y = 70
+    const schema = fixedSchema([
+      include,
+      reserve,
+      remove,
+      conditional,
+      firstPageContent,
+      secondPageContent,
+    ])
+    schema.page.pagination = { strategy: 'auto-sheets' }
+    const container = document.createElement('div')
+    const viewer = createViewer({
+      container,
+      profile: createTestCompiledMaterialProfile([
+        ...Object.values(manifests),
+        viewerManifest('text', { render: () => ({ tree: viewerText('flow') }) }),
+      ]),
+    })
+
+    await viewer.open({ schema, data: { label: 'overlay', show: true } })
+
+    expect(viewer.renderedPages).toHaveLength(2)
+    expect(container.querySelectorAll('[data-element-type="repeat-include"]')).toHaveLength(2)
+    expect(container.querySelectorAll('[data-element-type="repeat-conditional"]')).toHaveLength(2)
+    expect(container.querySelectorAll('[data-element-type="repeat-reserve"]')).toHaveLength(0)
+    expect(container.querySelectorAll('[data-element-type="repeat-remove"]')).toHaveLength(0)
+    expect(measures.include).toHaveBeenCalledOnce()
+    expect(measures.reserve).toHaveBeenCalledOnce()
+    expect(measures.remove).not.toHaveBeenCalled()
+    expect(measures.conditional).toHaveBeenCalledOnce()
+
+    await viewer.updateData({ label: 'overlay' })
+    expect(viewer.renderedPages).toHaveLength(2)
+    expect(container.querySelectorAll('[data-element-type="repeat-include"]')).toHaveLength(2)
+    expect(container.querySelectorAll('[data-element-type="repeat-conditional"]')).toHaveLength(0)
+    expect(measures.conditional).toHaveBeenCalledOnce()
   })
 
   it('keeps quarantined repeated nodes quarantined on every virtual page', async () => {

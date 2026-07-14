@@ -82,6 +82,9 @@ const PAGE_LAYER_PLAN_RESOLVERS: Record<string, PageLayerPlanResolver> = {
 export interface RepeatedOverlayPlacement {
   readonly nodeId: string
   readonly pageIndex: number
+  readonly virtualNodeId: string
+  readonly virtualInstanceKey: string
+  readonly virtualFragmentId: string
 }
 
 export function planRepeatedOverlays(input: {
@@ -107,8 +110,15 @@ export function planRepeatedOverlays(input: {
 
   const placements: RepeatedOverlayPlacement[] = []
   for (const node of repeatedNodes) {
-    for (let pageIndex = 0; pageIndex < input.pageCount; pageIndex++)
-      placements.push(Object.freeze({ nodeId: node.id, pageIndex }))
+    for (let pageIndex = 0; pageIndex < input.pageCount; pageIndex++) {
+      placements.push(Object.freeze({
+        nodeId: node.id,
+        pageIndex,
+        virtualNodeId: `${node.id}__p${pageIndex}`,
+        virtualInstanceKey: JSON.stringify(['page-repeat-instance', node.id, pageIndex]),
+        virtualFragmentId: JSON.stringify(['page-repeat-fragment', node.id, pageIndex]),
+      }))
+    }
   }
   return Object.freeze(placements)
 }

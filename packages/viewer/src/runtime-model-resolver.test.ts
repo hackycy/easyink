@@ -341,6 +341,35 @@ describe('resolveRuntimeModels', () => {
     expect(project).toHaveBeenCalledTimes(1)
   })
 
+  it('clears retained models and disposes the cache idempotently', async () => {
+    const profile = activeProfile()
+    const materials = new ProfileMaterialRuntime(profile)
+    await materials.prepare(['invoice'])
+    const cache = createRuntimeModelResolutionCache(profile)
+    const input = {
+      instanceKey: 'n1',
+      scope: { key: 'document', data: {} },
+      node: makeNode('n1'),
+      dataRevision: 1,
+      nodeRevision: 1,
+      cache,
+      materials,
+      reportDiagnostic: vi.fn(),
+    }
+    resolveRuntimeModelInstance(input)
+    expect(cache.size).toBe(1)
+
+    cache.clear()
+    expect(cache.size).toBe(0)
+    resolveRuntimeModelInstance(input)
+    expect(cache.size).toBe(1)
+
+    cache.dispose()
+    cache.dispose()
+    expect(cache.size).toBe(0)
+    expect(() => resolveRuntimeModelInstance(input)).toThrow('RUNTIME_MODEL_CACHE_DISPOSED')
+  })
+
   it.each([
     ['current data', { key: 'row', data: { record: 'B' }, parent: { key: 'document', data: { tenant: 'a' } } }],
     ['parent data', { key: 'row', data: { record: 'A' }, parent: { key: 'document', data: { tenant: 'b' } } }],

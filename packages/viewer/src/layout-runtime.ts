@@ -31,6 +31,7 @@ import {
   createNonFragmentingMaterialPlans,
   freezeMaterialFragmentPlan,
   freezeMaterialLayoutPlan,
+  planRepeatedOverlays,
   runLayoutPipeline,
   runPagination,
 } from '@easyink/core'
@@ -47,6 +48,7 @@ export interface LayoutRuntimeInput {
   readonly documentRevision: number
   readonly data: Readonly<Record<string, unknown>>
   readonly dataRevision: number
+  readonly reportDiagnostic?: (diagnostic: unknown) => void
 }
 
 export interface RuntimeMaterialInstancePlan {
@@ -97,6 +99,7 @@ export interface LayoutRuntimeDependencies {
     document: DocumentSchema,
     layout: LayoutDocument,
     plans: ReadonlyMap<string, MaterialLayoutPlan>,
+    outputStates: ReadonlyMap<string, EffectiveOutputState>,
   ) => PaginationResult
 }
 
@@ -166,7 +169,7 @@ export function createLayoutRuntime(deps: LayoutRuntimeDependencies): Readonly<{
       throwIfAborted(signal)
       const layout = deps.layoutDocument(input.document, measured.plans)
       throwIfAborted(signal)
-      const pagination = deps.paginateDocument(input.document, layout, measured.plans)
+      const pagination = deps.paginateDocument(input.document, layout, measured.plans, outputStates)
       throwIfAborted(signal)
 
       return Object.freeze({
@@ -275,21 +278,40 @@ export function createDefaultLayoutRuntime(
         profile: deps.profile,
         materials: deps.materials,
         cache: deps.runtimeModelCache,
-        reportDiagnostic: deps.reportDiagnostic,
+        reportDiagnostic: input.reportDiagnostic ?? deps.reportDiagnostic,
       })
     },
     prepareResources: deps.prepareResources,
     measureNodes,
-    layoutDocument: (document, plans) => runLayoutPipeline(document, { plans }),
-    paginateDocument: (document, layout) => runPagination(document, layout, {
-      originalSchema: document,
-      resolveFragmentAdapter: fragment => deps.materials.getFragmentAdapter(fragment.node.type),
-    }),
+    layoutDocument: (document, plans) => runLayoutPipeline(withoutRepeatedRoots(document, deps.profile), { plans }),
+    paginateDocument: (document, layout, _plans, outputStates) => {
+      const flowDocument = withoutRepeatedRoots(document, deps.profile)
+      const hasPaintableRepeated = document.elements.some(node => (
+        deps.profile.getManifest(node.type)?.common.layout.pageRepeat === 'every-output-page'
+        && outputStates.get(node.id)?.shouldPaint === true
+      ))
+      return runPagination(flowDocument, layout, {
+        originalSchema: flowDocument,
+        resolveFragmentAdapter: fragment => deps.materials.getFragmentAdapter(fragment.node.type),
+        ...(hasPaintableRepeated ? { retainBlankPage: () => true } : {}),
+      })
+    },
   })
   return Object.freeze({
-    ...runtime,
+    async plan(input: LayoutRuntimeInput, signal: AbortSignal) {
+      const committed = await runtime.plan(input, signal)
+      throwIfAborted(signal)
+      return commitRepeatedPageInstances(input, committed, deps.profile)
+    },
     clear: measureNodes.clear,
-    dispose: measureNodes.dispose,
+    async dispose() {
+      try {
+        await measureNodes.dispose()
+      }
+      finally {
+        deps.runtimeModelCache.dispose()
+      }
+    },
   })
 }
 
@@ -307,6 +329,7 @@ async function measureInstance(context: {
   readonly artifactRetryAvailable: boolean
 }): Promise<MeasuredInstanceTree> {
   const { deps, input, node, instanceKey, scope, model, constraints, signal } = context
+  const reportDiagnostic = input.reportDiagnostic ?? deps.reportDiagnostic
   throwIfAborted(signal)
   if (context.ancestorNodeIds.has(node.id))
     throw new Error('MATERIAL_SLOT_MEASURE_CYCLE')
@@ -376,13 +399,13 @@ async function measureInstance(context: {
         node: nodeSnapshot,
         bindingDefinition: manifest.common.binding,
         baseScope: scope,
-        reportDiagnostic: deps.reportDiagnostic,
+        reportDiagnostic,
       })
       const formatBinding = createMaterialDisplayBindingResolver({
         node: nodeSnapshot,
         bindingDefinition: manifest.common.binding,
         baseScope: scope,
-        reportDiagnostic: deps.reportDiagnostic,
+        reportDiagnostic,
       })
       const collections = createMaterialCollectionOpener({
         node: nodeSnapshot,
@@ -390,7 +413,7 @@ async function measureInstance(context: {
         resolveBinding,
         provider: deps.preparedCollections,
         budget: deps.budget,
-        reportDiagnostic: deps.reportDiagnostic,
+        reportDiagnostic,
       })
       try {
         const facet = deps.materials.get(node.type)
@@ -462,7 +485,7 @@ async function measureInstance(context: {
                 admissionState: input.nodeStates.get(child.id),
                 cache: deps.runtimeModelCache,
                 materials: deps.materials,
-                reportDiagnostic: deps.reportDiagnostic,
+                reportDiagnostic,
               })
               return measureInstance({
                 deps,
@@ -662,6 +685,164 @@ export function createMaterialRenderBudgetToken(maxNodes: number): MaterialRende
       nodesUsed += count
     },
   })
+}
+
+function withoutRepeatedRoots(
+  document: DocumentSchema,
+  profile: CompiledMaterialProfile,
+): DocumentSchema {
+  const elements = document.elements.filter(node =>
+    profile.getManifest(node.type)?.common.layout.pageRepeat !== 'every-output-page',
+  )
+  return elements.length === document.elements.length
+    ? document
+    : Object.freeze({ ...document, elements })
+}
+
+function commitRepeatedPageInstances(
+  input: LayoutRuntimeInput,
+  plan: CommittedPagePlan,
+  profile: CompiledMaterialProfile,
+): CommittedPagePlan {
+  if (plan.pages.length === 0)
+    return plan
+  const repeatedById = new Map(input.document.elements
+    .filter(node => profile.getManifest(node.type)?.common.layout.pageRepeat === 'every-output-page')
+    .map(node => [node.id, node]))
+  if (repeatedById.size === 0)
+    return plan
+  const paintableNodeIds = new Set([...repeatedById.keys()]
+    .filter(nodeId => plan.outputStates.get(nodeId)?.shouldPaint === true))
+  const placements = planRepeatedOverlays({
+    nodes: [...repeatedById.values()],
+    profile,
+    pageCount: plan.pages.length,
+    paintableNodeIds,
+  })
+  if (placements.length === 0)
+    return plan
+
+  const instances = new Map(plan.runtimeInstances)
+  const outputStates = new Map(plan.outputStates)
+  const fragmentsByPage = plan.pages.map(page => [...page.fragments])
+  for (const placement of placements) {
+    const sourceNode = repeatedById.get(placement.nodeId)
+    const page = plan.pages[placement.pageIndex]
+    if (!sourceNode || !page)
+      continue
+    const committedSource = plan.runtimeInstances.get(sourceNode.id)
+    const source = committedSource?.node.type === sourceNode.type
+      ? committedSource
+      : createQuarantinedRepeatedSource(input, sourceNode)
+    const sourceFragment = source.embeddedFragmentPlan
+    if (!sourceFragment)
+      continue
+    const localY = resolveRepeatedElementLocalY(source.node, page.height)
+    const y = page.yOffset + localY
+    const node = copyAndFreezeJson(copyDefinedJsonValue({
+      ...definedProperties(source.node as unknown as Record<string, unknown>),
+      id: placement.virtualNodeId,
+      y,
+    })) as unknown as Readonly<MaterialNode>
+    const layoutPlan = freezeMaterialLayoutPlan({
+      ...source.layoutPlan,
+      instanceKey: placement.virtualInstanceKey,
+      nodeId: placement.virtualNodeId,
+      borderBox: { ...source.layoutPlan.borderBox, y },
+      contentBox: { ...source.layoutPlan.contentBox, y },
+    })
+    const fragmentPlan = freezeMaterialFragmentPlan({
+      ...sourceFragment,
+      id: placement.virtualFragmentId,
+      sourceInstanceKey: placement.virtualInstanceKey,
+      sourceNodeId: placement.virtualNodeId,
+      box: { ...sourceFragment.box, y },
+    })
+    const resolvedModel = copyAndFreezeRecord({
+      ...source.resolvedModel,
+      __pageNumber: page.index + 1,
+      __totalPages: plan.pages.length,
+    })
+    const instance: RuntimeMaterialInstancePlan = Object.freeze({
+      ...source,
+      instanceKey: placement.virtualInstanceKey,
+      nodeId: placement.virtualNodeId,
+      node,
+      resolvedModel,
+      layoutPlan,
+      embeddedFragmentPlan: fragmentPlan,
+    })
+    instances.set(placement.virtualInstanceKey, instance)
+    const sourceOutput = plan.outputStates.get(sourceNode.id)
+    if (sourceOutput)
+      outputStates.set(placement.virtualNodeId, sourceOutput)
+    fragmentsByPage[placement.pageIndex]!.push(Object.freeze({ node, plan: layoutPlan, fragmentPlan }))
+  }
+  const pages = plan.pages.map((page, index) => Object.freeze({
+    ...page,
+    fragments: Object.freeze(fragmentsByPage[index]!),
+  }))
+  return Object.freeze({
+    ...plan,
+    pages: Object.freeze(pages),
+    outputStates: createReadonlyMap(outputStates),
+    runtimeInstances: createReadonlyMap(instances),
+  })
+}
+
+function createQuarantinedRepeatedSource(
+  input: LayoutRuntimeInput,
+  sourceNode: MaterialNode,
+): RuntimeMaterialInstancePlan {
+  const facts = createNonFragmentingMaterialPlans({
+    instanceKey: sourceNode.id,
+    nodeId: sourceNode.id,
+    nodeRevision: input.documentRevision,
+    constraintKey: createLayoutConstraintKey({
+      availableWidth: sourceNode.width,
+      availableHeight: input.document.page.height,
+      unit: input.document.unit,
+      writingMode: 'horizontal-tb',
+    }),
+    pageIndex: 0,
+    borderBox: { x: sourceNode.x, y: sourceNode.y, width: sourceNode.width, height: sourceNode.height },
+    fragmentBox: { x: sourceNode.x, y: sourceNode.y, width: sourceNode.width, height: sourceNode.height },
+  })
+  return Object.freeze({
+    instanceKey: sourceNode.id,
+    nodeId: sourceNode.id,
+    node: copyAndFreezeJson(sourceNode) as unknown as Readonly<MaterialNode>,
+    scopeKey: 'document',
+    scopeData: input.data,
+    status: 'quarantined',
+    diagnostic: Object.freeze({ code: 'MATERIAL_NODE_QUARANTINED' }),
+    resolvedModel: copyAndFreezeRecord(sourceNode.model),
+    layoutPlan: facts.layoutPlan,
+    embeddedFragmentPlan: facts.fragmentPlan,
+    slotChildren: Object.freeze({}),
+  })
+}
+
+function resolveRepeatedElementLocalY(node: Readonly<MaterialNode>, pageHeight: number): number {
+  if (pageHeight <= 0)
+    return node.y
+  const localY = node.y % pageHeight
+  return localY < 0 ? localY + pageHeight : localY
+}
+
+function definedProperties(source: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(source).filter(([, value]) => value !== undefined))
+}
+
+function copyDefinedJsonValue(value: unknown): unknown {
+  if (Array.isArray(value))
+    return value.map(copyDefinedJsonValue)
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value)
+      .filter(([, child]) => child !== undefined)
+      .map(([key, child]) => [key, copyDefinedJsonValue(child)]))
+  }
+  return value
 }
 
 export function flattenMeasurableNodes(

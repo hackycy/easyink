@@ -26,10 +26,14 @@ export interface ResolvedRuntimeModel {
 export interface RuntimeModelResolutionCache {
   readonly profile: CompiledMaterialProfile
   readonly maxEntries: number
+  readonly size: number
+  readonly clear: () => void
+  readonly dispose: () => void
 }
 
 interface CacheState {
   readonly entries: Map<string, ResolvedRuntimeModel>
+  disposed: boolean
 }
 
 const cacheStates = new WeakMap<RuntimeModelResolutionCache, CacheState>()
@@ -41,8 +45,25 @@ export function createRuntimeModelResolutionCache(
 ): RuntimeModelResolutionCache {
   if (!Number.isSafeInteger(maxEntries) || maxEntries < 1)
     throw new Error('RUNTIME_MODEL_CACHE_LIMIT_INVALID')
-  const cache = Object.freeze({ profile, maxEntries })
-  cacheStates.set(cache, { entries: new Map() })
+  const state: CacheState = { entries: new Map(), disposed: false }
+  const cache: RuntimeModelResolutionCache = Object.freeze({
+    profile,
+    maxEntries,
+    get size() {
+      return state.entries.size
+    },
+    clear() {
+      if (!state.disposed)
+        state.entries.clear()
+    },
+    dispose() {
+      if (state.disposed)
+        return
+      state.disposed = true
+      state.entries.clear()
+    },
+  })
+  cacheStates.set(cache, state)
   return cache
 }
 
@@ -195,6 +216,8 @@ function requireCacheState(cache: RuntimeModelResolutionCache): CacheState {
   const state = cacheStates.get(cache)
   if (!state)
     throw new Error('RUNTIME_MODEL_CACHE_INVALID')
+  if (state.disposed)
+    throw new Error('RUNTIME_MODEL_CACHE_DISPOSED')
   return state
 }
 

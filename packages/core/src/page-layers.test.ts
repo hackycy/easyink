@@ -21,8 +21,20 @@ describe('page layers', () => {
     })
 
     expect(placements).toEqual([
-      { nodeId: 'page', pageIndex: 0 },
-      { nodeId: 'page', pageIndex: 1 },
+      {
+        nodeId: 'page',
+        pageIndex: 0,
+        virtualNodeId: 'page__p0',
+        virtualInstanceKey: '["page-repeat-instance","page",0]',
+        virtualFragmentId: '["page-repeat-fragment","page",0]',
+      },
+      {
+        nodeId: 'page',
+        pageIndex: 1,
+        virtualNodeId: 'page__p1',
+        virtualInstanceKey: '["page-repeat-instance","page",1]',
+        virtualFragmentId: '["page-repeat-fragment","page",1]',
+      },
     ])
     expect(Object.isFrozen(placements)).toBe(true)
     expect(placements.every(Object.isFrozen)).toBe(true)

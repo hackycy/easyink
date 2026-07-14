@@ -20,10 +20,11 @@ import type {
 } from './types'
 import type { ViewerHost } from './viewer-host'
 import { snapshotViewerTreePolicy } from '@easyink/browser-dom'
-import { createInternalHooks, createLayoutConstraintKey, createNonFragmentingMaterialPlans, FontManager, freezeMaterialFragmentPlan, freezeMaterialLayoutPlan, loadDocumentWithProfile, MeasureService, planRepeatedOverlays, runLayoutPipeline, runPagination, VIEWER_TREE_ABSOLUTE_MAX_NODES, walkMaterialNodes } from '@easyink/core'
+import { createInternalHooks, createLayoutConstraintKey, createNonFragmentingMaterialPlans, FontManager, freezeMaterialLayoutPlan, loadDocumentWithProfile, MeasureService, planRepeatedOverlays, runLayoutPipeline, runPagination, VIEWER_TREE_ABSOLUTE_MAX_NODES, walkMaterialNodes } from '@easyink/core'
 import { cloneJsonValue, deepClone, deepFreezeJsonValue, UNIT_FACTOR } from '@easyink/shared'
 import { applyBindingsToProps, projectBindings, walkProfileMaterialNodes } from './binding-projector'
 import { resolveConditionalSchema } from './conditional-schema'
+import { resolveEffectiveOutputStates } from './effective-output-state'
 import { collectFontFamilies, loadAndInjectFonts } from './font-loader'
 import { createDefaultLayoutRuntime } from './layout-runtime'
 import { ProfileMaterialRuntime } from './material-runtime'
@@ -75,6 +76,7 @@ export class ViewerRuntime {
   private _host?: ViewerHost
   private _renderedPageMetrics: ViewerPageMetrics[] = []
   private _destroyed = false
+  private _destroyPromise?: Promise<void>
   private _emittingHookFailure = false
   private _pageVirtualizer?: PageDomVirtualizer
   private _operation = 0
@@ -135,7 +137,11 @@ export class ViewerRuntime {
       },
       preparedCollections: options.preparedCollections,
       reportDiagnostic: diagnostic => this.emitRuntimeDiagnostic(diagnostic),
-      prepareResources: (input, signal) => this.prepareLayoutResources(input.document, signal),
+      prepareResources: (input, signal) => this.prepareLayoutResources(
+        input.document,
+        signal,
+        input.reportDiagnostic ?? (diagnostic => this.emitRuntimeDiagnostic(diagnostic)),
+      ),
     })
   }
 
@@ -147,6 +153,7 @@ export class ViewerRuntime {
     this.ensureNotDestroyed()
     const data = snapshotInlineData(input.data ?? {}, this._performanceBudget)
     const loaded = loadDocumentWithProfile(input.schema, this._options.profile)
+    const document = snapshotCanonicalDocument(loaded.schema, this._options.profile)
     const documentRevision = this.requireNextRevision(
       input.documentRevision,
       this._requested.documentRevision,
@@ -162,7 +169,7 @@ export class ViewerRuntime {
       ...loaded.diagnostics.map(loadDiagnosticToViewer),
     ])
     const candidate: ViewerInputState = Object.freeze({
-      document: loaded.schema,
+      document,
       nodeStates: snapshotNodeStates(loaded.nodeStates),
       data,
       documentRevision,
@@ -170,7 +177,6 @@ export class ViewerRuntime {
       diagnostics,
       ...(input.onDiagnostic ? { onDiagnostic: input.onDiagnostic } : {}),
     })
-    this._diagnosticHandler = input.onDiagnostic
     this._requested = candidate
     this._requestedDocumentRevision = documentRevision
     this._requestedDataRevision = dataRevision
@@ -377,8 +383,8 @@ export class ViewerRuntime {
         documentRevision: candidate.documentRevision,
         data: candidate.data,
         dataRevision: candidate.dataRevision,
+        reportDiagnostic: diagnostic => this.emitCandidateDiagnostic(candidate, diagnostic),
       }, task.signal)
-      committedPlan = commitRepeatedPageInstances(candidate, committedPlan, this._options.profile)
     }
     catch (error) {
       if (!this._tasks.isCurrent(task.generation))
@@ -443,7 +449,7 @@ export class ViewerRuntime {
     if (!candidate.document)
       throw new Error('No schema loaded. Call open() first.')
     const facetDiagnostics = await this._materials.prepare(
-      collectMaterialTypes(candidate.document, this._options.profile),
+      collectPreparedMaterialTypes(candidate, this._options.profile),
     )
     if (!this._tasks.isCurrent(task.generation))
       return
@@ -499,13 +505,17 @@ export class ViewerRuntime {
     return virtualizer
   }
 
-  private async prepareLayoutResources(document: DocumentSchema, signal: AbortSignal): Promise<number> {
+  private async prepareLayoutResources(
+    document: DocumentSchema,
+    signal: AbortSignal,
+    reportDiagnostic: (diagnostic: unknown) => void,
+  ): Promise<number> {
     throwIfAborted(signal)
     const families = collectFontFamilies(document, this._options.profile)
     if (this._host && this._fontManager.provider) {
       const diagnostics = await loadAndInjectFonts(families, this._fontManager, this._host.document)
       throwIfAborted(signal)
-      diagnostics.forEach(diagnostic => this.emitDiagnostic(diagnostic))
+      diagnostics.forEach(reportDiagnostic)
     }
     for (const family of families) {
       const key = `font:${family}`
@@ -516,15 +526,11 @@ export class ViewerRuntime {
   }
 
   private emitRuntimeDiagnostic(value: unknown): void {
-    const detail = snapshotDiagnosticDetail(value)
-    this.emitDiagnostic({
-      category: 'viewer',
-      severity: 'warning',
-      code: readDiagnosticCode(detail),
-      message: readDiagnosticMessage(detail),
-      detail,
-      scope: 'material',
-    })
+    this.emitDiagnostic(runtimeDiagnosticToViewer(value))
+  }
+
+  private emitCandidateDiagnostic(candidate: ViewerInputState, value: unknown): void {
+    candidate.onDiagnostic?.(runtimeDiagnosticToViewer(value))
   }
 
   async print(options: ViewerPrintOptions = {}): Promise<void> {
@@ -700,11 +706,16 @@ export class ViewerRuntime {
     }
   }
 
-  async destroy(): Promise<void> {
-    if (this._destroyed)
-      return
+  destroy(): Promise<void> {
+    if (this._destroyPromise)
+      return this._destroyPromise
     this._destroyed = true
     this._tasks.dispose()
+    this._destroyPromise = Promise.resolve().then(() => this.finishDestroy())
+    return this._destroyPromise
+  }
+
+  private async finishDestroy(): Promise<void> {
     ++this._operation
     const diagnostics: ViewerDiagnosticEvent[] = []
     try {
@@ -1193,10 +1204,25 @@ function resolveRepeatedElementLocalY(node: MaterialNode, pageHeight: number): n
   return localY < 0 ? localY + pageHeight : localY
 }
 
-function collectMaterialTypes(schema: DocumentSchema, profile: ViewerOptions['profile']): string[] {
-  const types: string[] = []
-  walkMaterialNodes(schema, profile, node => types.push(node.type))
-  return types
+function collectPreparedMaterialTypes(
+  candidate: ViewerInputState,
+  profile: ViewerOptions['profile'],
+): string[] {
+  if (!candidate.document)
+    return []
+  const outputStates = resolveEffectiveOutputStates(
+    candidate.document.elements,
+    candidate.data as Record<string, unknown>,
+    profile,
+  )
+  const types = new Set<string>()
+  walkMaterialNodes(candidate.document, profile, (node) => {
+    if (candidate.nodeStates.get(node.id)?.status === 'ready'
+      && outputStates.get(node.id)?.shouldMeasure === true) {
+      types.add(node.type)
+    }
+  })
+  return [...types]
 }
 
 function disposeDiagnostic(error: unknown): ViewerDiagnosticEvent {
@@ -1246,6 +1272,32 @@ function snapshotInlineData(
   return deepFreezeJsonValue(copy) as Record<string, unknown>
 }
 
+function snapshotCanonicalDocument(
+  document: DocumentSchema,
+  profile: ViewerOptions['profile'],
+): DocumentSchema {
+  const normalized = copyDefinedJson(document)
+  const copy = cloneJsonValue(normalized as never, {
+    maxDepth: profile.admissionBudget.maxDepth,
+    maxNodes: profile.admissionBudget.maxJsonNodes,
+    maxStringBytes: profile.admissionBudget.maxStringBytes,
+  })
+  return deepFreezeJsonValue(copy) as DocumentSchema
+}
+
+function copyDefinedJson(value: unknown): unknown {
+  if (Array.isArray(value))
+    return value.map(copyDefinedJson)
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value)
+      .filter(([, child]) => child !== undefined)
+      .map(([key, child]) => [key, copyDefinedJson(child)]))
+  }
+  if (value === undefined)
+    throw new Error('VIEWER_CANONICAL_DOCUMENT_INVALID')
+  return value
+}
+
 function initialViewerInputState(): ViewerInputState {
   return Object.freeze({
     nodeStates: createReadonlyMap(new Map()),
@@ -1277,117 +1329,6 @@ function measureTextDeterministically(input: MaterialTextMeasureInput): Readonly
   return Object.freeze({
     width: Math.min(input.availableWidth, unwrappedWidth),
     height: lineHeight * lines,
-  })
-}
-
-function commitRepeatedPageInstances(
-  candidate: ViewerInputState,
-  plan: CommittedPagePlan,
-  profile: ViewerOptions['profile'],
-): CommittedPagePlan {
-  const document = candidate.document
-  if (!document || plan.pages.length === 0)
-    return plan
-  const repeated = document.elements.filter(node =>
-    profile.getManifest(node.type)?.common.layout.pageRepeat === 'every-output-page',
-  )
-  if (repeated.length === 0)
-    return plan
-
-  const repeatedIds = new Set(repeated.map(node => node.id))
-  const instances = new Map(plan.runtimeInstances)
-  const pages = plan.pages.map((page) => {
-    const fragments = page.fragments.filter(fragment => !repeatedIds.has(fragment.node.id))
-    for (const sourceNode of repeated) {
-      const committedSource = plan.runtimeInstances.get(sourceNode.id)
-      const source = committedSource?.node.type === sourceNode.type
-        ? committedSource
-        : createQuarantinedRepeatedSource(candidate, sourceNode)
-      const instanceKey = JSON.stringify(['page-repeat', source.instanceKey, page.index])
-      const nodeId = `${source.nodeId}__p${page.index}`
-      const localY = resolveRepeatedElementLocalY(source.node as MaterialNode, page.height)
-      const y = page.yOffset + localY
-      const node = deepFreezeJsonValue(cloneJsonValue({
-        ...source.node,
-        id: nodeId,
-        y,
-      } as never)) as unknown as Readonly<MaterialNode>
-      const layoutPlan = freezeMaterialLayoutPlan({
-        ...source.layoutPlan,
-        instanceKey,
-        nodeId,
-        borderBox: { ...source.layoutPlan.borderBox, y },
-        contentBox: { ...source.layoutPlan.contentBox, y },
-      })
-      const sourceFragment = source.embeddedFragmentPlan
-      if (!sourceFragment)
-        continue
-      const fragmentPlan = freezeMaterialFragmentPlan({
-        ...sourceFragment,
-        id: JSON.stringify(['page-repeat-fragment', instanceKey, page.index]),
-        sourceInstanceKey: instanceKey,
-        sourceNodeId: nodeId,
-        box: { ...sourceFragment.box, y },
-      })
-      const resolvedModel = deepFreezeJsonValue(cloneJsonValue({
-        ...source.resolvedModel,
-        __pageNumber: page.index + 1,
-        __totalPages: plan.pages.length,
-      } as never)) as Readonly<Record<string, unknown>>
-      const instance = Object.freeze({
-        ...source,
-        instanceKey,
-        nodeId,
-        node,
-        resolvedModel,
-        layoutPlan,
-        embeddedFragmentPlan: fragmentPlan,
-      })
-      instances.set(instanceKey, instance)
-      fragments.push(Object.freeze({ node, plan: layoutPlan, fragmentPlan }))
-    }
-    return Object.freeze({ ...page, fragments: Object.freeze(fragments) })
-  })
-  return Object.freeze({
-    ...plan,
-    pages: Object.freeze(pages),
-    runtimeInstances: createReadonlyMap(instances),
-  })
-}
-
-function createQuarantinedRepeatedSource(
-  candidate: ViewerInputState,
-  sourceNode: MaterialNode,
-): import('./layout-runtime').RuntimeMaterialInstancePlan {
-  const document = candidate.document!
-  const facts = createNonFragmentingMaterialPlans({
-    instanceKey: sourceNode.id,
-    nodeId: sourceNode.id,
-    nodeRevision: candidate.documentRevision,
-    constraintKey: createLayoutConstraintKey({
-      availableWidth: sourceNode.width,
-      availableHeight: document.page.height,
-      unit: document.unit,
-      writingMode: 'horizontal-tb',
-    }),
-    pageIndex: 0,
-    borderBox: { x: sourceNode.x, y: sourceNode.y, width: sourceNode.width, height: sourceNode.height },
-    fragmentBox: { x: sourceNode.x, y: sourceNode.y, width: sourceNode.width, height: sourceNode.height },
-  })
-  const node = deepFreezeJsonValue(cloneJsonValue(sourceNode as never)) as unknown as Readonly<MaterialNode>
-  const resolvedModel = deepFreezeJsonValue(cloneJsonValue(sourceNode.model as never)) as Readonly<Record<string, unknown>>
-  return Object.freeze({
-    instanceKey: sourceNode.id,
-    nodeId: sourceNode.id,
-    node,
-    scopeKey: 'document',
-    scopeData: candidate.data,
-    status: 'quarantined',
-    diagnostic: Object.freeze({ code: 'MATERIAL_NODE_QUARANTINED' }),
-    resolvedModel,
-    layoutPlan: facts.layoutPlan,
-    embeddedFragmentPlan: facts.fragmentPlan,
-    slotChildren: Object.freeze({}),
   })
 }
 
@@ -1568,6 +1509,18 @@ function layoutDiagnosticToViewer(value: unknown): ViewerDiagnosticEvent {
   return {
     category: 'viewer',
     severity: readDiagnosticSeverity(detail),
+    code: readDiagnosticCode(detail),
+    message: readDiagnosticMessage(detail),
+    detail,
+    scope: 'material',
+  }
+}
+
+function runtimeDiagnosticToViewer(value: unknown): ViewerDiagnosticEvent {
+  const detail = snapshotDiagnosticDetail(value)
+  return {
+    category: 'viewer',
+    severity: 'warning',
     code: readDiagnosticCode(detail),
     message: readDiagnosticMessage(detail),
     detail,
