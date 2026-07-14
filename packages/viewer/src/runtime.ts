@@ -1575,7 +1575,9 @@ function mountCommittedPage(input: {
       })
       if (input.diagnostics.slice(diagnosticCount).some(diagnostic =>
         diagnostic.nodeId === fragment.node.id
-        && (diagnostic.code === 'VIEWER_MATERIAL_RENDER_ERROR' || diagnostic.code === 'VIEWER_MATERIAL_MOUNT_ERROR'),
+        && (diagnostic.code === 'VIEWER_MATERIAL_RENDER_ERROR'
+          || diagnostic.code === 'VIEWER_MATERIAL_MOUNT_ERROR'
+          || diagnostic.code === 'VIEWER_RENDER_TREE_BUDGET_EXCEEDED'),
       )) {
         wrapper.setAttribute('data-render-error', 'true')
       }

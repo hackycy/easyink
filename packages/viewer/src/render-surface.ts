@@ -252,16 +252,36 @@ interface CommittedMaterialRenderState {
 
 interface CommittedRenderBudgetController {
   readonly token: MaterialRenderBudgetToken
-  readonly snapshot: () => number
-  readonly restore: (snapshot: number) => void
+  readonly snapshot: () => CommittedRenderBudgetSnapshot
+  readonly restore: (snapshot: CommittedRenderBudgetSnapshot) => void
   readonly runWithIdentity: <T>(identity: CommittedRenderBudgetIdentity, callback: () => T) => T
-  readonly auditTree: (identity: CommittedRenderBudgetIdentity, tree: ViewerRenderTree, snapshot: number) => void
+  readonly reserveFor: (identity: CommittedRenderBudgetIdentity, kind: MaterialRenderNodeKind, count: number) => void
+  readonly reserveFallback: (identity: CommittedRenderBudgetIdentity) => CommittedFallbackReservation | undefined
+  readonly auditTree: (identity: CommittedRenderBudgetIdentity, tree: ViewerRenderTree, snapshot: CommittedRenderBudgetSnapshot) => void
 }
 
 interface CommittedRenderBudgetIdentity {
   readonly instanceKey: string
   readonly nodeId: string
 }
+
+interface CommittedRenderBudgetSnapshot {
+  readonly sequence: number
+  readonly nodesUsed: number
+}
+
+interface CommittedFallbackReservation {
+  readonly consume: () => void
+  readonly release: () => void
+}
+
+class RenderBudgetAuditExceeded extends Error {
+  constructor(readonly observed: number) {
+    super('VIEWER_RENDER_TREE_BUDGET_AUDIT_EXCEEDED')
+  }
+}
+
+const renderBudgetQuarantines = new WeakMap<object, Set<string>>()
 
 export function mountCommittedMaterial(
   host: HTMLElement,
@@ -290,6 +310,7 @@ function mountCommittedInstance(
   fragmentPlan: MaterialFragmentPlan,
   state: CommittedMaterialRenderState,
   ancestors: ReadonlySet<string>,
+  fallbackReservation?: CommittedFallbackReservation,
 ): ViewerTreeMount {
   const { input } = state
   const instance = input.committedPlan.runtimeInstances.get(instanceKey)
@@ -302,8 +323,10 @@ function mountCommittedInstance(
     return mountCommittedSentinel(host, state, '[material unavailable]', {
       instanceKey,
       nodeId: instance?.nodeId ?? fragmentPlan.sourceNodeId,
-    })
+    }, fallbackReservation)
   }
+  if (isRenderBudgetQuarantined(input.committedPlan, instanceKey))
+    return mountCommittedSentinel(host, state, '[material unavailable]', instance, fallbackReservation)
   if (instance.status === 'quarantined') {
     reportCommittedDiagnostic(state, {
       code: 'VIEWER_MATERIAL_INSTANCE_QUARANTINED',
@@ -311,7 +334,7 @@ function mountCommittedInstance(
       nodeId: instance.nodeId,
       detail: instance.diagnostic,
     })
-    return mountCommittedSentinel(host, state, '[material quarantined]', instance)
+    return mountCommittedSentinel(host, state, '[material quarantined]', instance, fallbackReservation)
   }
   if (ancestors.has(instanceKey)) {
     reportCommittedDiagnostic(state, {
@@ -319,7 +342,7 @@ function mountCommittedInstance(
       message: `Committed slot cycle reached instance "${instanceKey}"`,
       nodeId: instance.nodeId,
     })
-    return mountCommittedSentinel(host, state, '[slot unavailable]', instance)
+    return mountCommittedSentinel(host, state, '[slot unavailable]', instance, fallbackReservation)
   }
 
   const facetCapabilities = input.materials.getCapabilities(instance.node.type)
@@ -375,21 +398,23 @@ function mountCommittedInstance(
     state.renderBudget.restore(budgetSnapshot)
     if (!isRenderBudgetExceeded(error))
       reportCommittedFailure(state, 'VIEWER_MATERIAL_RENDER_ERROR', instance, error)
-    return mountCommittedSentinel(host, state, '[material unavailable]', instance)
+    return mountCommittedSentinel(host, state, '[material unavailable]', instance, fallbackReservation)
   }
 
   try {
-    return mountMaterialTree(host, tree, {
+    const mount = mountMaterialTree(host, tree, {
       document: host.ownerDocument,
       policy: input.browserDom?.policy,
       capabilities,
       maxNodes: state.maxNodes,
     })
+    fallbackReservation?.release()
+    return mount
   }
   catch (error) {
     state.renderBudget.restore(budgetSnapshot)
     reportCommittedFailure(state, 'VIEWER_MATERIAL_MOUNT_ERROR', instance, error)
-    return mountCommittedSentinel(host, state, '[material unavailable]', instance)
+    return mountCommittedSentinel(host, state, '[material unavailable]', instance, fallbackReservation)
   }
 }
 
@@ -430,13 +455,31 @@ function renderCommittedSlot(
       trees.push(viewerText('[slot unavailable]'))
       continue
     }
-    state.renderBudget.token.reserveNodes('imperative', 1)
+    const fallbackReservation = state.renderBudget.reserveFallback(child)
+    if (!fallbackReservation)
+      break
+    if (isRenderBudgetQuarantined(state.input.committedPlan, childInstanceKey)) {
+      fallbackReservation.consume()
+      trees.push(viewerText('[material unavailable]'))
+      break
+    }
+    try {
+      state.renderBudget.reserveFor(child, 'imperative', 1)
+    }
+    catch (error) {
+      if (!isRenderBudgetExceeded(error))
+        throw error
+      fallbackReservation.consume()
+      trees.push(viewerText('[material unavailable]'))
+      continue
+    }
     trees.push(createBrowserDomHostMount(ownerCapabilities, childHost => mountCommittedInstance(
       childHost,
       childInstanceKey,
       child.embeddedFragmentPlan!,
       state,
       ancestors,
+      fallbackReservation,
     )))
   }
   return viewerFragment(trees)
@@ -461,9 +504,13 @@ function mountCommittedSentinel(
   state: CommittedMaterialRenderState,
   message: string,
   identity: CommittedRenderBudgetIdentity,
+  fallbackReservation?: CommittedFallbackReservation,
 ): ViewerTreeMount {
   const tree = viewerText(message)
-  state.renderBudget.runWithIdentity(identity, () => state.renderBudget.token.reserveNodes('text', 1))
+  if (fallbackReservation)
+    fallbackReservation.consume()
+  else
+    state.renderBudget.reserveFor(identity, 'text', 1)
   const capabilities = createBrowserDomFallbackCapabilities({
     document: host.ownerDocument,
     policy: state.input.browserDom?.policy,
@@ -506,40 +553,58 @@ function createCommittedRenderBudget(
   input: MountCommittedMaterialOptions,
 ): CommittedRenderBudgetController {
   let nodesUsed = 0
+  let nextSequence = 0
   let currentIdentity: CommittedRenderBudgetIdentity | undefined
   let lastIdentity: CommittedRenderBudgetIdentity | undefined
+  const reservations: Array<{ sequence: number, count: number, active: boolean }> = []
+  const reserve = (identity: CommittedRenderBudgetIdentity, kind: MaterialRenderNodeKind, count: number): typeof reservations[number] | undefined => {
+    if (!['element', 'text', 'fragment', 'markup', 'imperative'].includes(kind))
+      throw new Error('VIEWER_RENDER_NODE_KIND_INVALID')
+    if (!Number.isSafeInteger(count) || count < 0)
+      throw new Error('VIEWER_RENDER_BUDGET_RESERVATION_INVALID')
+    if (count > maxNodes - nodesUsed) {
+      reportCommittedBudgetExceeded(input, identity, {
+        kind,
+        used: nodesUsed,
+        requested: count,
+        limit: maxNodes,
+      })
+      throw new Error('VIEWER_RENDER_TREE_BUDGET_EXCEEDED')
+    }
+    if (count === 0)
+      return undefined
+    const reservation = { sequence: ++nextSequence, count, active: true }
+    reservations.push(reservation)
+    nodesUsed += count
+    return reservation
+  }
   const token: MaterialRenderBudgetToken = Object.freeze({
     maxNodes,
     get nodesUsed() {
       return nodesUsed
     },
     reserveNodes(kind: MaterialRenderNodeKind, count: number): void {
-      if (!['element', 'text', 'fragment', 'markup', 'imperative'].includes(kind))
-        throw new Error('VIEWER_RENDER_NODE_KIND_INVALID')
-      if (!Number.isSafeInteger(count) || count < 0)
-        throw new Error('VIEWER_RENDER_BUDGET_RESERVATION_INVALID')
-      if (count > maxNodes - nodesUsed) {
-        const identity = currentIdentity ?? lastIdentity
-        if (!identity)
-          throw new Error('VIEWER_RENDER_BUDGET_IDENTITY_REQUIRED')
-        reportCommittedBudgetExceeded(input, identity, {
-          kind,
-          used: nodesUsed,
-          requested: count,
-          limit: maxNodes,
-        })
-        throw new Error('VIEWER_RENDER_TREE_BUDGET_EXCEEDED')
-      }
-      nodesUsed += count
+      const identity = currentIdentity ?? lastIdentity
+      if (!identity)
+        throw new Error('VIEWER_RENDER_BUDGET_IDENTITY_REQUIRED')
+      reserve(identity, kind, count)
     },
   })
   return Object.freeze({
     token,
-    snapshot: () => nodesUsed,
-    restore(snapshot: number): void {
-      if (!Number.isSafeInteger(snapshot) || snapshot < 0 || snapshot > nodesUsed)
+    snapshot: () => Object.freeze({ sequence: nextSequence, nodesUsed }),
+    restore(snapshot: CommittedRenderBudgetSnapshot): void {
+      if (!Number.isSafeInteger(snapshot.sequence) || snapshot.sequence < 0
+        || !Number.isSafeInteger(snapshot.nodesUsed) || snapshot.nodesUsed < 0) {
         throw new Error('VIEWER_RENDER_BUDGET_SNAPSHOT_INVALID')
-      nodesUsed = snapshot
+      }
+      while (reservations.length > 0 && reservations.at(-1)!.sequence > snapshot.sequence) {
+        const reservation = reservations.pop()!
+        if (reservation.active) {
+          reservation.active = false
+          nodesUsed -= reservation.count
+        }
+      }
     },
     runWithIdentity<T>(identity: CommittedRenderBudgetIdentity, callback: () => T): T {
       const previous = currentIdentity
@@ -552,13 +617,64 @@ function createCommittedRenderBudget(
         currentIdentity = previous
       }
     },
-    auditTree(identity: CommittedRenderBudgetIdentity, tree: ViewerRenderTree, snapshot: number): void {
-      let observed = 0
-      assertViewerRenderTree(tree, {
-        maxNodes: VIEWER_TREE_ABSOLUTE_MAX_NODES,
-        onVisitNode: () => { observed++ },
+    reserveFor(identity: CommittedRenderBudgetIdentity, kind: MaterialRenderNodeKind, count: number): void {
+      reserve(identity, kind, count)
+    },
+    reserveFallback(identity: CommittedRenderBudgetIdentity): CommittedFallbackReservation | undefined {
+      let reservation: typeof reservations[number] | undefined
+      try {
+        reservation = reserve(identity, 'text', 1)
+      }
+      catch (error) {
+        if (isRenderBudgetExceeded(error))
+          return undefined
+        throw error
+      }
+      if (!reservation)
+        throw new Error('VIEWER_RENDER_FALLBACK_RESERVATION_INVALID')
+      let settled = false
+      return Object.freeze({
+        consume(): void {
+          settled = true
+        },
+        release(): void {
+          if (settled)
+            return
+          settled = true
+          if (reservation.active) {
+            reservation.active = false
+            nodesUsed -= reservation.count
+          }
+        },
       })
-      const reserved = nodesUsed - snapshot
+    },
+    auditTree(identity: CommittedRenderBudgetIdentity, tree: ViewerRenderTree, snapshot: CommittedRenderBudgetSnapshot): void {
+      let observed = 0
+      const proofLimit = maxNodes - snapshot.nodesUsed
+      try {
+        assertViewerRenderTree(tree, {
+          maxNodes: VIEWER_TREE_ABSOLUTE_MAX_NODES,
+          onVisitNode: () => {
+            observed++
+            if (observed > proofLimit)
+              throw new RenderBudgetAuditExceeded(observed)
+          },
+        })
+      }
+      catch (error) {
+        if (!(error instanceof RenderBudgetAuditExceeded))
+          throw error
+        const reserved = nodesUsed - snapshot.nodesUsed
+        reportCommittedBudgetExceeded(input, identity, {
+          kind: 'fragment',
+          used: nodesUsed,
+          requested: Math.max(1, error.observed - reserved),
+          limit: maxNodes,
+          observed: error.observed,
+        })
+        throw new Error('VIEWER_RENDER_TREE_BUDGET_EXCEEDED')
+      }
+      const reserved = nodesUsed - snapshot.nodesUsed
       if (observed > reserved) {
         const previous = currentIdentity
         currentIdentity = identity
@@ -581,8 +697,11 @@ function reportCommittedBudgetExceeded(
     used: number
     requested: number
     limit: number
+    observed?: number
   }>,
 ): void {
+  if (!markRenderBudgetQuarantined(input.committedPlan, identity.instanceKey))
+    return
   input.diagnostics.push({
     category: 'viewer',
     severity: 'error',
@@ -598,6 +717,22 @@ function reportCommittedBudgetExceeded(
       ...detail,
     },
   })
+}
+
+function markRenderBudgetQuarantined(plan: object, instanceKey: string): boolean {
+  let quarantined = renderBudgetQuarantines.get(plan)
+  if (!quarantined) {
+    quarantined = new Set()
+    renderBudgetQuarantines.set(plan, quarantined)
+  }
+  if (quarantined.has(instanceKey))
+    return false
+  quarantined.add(instanceKey)
+  return true
+}
+
+function isRenderBudgetQuarantined(plan: object, instanceKey: string): boolean {
+  return renderBudgetQuarantines.get(plan)?.has(instanceKey) === true
 }
 
 function isRenderBudgetExceeded(error: unknown): boolean {

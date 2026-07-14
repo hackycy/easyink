@@ -4,18 +4,23 @@ import { createLayoutConstraintKey, createNonFragmentingMaterialPlans, viewerEle
 import { buildSegments, getFlowRowProps, measureFlowRows, resolveFlowRows } from './rendering'
 
 export function renderFlowRow(node: MaterialNode, context: ViewerRenderContext) {
+  let props = getFlowRowProps(node)
+  let segments = buildSegments(props.columns)
   const model = resolveFlowRows(node, {
     data: context.data ?? {},
     nodeId: node.id,
     reportDiagnostic: context.reportDiagnostic,
+  }, {
+    beforeRows(rowCount, resolvedProps) {
+      props = resolvedProps
+      segments = buildSegments(props.columns)
+      const cellsPerRow = segments.reduce((sum, segment) => sum + segment.columns.length, 0)
+      const inlineWrappersPerRow = segments.filter(segment => segment.kind !== 'block').length
+      context.renderBudget.reserveNodes('element', 1 + rowCount * (1 + cellsPerRow * 2 + inlineWrappersPerRow))
+      context.renderBudget.reserveNodes('text', rowCount * cellsPerRow)
+    },
   })
-  const props = getFlowRowProps(node)
   const unit = context.unit ?? 'mm'
-  const segments = buildSegments(props.columns)
-  const cellsPerRow = segments.reduce((sum, segment) => sum + segment.columns.length, 0)
-  const inlineWrappersPerRow = segments.filter(segment => segment.kind !== 'block').length
-  context.renderBudget.reserveNodes('element', 1 + model.rows.length * (1 + cellsPerRow * 2 + inlineWrappersPerRow))
-  context.renderBudget.reserveNodes('text', model.rows.length * cellsPerRow)
   const children = model.rows.map(row => viewerElement('div', { style: {
     'display': 'flex',
     'flex-direction': 'column',
@@ -78,7 +83,16 @@ export function measureFlowRow(node: MaterialNode, context: ViewerMeasureContext
 export const flowRowViewerLayout: MaterialViewerLayoutFacet = Object.freeze({
   async measure(request: MaterialMeasureRequest) {
     const node = Object.freeze({ ...request.node, model: request.resolvedModel }) as MaterialNode
-    const measured = measureFlowRow(node, { data: request.scope.data, unit: request.constraints.unit })
+    const model = resolveFlowRows(node, {
+      data: request.scope.data as Record<string, unknown>,
+      nodeId: node.id,
+    }, {
+      beforeRows: count => request.budget.reserveRuntimeRows(count),
+    })
+    const measured = {
+      width: node.width,
+      height: Math.max(node.height, measureFlowRows(node, model)),
+    }
     return createNonFragmentingMaterialPlans({
       instanceKey: request.instanceKey,
       nodeId: request.node.id,

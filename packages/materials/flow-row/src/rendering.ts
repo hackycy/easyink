@@ -36,6 +36,10 @@ export interface FlowRuntimeContext {
   reportDiagnostic?: (diagnostic: { code: string, message: string, severity: 'warning', nodeId?: string, cause?: unknown }) => void
 }
 
+export interface FlowRowResolutionHooks {
+  beforeRows?: (rowCount: number, props: FlowRowProps) => void
+}
+
 export function getFlowRowProps(node: MaterialNode): FlowRowProps {
   const raw = getNodeModel<Partial<FlowRowProps>>(node)
   return {
@@ -109,19 +113,30 @@ export function isFlowRowRuntimeRepeating(node: MaterialNode): boolean {
   return Boolean(inferCollectionPath(node, getFlowRowProps(node)))
 }
 
-export function resolveFlowRows(node: MaterialNode, context: FlowRuntimeContext): FlowRowRenderModel {
+export function resolveFlowRows(
+  node: MaterialNode,
+  context: FlowRuntimeContext,
+  hooks: FlowRowResolutionHooks = {},
+): FlowRowRenderModel {
   const props = getFlowRowProps(node)
   const collectionPath = inferCollectionPath(node, props)
   const records = resolveRecords(node, props, collectionPath, context.data)
+  hooks.beforeRows?.(records.length, props)
 
-  return {
-    rows: records.map(record => props.columns.map((column, index) => ({
+  const rows: FlowRenderCell[][] = []
+  for (let recordIndex = 0; recordIndex < records.length; recordIndex++) {
+    const candidate = records[recordIndex]
+    const record = typeof candidate === 'object' && candidate !== null
+      ? candidate as Record<string, unknown>
+      : {}
+    rows.push(props.columns.map((column, index) => ({
       column,
       index,
       binding: getFlowColumnBinding(node, column),
       text: resolveColumnText(node, column, record, collectionPath, context),
-    }))),
+    })))
   }
+  return { rows }
 }
 
 function resolveRecords(
@@ -129,7 +144,7 @@ function resolveRecords(
   props: FlowRowProps,
   collectionPath: string | undefined,
   data: Record<string, unknown>,
-): Record<string, unknown>[] {
+): readonly unknown[] {
   if (!collectionPath)
     return [data]
 
@@ -141,7 +156,7 @@ function resolveRecords(
   if (Array.isArray(source)) {
     if (source.length === 0)
       return [{}]
-    return source.map(item => typeof item === 'object' && item !== null ? item as Record<string, unknown> : {})
+    return source
   }
 
   const hasColumnCollectionBindings = props.columns.some(column =>

@@ -1229,7 +1229,7 @@ describe('measurement budgets and flattening', () => {
     expect(layout).toMatchObject({ runtimeRowsUsed: 2, layoutFactsUsed: 3 })
     expect(() => layout.reserveRuntimeRows(1)).toThrow('VIEWER_RUNTIME_ROW_BUDGET_EXCEEDED')
     expect(layout.runtimeRowsUsed).toBe(2)
-    expect(() => layout.reserveLayoutFacts('cell', 1)).toThrow('VIEWER_LAYOUT_FACT_BUDGET_EXCEEDED')
+    expect(() => layout.reserveLayoutFacts('cell', 1)).toThrow('VIEWER_RUNTIME_ROW_BUDGET_EXCEEDED')
     expect(layout.layoutFactsUsed).toBe(3)
 
     const render = createMaterialRenderBudgetToken({

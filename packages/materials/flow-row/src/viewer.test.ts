@@ -1,12 +1,63 @@
-import type { MaterialRenderBudgetToken, ViewerElementTree, ViewerRenderContext, ViewerRenderTree } from '@easyink/core'
+import type { MaterialMeasureRequest, MaterialRenderBudgetToken, ViewerElementTree, ViewerRenderContext, ViewerRenderTree } from '@easyink/core'
 import { createTestViewerRenderContext } from '@easyink/core/testing'
 import { describe, expect, it, vi } from 'vitest'
 import { createFlowRowNode } from './schema'
-import { measureFlowRow, renderFlowRow } from './viewer'
+import { flowRowViewerLayout, measureFlowRow, renderFlowRow } from './viewer'
 
 const context = createTestViewerRenderContext({ capabilities: {} as never }) satisfies ViewerRenderContext
 
 describe('flow-row viewer', () => {
+  it('reserves authoritative runtime rows before reading record cells or building row arrays', async () => {
+    const node = createFlowRowNode({ model: { columns: [{ id: 'a', ratio: 1, textAlign: 'left', wrapMode: 'block', bindingPort: 'flow-port:a' }] } })
+    node.bindings.value = { sourceId: 's', fieldPath: 'items' }
+    node.bindings['flow-port:a'] = { sourceId: 's', fieldPath: 'items/name' }
+    let numericReads = 0
+    const records = new Proxy(Array.from({ length: 100_000 }, (_, index) => ({ name: String(index) })), {
+      get(target, property, receiver) {
+        if (typeof property === 'string' && /^(?:0|[1-9]\d*)$/.test(property))
+          numericReads++
+        return Reflect.get(target, property, receiver)
+      },
+    })
+    const reserveRuntimeRows = vi.fn((count: number) => {
+      if (count > 2)
+        throw new Error('VIEWER_RUNTIME_ROW_BUDGET_EXCEEDED')
+    })
+    const reserveLayoutFacts = vi.fn()
+    const request = {
+      mode: 'authoritative',
+      instanceKey: node.id,
+      node,
+      scope: { key: 'document', data: { items: records } },
+      resolvedModel: node.model,
+      nodeRevision: 1,
+      dataRevision: 1,
+      resourceRevision: 1,
+      constraints: { availableWidth: 100, availableHeight: 100, unit: 'mm', writingMode: 'horizontal-tb' },
+      signal: new AbortController().signal,
+      budget: {
+        maxRuntimeRows: 2,
+        maxLayoutFacts: 2,
+        runtimeRowsUsed: 0,
+        layoutFactsUsed: 0,
+        reserveRuntimeRows,
+        reserveLayoutFacts,
+      },
+      resolveBinding: vi.fn(),
+      formatBinding: vi.fn(),
+      openCollection: vi.fn(),
+      schedule: {} as never,
+      measureText: vi.fn(),
+      measureSlot: vi.fn(),
+    } as unknown as MaterialMeasureRequest
+
+    await expect(flowRowViewerLayout.measure!(request)).rejects.toThrow('VIEWER_RUNTIME_ROW_BUDGET_EXCEEDED')
+    expect(reserveRuntimeRows).toHaveBeenCalledTimes(1)
+    expect(reserveRuntimeRows).toHaveBeenCalledWith(100_000)
+    expect(reserveLayoutFacts).not.toHaveBeenCalled()
+    expect(numericReads).toBeLessThanOrEqual(3)
+  })
+
   it('reserves owned element and text nodes before building the tree', () => {
     const reserveNodes = vi.fn()
     const renderBudget: MaterialRenderBudgetToken = {

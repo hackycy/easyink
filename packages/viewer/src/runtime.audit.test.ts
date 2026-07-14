@@ -1619,7 +1619,9 @@ describe('viewer audit risk regressions', () => {
     const failingTypes = badTypes.filter(type => type !== 'throw-size')
     expect(container.querySelectorAll('[data-render-error="true"]')).toHaveLength(failingTypes.length)
     expect(diagnostics
-      .filter(item => item.code === 'VIEWER_MATERIAL_RENDER_ERROR' || item.code === 'VIEWER_MATERIAL_MOUNT_ERROR')
+      .filter(item => item.code === 'VIEWER_MATERIAL_RENDER_ERROR'
+        || item.code === 'VIEWER_MATERIAL_MOUNT_ERROR'
+        || item.code === 'VIEWER_RENDER_TREE_BUDGET_EXCEEDED')
       .map(item => item.nodeId)
       .sort())
       .toEqual(failingTypes.map(type => `${type}-node`).sort())

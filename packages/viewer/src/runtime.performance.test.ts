@@ -1,4 +1,4 @@
-import type { MaterialLayoutPlan, MaterialMeasureRequest, MaterialViewerFacet } from '@easyink/core'
+import type { MaterialLayoutPlan, MaterialMeasureRequest, MaterialViewerFacet, ViewerRenderTree } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { EffectiveOutputState } from './effective-output-state'
 import type { MaterialMeasurementBudget } from './layout-runtime'
@@ -174,19 +174,13 @@ describe('viewer performance budget primitives', () => {
     token.reserveRuntimeRows(2)
     token.reserveLayoutFacts('cell', 4)
     expect(() => token.reserveRuntimeRows(1)).toThrow('VIEWER_RUNTIME_ROW_BUDGET_EXCEEDED')
-    expect(() => token.reserveLayoutFacts('edge', 1)).toThrow('VIEWER_LAYOUT_FACT_BUDGET_EXCEEDED')
+    expect(() => token.reserveLayoutFacts('edge', 1)).toThrow('VIEWER_RUNTIME_ROW_BUDGET_EXCEEDED')
     expect(token.runtimeRowsUsed).toBe(2)
     expect(token.layoutFactsUsed).toBe(4)
-    expect(diagnostics).toEqual([
-      {
-        code: 'VIEWER_RUNTIME_ROW_BUDGET_EXCEEDED',
-        detail: { ...identity, kind: 'rows', used: 2, requested: 1, limit: 2 },
-      },
-      {
-        code: 'VIEWER_LAYOUT_FACT_BUDGET_EXCEEDED',
-        detail: { ...identity, kind: 'edge', used: 4, requested: 1, limit: 4 },
-      },
-    ])
+    expect(diagnostics).toEqual([{
+      code: 'VIEWER_RUNTIME_ROW_BUDGET_EXCEEDED',
+      detail: { ...identity, kind: 'rows', used: 2, requested: 1, limit: 2 },
+    }])
   })
 
   it('rejects invalid layout limits/counts and aborts atomically before reporting or mutation', () => {
@@ -268,6 +262,37 @@ describe('viewer performance budget primitives', () => {
     })
     expect(() => token.reserveRuntimeRows(2)).toThrow('VIEWER_RUNTIME_ROW_BUDGET_EXCEEDED')
     expect(token.runtimeRowsUsed).toBe(0)
+  })
+
+  it('keeps the first layout budget failure sticky with one diagnostic and one stable error', () => {
+    const reportDiagnostic = vi.fn()
+    const token = createMaterialLayoutBudgetToken({
+      ...identity,
+      maxRuntimeRows: 1,
+      maxLayoutFacts: 1,
+      signal: new AbortController().signal,
+      reportDiagnostic,
+    })
+    let first: unknown
+    let second: unknown
+    try {
+      token.reserveRuntimeRows(2)
+    }
+    catch (error) {
+      first = error
+    }
+    try {
+      token.reserveLayoutFacts('cell', 2)
+    }
+    catch (error) {
+      second = error
+    }
+
+    expect(first).toBeInstanceOf(Error)
+    expect(second).toBe(first)
+    expect(reportDiagnostic).toHaveBeenCalledTimes(1)
+    expect(token.runtimeRowsUsed).toBe(0)
+    expect(token.layoutFactsUsed).toBe(0)
   })
 })
 
@@ -465,6 +490,51 @@ describe('layout budget integration', () => {
     expect(harness.measureService.size).toBe(0)
   })
 
+  it.each(['return', 'abort'] as const)(
+    'contains a swallowed layout budget failure when the facet later chooses to %s',
+    async (afterCatch) => {
+      const bad = materialNode('bad', `sticky-${afterCatch}`)
+      const good = materialNode('good', 'sticky-sibling')
+      let badMeasures = 0
+      const harness = await measurementHarness({
+        facets: {
+          [`sticky-${afterCatch}`]: async (request) => {
+            badMeasures++
+            if (request.dataRevision === 7) {
+              try {
+                request.budget.reserveRuntimeRows(3)
+              }
+              catch {
+                if (afterCatch === 'abort')
+                  throw new DOMException('The operation was aborted.', 'AbortError')
+              }
+            }
+            return plan(request, 1)
+          },
+          'sticky-sibling': async request => plan(request, 1),
+        },
+        budget: measurementBudget,
+        maxEntries: 2,
+      })
+
+      const first = await harness.measureNodes(measureInput([bad, good], 7), new AbortController().signal)
+
+      expect(first.instances.get('bad')).toMatchObject({
+        status: 'quarantined',
+        diagnostic: { code: 'VIEWER_RUNTIME_ROW_BUDGET_EXCEEDED' },
+      })
+      expect(first.instances.get('good')).toMatchObject({ status: 'ready' })
+      expect(harness.reportDiagnostic).toHaveBeenCalledTimes(1)
+      expect(harness.measureService.size).toBe(1)
+
+      const recovered = await harness.measureNodes(measureInput([bad, good], 8), new AbortController().signal)
+      expect(recovered.instances.get('bad')).toMatchObject({ status: 'ready' })
+      expect(recovered.instances.get('good')).toMatchObject({ status: 'ready' })
+      expect(badMeasures).toBe(2)
+      expect(harness.measureService.size).toBe(2)
+    },
+  )
+
   it('keeps the measure cache bounded across revision churn', async () => {
     const source = materialNode('good', 'cached-layout')
     const harness = await measurementHarness({
@@ -610,7 +680,7 @@ describe('viewer budget wiring and cancellation', () => {
     expect(diagnostics).toContainEqual(expect.objectContaining({
       code: 'VIEWER_RENDER_TREE_BUDGET_EXCEEDED',
       nodeId: 'bad-render',
-      detail: {
+      detail: expect.objectContaining({
         instanceKey: 'bad-render',
         nodeId: 'bad-render',
         documentRevision: 4,
@@ -619,8 +689,60 @@ describe('viewer budget wiring and cancellation', () => {
         used: 0,
         requested: 4,
         limit: 3,
-      },
+      }),
     }))
+    await viewer.destroy()
+  })
+
+  it('stops returned-tree audit as soon as a small effective budget is proven exceeded', async () => {
+    const source = materialNode('bounded-audit', 'bounded-audit-render')
+    let childReads = 0
+    const child = viewerText('x')
+    const children = new Proxy(Array.from({ length: VIEWER_TREE_ABSOLUTE_MAX_NODES }).fill(child), {
+      get(target, property, receiver) {
+        if (typeof property === 'string' && /^(?:0|[1-9]\d*)$/.test(property))
+          childReads++
+        return Reflect.get(target, property, receiver)
+      },
+    })
+    const tree = Object.freeze({ kind: 'fragment', children }) as ViewerRenderTree
+    const manifest = createTestMaterialManifest({
+      type: source.type,
+      viewer: () => ({
+        capabilities: {},
+        extension: { render: () => ({ tree }) },
+      }),
+    })
+    const container = document.createElement('div')
+    const diagnostics: Array<{ code: string, detail?: unknown }> = []
+    const viewer = createViewer({
+      container,
+      profile: createTestCompiledMaterialProfile([manifest]),
+      browserDom: { maxNodes: 2 },
+      performanceBudget: { maxRenderTreeNodesPerMaterial: 2 },
+    })
+
+    await viewer.open({
+      schema: schema([source]),
+      documentRevision: 4,
+      dataRevision: 7,
+      onDiagnostic: diagnostic => diagnostics.push(diagnostic),
+    })
+
+    expect(childReads).toBeLessThanOrEqual(4)
+    expect(diagnostics).toContainEqual(expect.objectContaining({
+      code: 'VIEWER_RENDER_TREE_BUDGET_EXCEEDED',
+      nodeId: source.id,
+      detail: expect.objectContaining({
+        instanceKey: source.id,
+        documentRevision: 4,
+        dataRevision: 7,
+        limit: 2,
+        observed: 3,
+      }),
+    }))
+    expect(diagnostics.some(item => item.code === 'VIEWER_MATERIAL_RENDER_ERROR')).toBe(false)
+    expect(diagnostics.some(item => item.code === 'VIEWER_MATERIAL_MOUNT_ERROR')).toBe(false)
     await viewer.destroy()
   })
 })

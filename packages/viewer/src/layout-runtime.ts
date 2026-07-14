@@ -68,6 +68,13 @@ interface MaterialBudgetIdentity {
   readonly dataRevision: number
 }
 
+interface MaterialLayoutBudgetFailure {
+  readonly error: Error
+  readonly diagnostic: RuntimeBudgetDiagnostic
+}
+
+const materialLayoutBudgetFailures = new WeakMap<MaterialLayoutBudgetToken, MaterialLayoutBudgetFailure>()
+
 export interface LayoutRuntimeInput {
   readonly document: DocumentSchema
   readonly nodeStates: ReadonlyMap<string, MaterialNodeLoadState>
@@ -406,6 +413,7 @@ async function measureInstance(context: {
 
   const nodeController = createLinkedAbortController(signal)
   let budgetFailure: RuntimeBudgetDiagnostic | undefined
+  let layoutBudget: MaterialLayoutBudgetToken | undefined
   let plan: MaterialLayoutPlan
   try {
     plan = await deps.measureService.measure({
@@ -436,6 +444,7 @@ async function measureInstance(context: {
           signal: measureSignal,
           reportDiagnostic: reportBudgetDiagnostic,
         })
+        layoutBudget = budget
         const resolveBinding = createMaterialBindingResolver({
           node: nodeSnapshot,
           bindingDefinition: manifest.common.binding,
@@ -552,6 +561,7 @@ async function measureInstance(context: {
               })
             },
           }))
+          throwMaterialLayoutBudgetFailure(budget)
           throwIfAborted(signal)
           const observed = auditMaterialLayoutPlan(measuredPlan, {
             maxRuntimeRows: deps.budget.maxRuntimeRows,
@@ -583,7 +593,9 @@ async function measureInstance(context: {
     }) as MaterialLayoutPlan
   }
   catch (error) {
-    if (!budgetFailure || !isRuntimeBudgetExceeded(error))
+    const stickyFailure = layoutBudget ? readMaterialLayoutBudgetFailure(layoutBudget) : undefined
+    const diagnostic = stickyFailure?.diagnostic ?? budgetFailure
+    if (!diagnostic || (!stickyFailure && !isRuntimeBudgetExceeded(error)))
       throw error
     deps.measureService.invalidateNode(node.id)
     return createBudgetQuarantinedTree({
@@ -594,7 +606,7 @@ async function measureInstance(context: {
       scope,
       resolvedModel,
       constraintKey,
-      diagnostic: budgetFailure,
+      diagnostic,
     })
   }
   finally {
@@ -737,7 +749,11 @@ export function createMaterialLayoutBudgetToken(input: {
   assertBudgetIdentity(input)
   let runtimeRowsUsed = 0
   let layoutFactsUsed = 0
+  let token!: MaterialLayoutBudgetToken
   const reserve = (kind: 'rows' | MaterialLayoutFactKind, count: number): void => {
+    const stickyFailure = readMaterialLayoutBudgetFailure(token)
+    if (stickyFailure)
+      throw stickyFailure.error
     throwIfAborted(input.signal)
     assertLayoutReserveCount(count)
     const rows = kind === 'rows'
@@ -747,9 +763,9 @@ export function createMaterialLayoutBudgetToken(input: {
       const code = rows
         ? 'VIEWER_RUNTIME_ROW_BUDGET_EXCEEDED'
         : 'VIEWER_LAYOUT_FACT_BUDGET_EXCEEDED'
-      safeReportDiagnostic(input.reportDiagnostic, {
+      const diagnostic: RuntimeBudgetDiagnostic = Object.freeze({
         code,
-        detail: {
+        detail: Object.freeze({
           instanceKey: input.instanceKey,
           nodeId: input.nodeId,
           documentRevision: input.documentRevision,
@@ -758,16 +774,19 @@ export function createMaterialLayoutBudgetToken(input: {
           used,
           requested: count,
           limit,
-        },
+        }),
       })
-      throw new Error(code)
+      const failure = Object.freeze({ error: new Error(code), diagnostic })
+      materialLayoutBudgetFailures.set(token, failure)
+      safeReportDiagnostic(input.reportDiagnostic, diagnostic)
+      throw failure.error
     }
     if (rows)
       runtimeRowsUsed += count
     else
       layoutFactsUsed += count
   }
-  return Object.freeze({
+  token = Object.freeze({
     maxRuntimeRows: input.maxRuntimeRows,
     maxLayoutFacts: input.maxLayoutFacts,
     get runtimeRowsUsed() { return runtimeRowsUsed },
@@ -776,11 +795,27 @@ export function createMaterialLayoutBudgetToken(input: {
       reserve('rows', count)
     },
     reserveLayoutFacts(kind: MaterialLayoutFactKind, count: number): void {
+      const stickyFailure = readMaterialLayoutBudgetFailure(token)
+      if (stickyFailure)
+        throw stickyFailure.error
       if (!['row', 'cell', 'edge', 'slot', 'box', 'custom'].includes(kind))
         throw new Error('MATERIAL_LAYOUT_FACT_KIND_INVALID')
       reserve(kind, count)
     },
   })
+  return token
+}
+
+function readMaterialLayoutBudgetFailure(
+  token: MaterialLayoutBudgetToken,
+): MaterialLayoutBudgetFailure | undefined {
+  return materialLayoutBudgetFailures.get(token)
+}
+
+function throwMaterialLayoutBudgetFailure(token: MaterialLayoutBudgetToken): void {
+  const failure = readMaterialLayoutBudgetFailure(token)
+  if (failure)
+    throw failure.error
 }
 
 export function createMaterialRenderBudgetToken(input: MaterialBudgetIdentity & {
