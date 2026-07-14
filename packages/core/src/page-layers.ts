@@ -92,11 +92,16 @@ export function planRepeatedOverlays(input: {
   readonly profile: CompiledMaterialProfile
   readonly pageCount: number
   readonly paintableNodeIds: ReadonlySet<string>
-  readonly occupiedNodeIds?: ReadonlySet<string>
+  readonly occupiedNodeIds?: Iterable<string>
+  readonly occupiedInstanceKeys?: Iterable<string>
+  readonly occupiedFragmentIds?: Iterable<string>
 }): readonly RepeatedOverlayPlacement[] {
   if (!Number.isSafeInteger(input.pageCount) || input.pageCount < 0)
     throw new Error('REPEATED_OVERLAY_PAGE_COUNT_INVALID')
 
+  const occupiedNodeIds = copyOccupiedIdentities(input.occupiedNodeIds)
+  const occupiedInstanceKeys = copyOccupiedIdentities(input.occupiedInstanceKeys)
+  const occupiedFragmentIds = copyOccupiedIdentities(input.occupiedFragmentIds)
   if (input.pageCount === 0)
     return Object.freeze([])
 
@@ -110,17 +115,20 @@ export function planRepeatedOverlays(input: {
     throw new Error('PAGE_REPEAT_OVERLAY_BUDGET_EXCEEDED')
 
   const placements: RepeatedOverlayPlacement[] = []
-  const occupiedNodeIds = new Set(input.occupiedNodeIds)
   for (const node of repeatedNodes) {
     for (let pageIndex = 0; pageIndex < input.pageCount; pageIndex++) {
       const virtualNodeId = mintRepeatedVirtualNodeId(node.id, pageIndex, occupiedNodeIds)
+      const virtualInstanceKey = mintRepeatedVirtualIdentity('page-repeat-instance', node.id, pageIndex, occupiedInstanceKeys)
+      const virtualFragmentId = mintRepeatedVirtualIdentity('page-repeat-fragment', node.id, pageIndex, occupiedFragmentIds)
       occupiedNodeIds.add(virtualNodeId)
+      occupiedInstanceKeys.add(virtualInstanceKey)
+      occupiedFragmentIds.add(virtualFragmentId)
       placements.push(Object.freeze({
         nodeId: node.id,
         pageIndex,
         virtualNodeId,
-        virtualInstanceKey: JSON.stringify(['page-repeat-instance', node.id, pageIndex]),
-        virtualFragmentId: JSON.stringify(['page-repeat-fragment', node.id, pageIndex]),
+        virtualInstanceKey,
+        virtualFragmentId,
       }))
     }
   }
@@ -139,6 +147,43 @@ function mintRepeatedVirtualNodeId(
   while (occupiedNodeIds.has(`${base}__v${suffix}`))
     suffix++
   return `${base}__v${suffix}`
+}
+
+function mintRepeatedVirtualIdentity(
+  kind: 'page-repeat-instance' | 'page-repeat-fragment',
+  sourceNodeId: string,
+  pageIndex: number,
+  occupied: ReadonlySet<string>,
+): string {
+  return mintUnoccupiedIdentity(JSON.stringify([kind, sourceNodeId, pageIndex]), occupied)
+}
+
+function mintUnoccupiedIdentity(base: string, occupied: ReadonlySet<string>): string {
+  if (!occupied.has(base))
+    return base
+  let suffix = 1
+  while (occupied.has(`${base}__v${suffix}`))
+    suffix++
+  return `${base}__v${suffix}`
+}
+
+function copyOccupiedIdentities(value: Iterable<string> | undefined): Set<string> {
+  if (value === undefined)
+    return new Set()
+  try {
+    if (typeof value !== 'object' || value === null)
+      throw new Error('invalid identity collection')
+    const identities = new Set<string>()
+    for (const identity of value) {
+      if (typeof identity !== 'string')
+        throw new Error('invalid identity')
+      identities.add(identity)
+    }
+    return identities
+  }
+  catch {
+    throw new Error('REPEATED_OVERLAY_OCCUPIED_IDENTITIES_INVALID')
+  }
 }
 
 export function resolvePageLayers(page: Pick<PageSchema, 'layers'>): ResolvedPageLayer[] {

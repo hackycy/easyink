@@ -1513,6 +1513,71 @@ describe('viewer audit risk regressions', () => {
     await viewer.destroy()
   })
 
+  it('preserves an ordinary root whose identity matches a repeated instance base', async () => {
+    const ordinaryInstanceKey = JSON.stringify(['page-repeat-instance', 'h', 0])
+    const ordinaryManifest = viewerManifest('repeat-instance-ordinary', {
+      render: () => ({ tree: viewerText('ORDINARYHEADER') }),
+    })
+    const repeatedManifest = viewerManifest('repeat-instance-header', {
+      render: () => ({ tree: viewerText('HEADER') }),
+    }, 'every-output-page')
+    const ordinary = textNode(ordinaryInstanceKey)
+    ordinary.type = ordinaryManifest.type
+    const repeated = textNode('h')
+    repeated.type = repeatedManifest.type
+    const schema = fixedSchema([ordinary, repeated])
+    schema.page.pagination = { strategy: 'fixed-sheets', pageCount: 1 }
+    const container = document.createElement('div')
+    let committed: CommittedPagePlan | undefined
+    const viewer = createViewer({
+      container,
+      profile: createTestCompiledMaterialProfile([ordinaryManifest, repeatedManifest]),
+    })
+    const state = viewer as unknown as {
+      _layoutRuntime: {
+        plan: (input: LayoutRuntimeInput, signal: AbortSignal) => Promise<CommittedPagePlan>
+        clear: () => void
+        dispose: () => Promise<void>
+      }
+    }
+    const base = state._layoutRuntime
+    state._layoutRuntime = Object.freeze({
+      ...base,
+      async plan(...args) {
+        committed = await base.plan(...args)
+        return committed
+      },
+    })
+
+    await viewer.open({ schema })
+
+    expect(container.textContent).toContain('ORDINARYHEADER')
+    expect(container.textContent).toContain('HEADER')
+    expect(container.textContent).not.toContain('[material unavailable]')
+    const ordinaryInstance = committed?.runtimeInstances.get(ordinaryInstanceKey)
+    expect(ordinaryInstance).toMatchObject({
+      instanceKey: ordinaryInstanceKey,
+      nodeId: ordinaryInstanceKey,
+      layoutPlan: { instanceKey: ordinaryInstanceKey, nodeId: ordinaryInstanceKey },
+      embeddedFragmentPlan: {
+        sourceInstanceKey: ordinaryInstanceKey,
+        sourceNodeId: ordinaryInstanceKey,
+      },
+    })
+    const ordinaryFragment = committed?.pages
+      .flatMap(page => page.fragments)
+      .find(fragment => fragment.fragmentPlan?.sourceNodeId === ordinaryInstanceKey)
+    expect(ordinaryFragment?.fragmentPlan).toMatchObject({
+      sourceInstanceKey: ordinaryInstanceKey,
+      sourceNodeId: ordinaryInstanceKey,
+    })
+    const repeatedInstance = [...(committed?.runtimeInstances.values() ?? [])]
+      .find(instance => instance.nodeId.startsWith('h__p0'))
+    expect(repeatedInstance?.instanceKey).not.toBe(ordinaryInstanceKey)
+    expect(repeatedInstance?.embeddedFragmentPlan?.sourceInstanceKey).toBe(repeatedInstance?.instanceKey)
+    await viewer.destroy()
+  })
+
   it('isolates every material render stage and continues rendering healthy nodes', async () => {
     const container = document.createElement('div')
     const diagnostics: ViewerDiagnosticEvent[] = []

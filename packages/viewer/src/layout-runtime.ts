@@ -720,6 +720,8 @@ function commitRepeatedPageInstances(
     pageCount: plan.pages.length,
     paintableNodeIds,
     occupiedNodeIds: collectMaterialGraphNodeIds(input.document, profile),
+    occupiedInstanceKeys: plan.runtimeInstances.keys(),
+    occupiedFragmentIds: collectCommittedFragmentIds(plan),
   })
   if (placements.length === 0)
     return plan
@@ -774,6 +776,8 @@ function commitRepeatedPageInstances(
       layoutPlan,
       embeddedFragmentPlan: fragmentPlan,
     })
+    if (instances.has(placement.virtualInstanceKey))
+      throw new Error('VIEWER_REPEATED_INSTANCE_IDENTITY_COLLISION')
     instances.set(placement.virtualInstanceKey, instance)
     const sourceOutput = plan.outputStates.get(sourceNode.id)
     if (sourceOutput)
@@ -790,6 +794,21 @@ function commitRepeatedPageInstances(
     outputStates: createReadonlyMap(outputStates),
     runtimeInstances: createReadonlyMap(instances),
   })
+}
+
+function collectCommittedFragmentIds(plan: CommittedPagePlan): ReadonlySet<string> {
+  const fragmentIds = new Set<string>()
+  for (const page of plan.pages) {
+    for (const fragment of page.fragments) {
+      if (fragment.fragmentPlan)
+        fragmentIds.add(fragment.fragmentPlan.id)
+    }
+  }
+  for (const instance of plan.runtimeInstances.values()) {
+    if (instance.embeddedFragmentPlan)
+      fragmentIds.add(instance.embeddedFragmentPlan.id)
+  }
+  return fragmentIds
 }
 
 function collectMaterialGraphNodeIds(

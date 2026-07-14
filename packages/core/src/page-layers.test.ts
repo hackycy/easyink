@@ -64,6 +64,58 @@ describe('page layers', () => {
     ])
   })
 
+  it('mints node, instance, and fragment identities against independent occupied sets', () => {
+    const instancePage0 = JSON.stringify(['page-repeat-instance', 'h', 0])
+    const instancePage1 = JSON.stringify(['page-repeat-instance', 'h', 1])
+    const fragmentPage0 = JSON.stringify(['page-repeat-fragment', 'h', 0])
+    const fragmentPage1 = JSON.stringify(['page-repeat-fragment', 'h', 1])
+    const placements = planRepeatedOverlays({
+      nodes: [{ id: 'h', type: 'page-number' }] as never,
+      profile: { getManifest: () => ({ common: { layout: { pageRepeat: 'every-output-page' } } }) } as never,
+      pageCount: 2,
+      paintableNodeIds: new Set(['h']),
+      occupiedNodeIds: new Set(['h__p0', 'h__p0__v1']),
+      occupiedInstanceKeys: new Set([instancePage0, `${instancePage0}__v1`, instancePage1]),
+      occupiedFragmentIds: new Set([fragmentPage0, fragmentPage1, `${fragmentPage1}__v1`]),
+    })
+
+    expect(placements).toEqual([
+      expect.objectContaining({
+        virtualNodeId: 'h__p0__v2',
+        virtualInstanceKey: `${instancePage0}__v2`,
+        virtualFragmentId: `${fragmentPage0}__v1`,
+      }),
+      expect.objectContaining({
+        virtualNodeId: 'h__p1',
+        virtualInstanceKey: `${instancePage1}__v1`,
+        virtualFragmentId: `${fragmentPage1}__v2`,
+      }),
+    ])
+  })
+
+  it.each(['occupiedNodeIds', 'occupiedInstanceKeys', 'occupiedFragmentIds'] as const)(
+    'rejects malformed %s without leaking iterable errors',
+    (field) => {
+      expect(() => planRepeatedOverlays({
+        nodes: [{ id: 'h', type: 'page-number' }] as never,
+        profile: { getManifest: () => ({ common: { layout: { pageRepeat: 'every-output-page' } } }) } as never,
+        pageCount: 1,
+        paintableNodeIds: new Set(['h']),
+        [field]: ['valid', 1],
+      } as never)).toThrow('REPEATED_OVERLAY_OCCUPIED_IDENTITIES_INVALID')
+    },
+  )
+
+  it('rejects a scalar string instead of treating it as an occupied identity collection', () => {
+    expect(() => planRepeatedOverlays({
+      nodes: [{ id: 'h', type: 'page-number' }] as never,
+      profile: { getManifest: () => ({ common: { layout: { pageRepeat: 'every-output-page' } } }) } as never,
+      pageCount: 1,
+      paintableNodeIds: new Set(['h']),
+      occupiedInstanceKeys: 'not-a-collection',
+    })).toThrow('REPEATED_OVERLAY_OCCUPIED_IDENTITIES_INVALID')
+  })
+
   it('enforces the shared viewer node budget before allocating repeated overlays', () => {
     const input = {
       nodes: [{ id: 'page', type: 'page-number' }] as never,
