@@ -745,4 +745,45 @@ describe('viewer budget wiring and cancellation', () => {
     expect(diagnostics.some(item => item.code === 'VIEWER_MATERIAL_MOUNT_ERROR')).toBe(false)
     await viewer.destroy()
   })
+
+  it('contains a swallowed render overflow even when the diagnostic observer throws', async () => {
+    const source = materialNode('swallowed-observer', 'swallowed-observer-render')
+    const render = vi.fn((_node, context: Parameters<NonNullable<MaterialViewerFacet['extension']['render']>>[1]) => {
+      try {
+        context.renderBudget.reserveNodes('element', 2)
+      }
+      catch {}
+      return { tree: viewerText('unsafe observer tree') }
+    })
+    const manifest = createTestMaterialManifest({
+      type: source.type,
+      viewer: () => ({ capabilities: {}, extension: { render } }),
+    })
+    const container = document.createElement('div')
+    const diagnosticCodes: string[] = []
+    const viewer = createViewer({
+      container,
+      profile: createTestCompiledMaterialProfile([manifest]),
+      browserDom: { maxNodes: 1 },
+      performanceBudget: { maxRenderTreeNodesPerMaterial: 1 },
+    })
+
+    await viewer.open({
+      schema: schema([source]),
+      documentRevision: 4,
+      dataRevision: 7,
+      onDiagnostic(diagnostic) {
+        diagnosticCodes.push(diagnostic.code)
+        throw new Error('diagnostic observer failed')
+      },
+    })
+
+    expect(container.textContent).toContain('[material unavailable]')
+    expect(container.textContent).not.toContain('unsafe observer tree')
+    expect(render).toHaveBeenCalledTimes(1)
+    expect(diagnosticCodes.filter(code => code === 'VIEWER_RENDER_TREE_BUDGET_EXCEEDED')).toHaveLength(1)
+    expect(diagnosticCodes).not.toContain('VIEWER_MATERIAL_RENDER_ERROR')
+    expect(diagnosticCodes).not.toContain('VIEWER_MATERIAL_MOUNT_ERROR')
+    await viewer.destroy()
+  })
 })

@@ -1,4 +1,4 @@
-import type { MaterialManifest, MaterialNodeLoadState, MaterialViewerExtension, PagePlanEntry, ViewerFacetCapabilities, ViewerRenderContext } from '@easyink/core'
+import type { MaterialManifest, MaterialNodeLoadState, MaterialViewerExtension, PagePlanEntry, ViewerFacetCapabilities, ViewerRenderContext, ViewerRenderTree } from '@easyink/core'
 import type { MaterialNode, PageSchema } from '@easyink/schema'
 import type { CommittedPagePlan, RuntimeMaterialInstancePlan } from './layout-runtime'
 import type { ViewerDiagnosticEvent } from './types'
@@ -502,6 +502,58 @@ describe('mountCommittedMaterial', () => {
     expect(diagnostics.some(item => item.code === 'VIEWER_MATERIAL_MOUNT_ERROR')).toBe(false)
   })
 
+  it('consumes the reserved nested fallback when a child swallows its render overflow', async () => {
+    const child = committedFacts('swallowed-child-instance', committedNode('swallowed-child', 'committed-swallowed-child'), { embedded: true })
+    const slotInstanceKey = 'slot:swallowed-child'
+    const owner = committedFacts('swallowed-owner-instance', committedNode('swallowed-owner', 'committed-swallowed-owner'), {
+      slotChildren: { [slotInstanceKey]: [child.instance.instanceKey] },
+      slotInstanceKeys: [slotInstanceKey],
+    })
+    const childRender = vi.fn((_node, context: ViewerRenderContext) => {
+      if (childRender.mock.calls.length === 1) {
+        try {
+          context.renderBudget.reserveNodes('element', 2)
+        }
+        catch {}
+        return { tree: viewerText('unsafe child tree') }
+      }
+      return { tree: viewerText('recovered child tree') }
+    })
+    const materials = await createCommittedMaterials([
+      { type: owner.instance.node.type, extension: { render: (_node, context) => ({ tree: context.renderSlot(slotInstanceKey) }) } },
+      { type: child.instance.node.type, extension: { render: childRender } },
+    ])
+    const currentPlan = committedPagePlan([owner.instance, child.instance])
+    const diagnostics: ViewerDiagnosticEvent[] = []
+    const mount = (plan: CommittedPagePlan): HTMLElement => {
+      const host = document.createElement('div')
+      mountCommittedMaterial(host, {
+        committedPlan: plan,
+        fragmentPlan: owner.fragmentPlan,
+        materials,
+        pageIndex: 0,
+        unit: 'mm',
+        zoom: 1,
+        viewerMaxNodes: 4,
+        browserDom: { maxNodes: 4 },
+        diagnostics,
+      })
+      return host
+    }
+
+    const firstHost = mount(currentPlan)
+    const samePlanHost = mount(currentPlan)
+    const newPlanHost = mount(committedPagePlan([owner.instance, child.instance]))
+
+    expect(firstHost.textContent).toBe('[material unavailable]')
+    expect(samePlanHost.textContent).toBe('[material unavailable]')
+    expect(newPlanHost.textContent).toBe('recovered child tree')
+    expect(childRender).toHaveBeenCalledTimes(2)
+    expect(diagnostics.filter(item => item.code === 'VIEWER_RENDER_TREE_BUDGET_EXCEEDED')).toHaveLength(1)
+    expect(diagnostics.some(item => item.code === 'VIEWER_MATERIAL_RENDER_ERROR')).toBe(false)
+    expect(diagnostics.some(item => item.code === 'VIEWER_MATERIAL_MOUNT_ERROR')).toBe(false)
+  })
+
   it('quarantines a render-overflow child only for the current committed plan identity', async () => {
     const child = committedFacts('plan-quarantine-child-instance', committedNode('plan-quarantine-child', 'committed-plan-quarantine-child'), { embedded: true })
     const healthy = committedFacts('plan-quarantine-healthy-instance', committedNode('plan-quarantine-healthy', 'committed-plan-quarantine-healthy'))
@@ -559,6 +611,103 @@ describe('mountCommittedMaterial', () => {
     expect(childRender).toHaveBeenCalledTimes(2)
     expect(diagnostics.filter(item => item.code === 'VIEWER_RENDER_TREE_BUDGET_EXCEEDED')).toHaveLength(2)
   })
+
+  it('quarantines a swallowed root overflow before auditing or mounting its returned tree', async () => {
+    const source = committedFacts('swallowed-root-instance', committedNode('swallowed-root', 'committed-swallowed-root'))
+    const render = vi.fn((_node, context: ViewerRenderContext) => {
+      if (render.mock.calls.length === 1) {
+        try {
+          context.renderBudget.reserveNodes('element', 2)
+        }
+        catch {}
+        return { tree: viewerText('unsafe first tree') }
+      }
+      return { tree: viewerText('recovered tree') }
+    })
+    const materials = await createCommittedMaterials([
+      { type: source.instance.node.type, extension: { render } },
+    ])
+    const currentPlan = committedPagePlan([source.instance])
+    const diagnostics: ViewerDiagnosticEvent[] = []
+    const mount = (plan: CommittedPagePlan): HTMLElement => {
+      const host = document.createElement('div')
+      mountCommittedMaterial(host, {
+        committedPlan: plan,
+        fragmentPlan: source.fragmentPlan,
+        materials,
+        pageIndex: 0,
+        unit: 'mm',
+        zoom: 1,
+        viewerMaxNodes: 1,
+        browserDom: { maxNodes: 1 },
+        diagnostics,
+      })
+      return host
+    }
+
+    const firstHost = mount(currentPlan)
+    const samePlanHost = mount(currentPlan)
+    const newPlanHost = mount(committedPagePlan([source.instance]))
+
+    expect(firstHost.textContent).toBe('[material unavailable]')
+    expect(samePlanHost.textContent).toBe('[material unavailable]')
+    expect(newPlanHost.textContent).toBe('recovered tree')
+    expect(render).toHaveBeenCalledTimes(2)
+    expect(diagnostics.filter(item => item.code === 'VIEWER_RENDER_TREE_BUDGET_EXCEEDED')).toHaveLength(1)
+    expect(diagnostics.some(item => item.code === 'VIEWER_MATERIAL_RENDER_ERROR')).toBe(false)
+    expect(diagnostics.some(item => item.code === 'VIEWER_MATERIAL_MOUNT_ERROR')).toBe(false)
+  })
+
+  it.each(['empty', 'large'] as const)(
+    'does not audit a swallowed-overflow %s tree before using the root sentinel',
+    async (treeKind) => {
+      const source = committedFacts(`swallowed-${treeKind}-instance`, committedNode(`swallowed-${treeKind}`, `committed-swallowed-${treeKind}`))
+      let childReads = 0
+      const child = viewerText('unsafe child')
+      const largeTree = Object.freeze({
+        kind: 'fragment',
+        children: new Proxy(Array.from({ length: 10 }).fill(child), {
+          get(target, property, receiver) {
+            if (typeof property === 'string' && /^(?:0|[1-9]\d*)$/.test(property))
+              childReads++
+            return Reflect.get(target, property, receiver)
+          },
+        }),
+      }) as ViewerRenderTree
+      const unsafeTree = treeKind === 'empty' ? viewerFragment([]) : largeTree
+      const render = vi.fn((_node, context: ViewerRenderContext) => {
+        try {
+          context.renderBudget.reserveNodes('element', 2)
+        }
+        catch {}
+        return { tree: unsafeTree }
+      })
+      const materials = await createCommittedMaterials([
+        { type: source.instance.node.type, extension: { render } },
+      ])
+      const diagnostics: ViewerDiagnosticEvent[] = []
+      const host = document.createElement('div')
+
+      mountCommittedMaterial(host, {
+        committedPlan: committedPagePlan([source.instance]),
+        fragmentPlan: source.fragmentPlan,
+        materials,
+        pageIndex: 0,
+        unit: 'mm',
+        zoom: 1,
+        viewerMaxNodes: 1,
+        browserDom: { maxNodes: 1 },
+        diagnostics,
+      })
+
+      expect(host.textContent).toBe('[material unavailable]')
+      expect(render).toHaveBeenCalledTimes(1)
+      expect(childReads).toBe(0)
+      expect(diagnostics.filter(item => item.code === 'VIEWER_RENDER_TREE_BUDGET_EXCEEDED')).toHaveLength(1)
+      expect(diagnostics.some(item => item.code === 'VIEWER_MATERIAL_RENDER_ERROR')).toBe(false)
+      expect(diagnostics.some(item => item.code === 'VIEWER_MATERIAL_MOUNT_ERROR')).toBe(false)
+    },
+  )
 
   it('diagnoses absent, foreign, and cyclic slot references with safe sentinels', async () => {
     const missingSlotKey = 'slot:missing-child'

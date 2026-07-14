@@ -387,17 +387,36 @@ function mountCommittedInstance(
 
   let tree: ViewerRenderTree
   try {
-    tree = state.renderBudget.runWithIdentity(instance, () => {
-      const rendered = input.materials.render(instance.node as MaterialNode<unknown>, context, true).tree
-      state.renderBudget.auditTree(instance, rendered, budgetSnapshot)
-      return rendered
-    })
+    tree = state.renderBudget.runWithIdentity(
+      instance,
+      () => input.materials.render(instance.node as MaterialNode<unknown>, context, true).tree,
+    )
+    const budgetFallback = mountCommittedRenderBudgetFallback(
+      host,
+      state,
+      instance,
+      budgetSnapshot,
+      capabilities,
+      fallbackReservation,
+    )
+    if (budgetFallback)
+      return budgetFallback
+    state.renderBudget.auditTree(instance, tree, budgetSnapshot)
   }
   catch (error) {
+    const budgetFallback = mountCommittedRenderBudgetFallback(
+      host,
+      state,
+      instance,
+      budgetSnapshot,
+      capabilities,
+      fallbackReservation,
+    )
+    if (budgetFallback)
+      return budgetFallback
     capabilities.dispose()
     state.renderBudget.restore(budgetSnapshot)
-    if (!isRenderBudgetExceeded(error))
-      reportCommittedFailure(state, 'VIEWER_MATERIAL_RENDER_ERROR', instance, error)
+    reportCommittedFailure(state, 'VIEWER_MATERIAL_RENDER_ERROR', instance, error)
     return mountCommittedSentinel(host, state, '[material unavailable]', instance, fallbackReservation)
   }
 
@@ -416,6 +435,21 @@ function mountCommittedInstance(
     reportCommittedFailure(state, 'VIEWER_MATERIAL_MOUNT_ERROR', instance, error)
     return mountCommittedSentinel(host, state, '[material unavailable]', instance, fallbackReservation)
   }
+}
+
+function mountCommittedRenderBudgetFallback(
+  host: HTMLElement,
+  state: CommittedMaterialRenderState,
+  instance: RuntimeMaterialInstancePlan,
+  budgetSnapshot: CommittedRenderBudgetSnapshot,
+  capabilities: BrowserDomCapabilities,
+  fallbackReservation?: CommittedFallbackReservation,
+): ViewerTreeMount | undefined {
+  if (!isRenderBudgetQuarantined(state.input.committedPlan, instance.instanceKey))
+    return undefined
+  capabilities.dispose()
+  state.renderBudget.restore(budgetSnapshot)
+  return mountCommittedSentinel(host, state, '[material unavailable]', instance, fallbackReservation)
 }
 
 function renderCommittedSlot(
