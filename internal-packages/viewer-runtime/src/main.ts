@@ -1,6 +1,7 @@
 import type { DocumentSchema, DocumentSchemaInput, ViewerDiagnosticEvent } from '@easyink/viewer'
 import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
 import { createViewer, normalizeDocumentSchema } from '@easyink/viewer'
+import './polyfills'
 import './style.css'
 
 interface RuntimePayload {

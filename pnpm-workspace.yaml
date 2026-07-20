@@ -58,6 +58,7 @@ catalogs:
     '@lezer/highlight': ^1.0.0
     '@tanstack/vue-query': ^5.100.14
     '@vueuse/core': ^14.3.0
+    core-js: ^3.49.0
     '@xstate/vue': ^5.0.0
     ant-design-vue: ^4.2.6
     class-variance-authority: ^0.7.1

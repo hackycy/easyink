@@ -24,6 +24,7 @@ await run(gradleBin, [
   'clean',
   'assembleRelease',
   'verifyAarRuntimeAssets',
+  'publishReleasePublicationToFlutterSampleRepository',
   ':sample-minimal:assembleDebug',
 ])
 
