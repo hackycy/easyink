@@ -99,6 +99,7 @@ catalogs:
     vue-plugin-hiprint: ^0.0.60
     yaml: ^2.8.1
   types:
+    '@types/jsbarcode': ^3.11.4
     '@types/lodash-es': ^4.17.12
     '@types/node': ^24.10.0
 ignoreWorkspaceRootCheck: true

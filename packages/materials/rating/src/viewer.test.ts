@@ -20,6 +20,7 @@ describe('renderRating', () => {
   it('projects resolved bound values over preset props', () => {
     const node = createRatingNode({ props: { value: 20 } })
     const html = readTrustedViewerHtml(renderRating(node, {
+      document,
       data: {},
       resolvedProps: { value: 80 },
       pageIndex: 0,
