@@ -6,6 +6,7 @@ import { createFlowRowNode, FLOW_ROW_DEFAULTS } from './schema'
 import { measureFlowRow, renderFlowRow } from './viewer'
 
 const viewerContext = {
+  document,
   data: {},
   resolvedProps: {},
   pageIndex: 0,

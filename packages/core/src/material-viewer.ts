@@ -31,6 +31,8 @@ export function readTrustedViewerHtml(html: TrustedViewerHtml): string {
  * Provides document-level unit and zoom for physical unit calculations.
  */
 export interface ViewerRenderContext {
+  /** Host document used to create material-owned DOM nodes. */
+  readonly document: Document
   data: Record<string, unknown>
   resolvedProps: Record<string, unknown>
   pageIndex: number

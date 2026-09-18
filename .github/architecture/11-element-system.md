@@ -656,6 +656,15 @@ CanvasWorkspace 遍历 elements
 每个物料包可提供 Viewer 渲染扩展：
 
 ```typescript
+interface ViewerRenderContext {
+  readonly document: Document
+  data: Record<string, unknown>
+  resolvedProps: Record<string, unknown>
+  pageIndex: number
+  unit: string
+  zoom: number
+}
+
 interface MaterialViewerExtension {
   render(node: MaterialNode, context: ViewerRenderContext): ViewerRenderOutput
   measure?(node: MaterialNode, context: ViewerMeasureContext): ViewerMeasureResult
@@ -666,6 +675,7 @@ interface MaterialViewerExtension {
 其中职责边界如下：
 
 - `render()` 只负责生成物料内容 DOM/SVG。
+- `context.document` 是当前 Viewer host 的文档；物料返回 DOM/SVG 节点时必须使用它创建节点，不能依赖全局 `document`，以兼容 iframe 和 custom host。
 - `measure()` 负责参与运行时测量和回流，典型场景是 table-data 这类动态高度物料。
 - `getRenderSize()` 负责声明最终渲染容器尺寸，适用于“运行态视觉尺寸不等于 schema 几何尺寸”的物料；例如线条物料可把 legacy `lineWidth` 或最小可见厚度提升为实际渲染高度。
 - `viewer` 的 `RenderSurface` 不允许根据 `node.type` 推断这些差异，必须统一通过 `MaterialRendererRegistry -> MaterialViewerExtension` 获取。

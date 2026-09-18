@@ -48,6 +48,7 @@ export function renderPages(
     pageEl.appendChild(contentLayer)
 
     const context: ViewerRenderContext = {
+      document,
       data,
       resolvedProps: {},
       pageIndex: page.index,

@@ -27,5 +27,8 @@
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*",
     "jsbarcode": "catalog:framework"
+  },
+  "devDependencies": {
+    "@types/jsbarcode": "catalog:types"
   }
 }
