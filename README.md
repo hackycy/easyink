@@ -1,3 +1,5 @@
+
+
 <p align="center">
 	<img src=".github/logo/logo.png" width="160" alt="EasyInk logo" />
 </p>
@@ -42,6 +44,7 @@ EasyInk provides a package-based print design ecosystem for building templates, 
 | --- | --- | --- | --- |
 | [@easyink/designer](packages/designer) | Template designer and editing experience | [![npm][designer-npm-version-src]][designer-npm-version-href] | [![npm downloads][designer-npm-downloads-src]][designer-npm-version-href] |
 | [@easyink/viewer](packages/viewer) | Viewer and print preview runtime | [![npm][viewer-npm-version-src]][viewer-npm-version-href] | [![npm downloads][viewer-npm-downloads-src]][viewer-npm-version-href] |
+| [@easyink/core](packages/core) | Core logic for EasyInk: commands, selection, geometry, units, fonts | [![npm][core-npm-version-src]][core-npm-version-href] | [![npm downloads][core-npm-downloads-src]][core-npm-version-href] |
 
 ## Documentation
 
@@ -71,3 +74,6 @@ pnpm play
 [viewer-npm-version-src]: https://img.shields.io/npm/v/@easyink/viewer?style=flat&colorA=080f12&colorB=1fa669
 [viewer-npm-downloads-src]: https://img.shields.io/npm/dm/@easyink/viewer?style=flat&colorA=080f12&colorB=1fa669
 [viewer-npm-version-href]: https://npmjs.com/package/@easyink/viewer
+[core-npm-version-src]: https://img.shields.io/npm/v/@easyink/core?style=flat&colorA=080f12&colorB=1fa669
+[core-npm-downloads-src]: https://img.shields.io/npm/dm/@easyink/core?style=flat&colorA=080f12&colorB=1fa669
+[core-npm-version-href]: https://npmjs.com/package/@easyink/core
