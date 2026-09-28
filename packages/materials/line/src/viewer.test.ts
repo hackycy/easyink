@@ -14,6 +14,7 @@ describe('renderLine', () => {
     })
 
     const output = renderLine(node, {
+      document,
       data: {},
       resolvedProps: node.props,
       pageIndex: 0,
@@ -47,6 +48,7 @@ describe('renderLine', () => {
     })
 
     const dashedOutput = renderLine(dashed, {
+      document,
       data: {},
       resolvedProps: dashed.props,
       pageIndex: 0,
@@ -54,6 +56,7 @@ describe('renderLine', () => {
       zoom: 1,
     })
     const dottedOutput = renderLine(dotted, {
+      document,
       data: {},
       resolvedProps: dotted.props,
       pageIndex: 0,

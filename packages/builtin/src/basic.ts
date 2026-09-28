@@ -585,7 +585,7 @@ export const builtinViewerMaterialBundle: BuiltinViewerMaterialBundle = {
       },
     },
     { type: IMAGE_TYPE, binding: imageMaterialBinding, extension: { render: (node, ctx) => renderImage(node, ctx.unit) } },
-    { type: BARCODE_TYPE, binding: barcodeMaterialBinding, extension: { render: node => renderBarcode(node) } },
+    { type: BARCODE_TYPE, binding: barcodeMaterialBinding, extension: { render: (node, ctx) => renderBarcode(node, ctx) } },
     { type: QRCODE_TYPE, binding: qrcodeMaterialBinding, extension: { render: node => renderQrcode(node) } },
     { type: LINE_TYPE, binding: noMaterialBinding, extension: createLineViewerExtension() },
     { type: RECT_TYPE, binding: noMaterialBinding, extension: { render: (node, ctx) => renderRect(node, ctx.unit) } },

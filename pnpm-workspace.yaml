@@ -58,6 +58,7 @@ catalogs:
     '@lezer/highlight': ^1.0.0
     '@tanstack/vue-query': ^5.100.14
     '@vueuse/core': ^14.3.0
+    core-js: ^3.49.0
     '@xstate/vue': ^5.0.0
     ant-design-vue: ^4.2.6
     class-variance-authority: ^0.7.1
@@ -98,6 +99,7 @@ catalogs:
     vue-plugin-hiprint: ^0.0.60
     yaml: ^2.8.1
   types:
+    '@types/jsbarcode': ^3.11.4
     '@types/lodash-es': ^4.17.12
     '@types/node': ^24.10.0
 ignoreWorkspaceRootCheck: true

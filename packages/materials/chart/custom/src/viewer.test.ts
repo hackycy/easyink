@@ -12,6 +12,7 @@ describe('chart custom viewer', () => {
       },
     })
     const output = renderChartCustom(node, {
+      document,
       data: {},
       resolvedProps: node.props,
       pageIndex: 0,

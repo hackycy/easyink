@@ -10,7 +10,7 @@ export default defineConfig({
   build: {
     outDir: 'dist/runtime/easyink-viewer/assets',
     emptyOutDir: true,
-    target: 'es2022',
+    target: 'chrome83',
     minify: false,
     cssCodeSplit: false,
     lib: {

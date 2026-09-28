@@ -75,4 +75,3 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - Each package room needs to import packages through a pnpm workspace
 - Ensure that the projects `pnpm build`, `pnpm lint`, and `pnpm typecheck` pass (in order)
 - Centralize dependencies workspace catalog
-- The project is still evolving and should publish the current best design only. Do not add compatibility or migration wording, paths, shims, aliases, or documentation unless the user explicitly asks for them.

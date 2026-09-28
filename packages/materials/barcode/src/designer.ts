@@ -2,84 +2,126 @@ import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyi
 import type { MaterialNode } from '@easyink/schema'
 import type { BarcodeProps } from './schema'
 import { getBindingRefs } from '@easyink/schema'
-import { escapeHtml } from '@easyink/shared'
-import { generateBarcodeSvg } from './render'
+import { createBarcodeSvgElement } from './render'
 import { BARCODE_FORMATS, resolveBarcodeProps } from './schema'
 
-function buildPlaceholder(p: BarcodeProps, label: string): string {
-  const sampleValue = BARCODE_FORMATS.find(format => format.value === p.format)?.sampleValue || 'EasyInk'
+function applyFrameStyles(frame: HTMLDivElement, props: BarcodeProps, unit: string): void {
+  frame.style.position = 'relative'
+  frame.style.width = '100%'
+  frame.style.height = '100%'
+  frame.style.boxSizing = 'border-box'
+  if (props.borderWidth) {
+    frame.style.border = `${props.borderWidth}${unit} ${props.borderType} ${props.borderColor}`
+  }
+}
 
-  let svg: string
+function createErrorPlaceholder(document: Document, props: BarcodeProps, value: string): HTMLDivElement {
+  const error = document.createElement('div')
+  error.style.width = '100%'
+  error.style.height = '100%'
+  error.style.display = 'flex'
+  error.style.alignItems = 'center'
+  error.style.justifyContent = 'center'
+  error.style.boxSizing = 'border-box'
+  error.style.background = props.backgroundColor
+  error.style.color = '#e53e3e'
+  error.style.fontSize = '11px'
+  error.style.border = '1px dashed #e53e3e'
+  error.textContent = `Invalid: ${value}`
+  return error
+}
+
+function appendLabelOverlay(document: Document, frame: HTMLElement, label: string, color: string): void {
+  const overlay = document.createElement('div')
+  overlay.style.position = 'absolute'
+  overlay.style.inset = '0'
+  overlay.style.display = 'flex'
+  overlay.style.alignItems = 'center'
+  overlay.style.justifyContent = 'center'
+
+  const text = document.createElement('span')
+  text.style.maxWidth = '90%'
+  text.style.overflow = 'hidden'
+  text.style.padding = '1px 4px'
+  text.style.borderRadius = '2px'
+  text.style.background = 'rgba(255, 255, 255, 0.8)'
+  text.style.color = color
+  text.style.fontSize = '10px'
+  text.style.textOverflow = 'ellipsis'
+  text.style.whiteSpace = 'nowrap'
+  text.textContent = label
+
+  overlay.appendChild(text)
+  frame.appendChild(overlay)
+}
+
+function createPlaceholder(document: Document, props: BarcodeProps, label: string): HTMLElement {
+  const placeholder = document.createElement('div')
+  placeholder.style.position = 'relative'
+  placeholder.style.width = '100%'
+  placeholder.style.height = '100%'
+  placeholder.style.opacity = '0.4'
+
+  const sampleValue = BARCODE_FORMATS.find(format => format.value === props.format)?.sampleValue || 'EasyInk'
   try {
-    svg = generateBarcodeSvg(sampleValue, {
-      format: p.format,
-      lineWidth: p.lineWidth,
-      lineColor: p.lineColor,
-      backgroundColor: p.backgroundColor,
+    placeholder.appendChild(createBarcodeSvgElement(sampleValue, {
+      format: props.format,
+      lineWidth: props.lineWidth,
+      lineColor: props.lineColor,
+      backgroundColor: props.backgroundColor,
       showText: false,
-    })
+    }, document))
   }
   catch {
-    return buildErrorPlaceholder(p, label)
+    return createErrorPlaceholder(document, props, label)
   }
 
-  return `<div style="position:relative;width:100%;height:100%;opacity:0.4">${svg}<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center"><span style="background:rgba(255,255,255,0.8);padding:1px 4px;font-size:10px;color:${p.lineColor};border-radius:2px">${label}</span></div></div>`
+  appendLabelOverlay(document, placeholder, label, props.lineColor)
+  return placeholder
 }
 
-function buildErrorPlaceholder(p: BarcodeProps, value: string): string {
-  return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:${p.backgroundColor};color:#e53e3e;font-size:11px;border:1px dashed #e53e3e;box-sizing:border-box">Invalid: ${escapeHtml(value)}</div>`
-}
+function buildElement(node: MaterialNode, context: MaterialExtensionContext, document: Document): HTMLElement {
+  const props = resolveBarcodeProps(node)
+  const frame = document.createElement('div')
+  applyFrameStyles(frame, props, context.getSchema().unit)
 
-function buildHtml(node: MaterialNode, context: MaterialExtensionContext): string {
-  const p = resolveBarcodeProps(node)
-  const unit = context.getSchema().unit
-  const DASH_MAP: Record<string, string> = { dashed: 'dashed', dotted: 'dotted' }
-  const borderStyle = p.borderWidth ? `border:${p.borderWidth}${unit} ${DASH_MAP[p.borderType] || 'solid'} ${p.borderColor};box-sizing:border-box;` : ''
-
-  let label: string | undefined
-  const b = getBindingRefs(node.binding)[0]
-  if (b) {
-    label = `{#${escapeHtml(context.getBindingLabel(b))}}`
-  }
-
-  const value = p.value || ''
+  const binding = getBindingRefs(node.binding)[0]
+  const label = binding ? `{#${context.getBindingLabel(binding)}}` : undefined
+  const value = props.value == null ? '' : String(props.value)
 
   if (!value) {
-    const inner = buildPlaceholder(p, label || p.format)
-    return borderStyle ? `<div style="width:100%;height:100%;${borderStyle}">${inner}</div>` : inner
+    frame.appendChild(createPlaceholder(document, props, label || props.format))
+    return frame
   }
 
-  let svg: string
   try {
-    svg = generateBarcodeSvg(value, {
-      format: p.format,
-      lineWidth: p.lineWidth,
-      lineColor: p.lineColor,
-      backgroundColor: p.backgroundColor,
-      showText: p.showText,
-    })
+    frame.appendChild(createBarcodeSvgElement(value, {
+      format: props.format,
+      lineWidth: props.lineWidth,
+      lineColor: props.lineColor,
+      backgroundColor: props.backgroundColor,
+      showText: props.showText,
+    }, document))
   }
   catch {
-    const inner = buildErrorPlaceholder(p, value)
-    return borderStyle ? `<div style="width:100%;height:100%;${borderStyle}">${inner}</div>` : inner
+    frame.appendChild(createErrorPlaceholder(document, props, value))
+    return frame
   }
 
-  if (label) {
-    return `<div style="position:relative;width:100%;height:100%;${borderStyle}">${svg}<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center"><span style="background:rgba(255,255,255,0.8);padding:1px 4px;font-size:10px;color:${p.lineColor};border-radius:2px;max-width:90%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</span></div></div>`
-  }
+  if (label)
+    appendLabelOverlay(document, frame, label, props.lineColor)
 
-  return borderStyle ? `<div style="width:100%;height:100%;${borderStyle}">${svg}</div>` : svg
+  return frame
 }
 
 export function createBarcodeExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
   return {
     renderContent(nodeSignal, container) {
       function render() {
-        container.innerHTML = buildHtml(nodeSignal.get(), context)
+        container.replaceChildren(buildElement(nodeSignal.get(), context, container.ownerDocument))
       }
       render()
-      const unsub = nodeSignal.subscribe(render)
-      return unsub
+      return nodeSignal.subscribe(render)
     },
   }
 }

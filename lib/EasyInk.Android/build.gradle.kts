@@ -90,6 +90,12 @@ tasks.register("verifyAarRuntimeAssets") {
 
 afterEvaluate {
     publishing {
+        repositories {
+            maven {
+                name = "flutterSample"
+                url = layout.buildDirectory.dir("repository").get().asFile.toURI()
+            }
+        }
         publications {
             create<MavenPublication>("release") {
                 from(components["release"])

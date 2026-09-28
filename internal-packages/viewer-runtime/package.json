@@ -5,6 +5,7 @@
   "private": true,
   "description": "Internal EasyInk.Render HTML runtime bundle built from @easyink/viewer",
   "sideEffects": [
+    "./src/polyfills.ts",
     "./src/style.css"
   ],
   "scripts": {
@@ -13,7 +14,8 @@
   },
   "dependencies": {
     "@easyink/builtin": "workspace:*",
-    "@easyink/viewer": "workspace:*"
+    "@easyink/viewer": "workspace:*",
+    "core-js": "catalog:framework"
   },
   "devDependencies": {
     "@types/node": "catalog:types",

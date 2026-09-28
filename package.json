@@ -14,8 +14,9 @@
   "sideEffects": false,
   "scripts": {
     "build": "turbo build",
+    "build:packages": "turbo build --filter='./packages/**'",
     "dev": "turbo dev --filter='./packages/**' --concurrency 50",
-    "play": "pnpm -F ./playground dev",
+    "play": "pnpm build:packages && pnpm -F ./playground dev",
     "lint": "eslint --cache .",
     "release": "node ./scripts/release.mjs",
     "sync:package-readmes": "node ./scripts/sync-package-readmes.mjs",

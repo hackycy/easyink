@@ -1,36 +1,60 @@
+import type { ViewerRenderContext, ViewerRenderOutput } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
-import { trustedViewerHtml } from '@easyink/core'
-import { escapeHtml } from '@easyink/shared'
-import { generateBarcodeEmptySvg, generateBarcodeSvg } from './render'
+import { createBarcodeEmptySvgElement, createBarcodeSvgElement } from './render'
 import { resolveBarcodeProps } from './schema'
 
-export function renderBarcode(node: MaterialNode) {
+function createErrorPlaceholder(document: Document, backgroundColor: string, value: string): HTMLDivElement {
+  const error = document.createElement('div')
+  error.style.width = '100%'
+  error.style.height = '100%'
+  error.style.display = 'flex'
+  error.style.alignItems = 'center'
+  error.style.justifyContent = 'center'
+  error.style.boxSizing = 'border-box'
+  error.style.background = backgroundColor
+  error.style.color = '#e53e3e'
+  error.style.fontSize = '12px'
+  error.style.border = '1px dashed #e53e3e'
+  error.textContent = `Invalid: ${value}`
+  return error
+}
+
+export function renderBarcode(
+  node: MaterialNode,
+  context: Pick<ViewerRenderContext, 'document' | 'unit'>,
+): ViewerRenderOutput {
   const props = resolveBarcodeProps(node)
   const value = props.value == null ? '' : String(props.value)
+  const { document } = context
+  const frame = document.createElement('div')
+  frame.style.width = '100%'
+  frame.style.height = '100%'
+  frame.style.boxSizing = 'border-box'
+
+  if (props.borderWidth) {
+    frame.style.border = `${props.borderWidth}${context.unit} ${props.borderType} ${props.borderColor}`
+  }
 
   if (!value) {
-    return {
-      html: trustedViewerHtml(generateBarcodeEmptySvg({
-        lineColor: props.lineColor,
-        backgroundColor: props.backgroundColor,
-      })),
-    }
+    frame.appendChild(createBarcodeEmptySvgElement({
+      lineColor: props.lineColor,
+      backgroundColor: props.backgroundColor,
+    }, document))
+    return { element: frame }
   }
 
   try {
-    return {
-      html: trustedViewerHtml(generateBarcodeSvg(value, {
-        format: props.format,
-        lineWidth: props.lineWidth,
-        lineColor: props.lineColor,
-        backgroundColor: props.backgroundColor,
-        showText: props.showText,
-      })),
-    }
+    frame.appendChild(createBarcodeSvgElement(value, {
+      format: props.format,
+      lineWidth: props.lineWidth,
+      lineColor: props.lineColor,
+      backgroundColor: props.backgroundColor,
+      showText: props.showText,
+    }, document))
   }
   catch {
-    return {
-      html: trustedViewerHtml(`<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:${props.backgroundColor};color:#e53e3e;font-size:12px;border:1px dashed #e53e3e;">Invalid: ${escapeHtml(value)}</div>`),
-    }
+    frame.appendChild(createErrorPlaceholder(document, props.backgroundColor, value))
   }
+
+  return { element: frame }
 }

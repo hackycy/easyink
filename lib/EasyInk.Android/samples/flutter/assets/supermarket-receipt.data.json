@@ -1,0 +1,59 @@
+{
+  "store": {
+    "name": "好又多超市",
+    "address": "北京市朝阳区望京街道示例路88号",
+    "phone": "010-12345678"
+  },
+  "transaction": {
+    "no": "TXN-20260423-1234",
+    "date": "2026-04-23",
+    "time": "14:35:22",
+    "cashier": "小李",
+    "paymentMethod": "微信支付"
+  },
+  "items": [
+    {
+      "name": "有机牛奶250ml*4",
+      "qty": 1,
+      "unitPrice": 32.8,
+      "subtotal": 32.8
+    },
+    {
+      "name": "东北大米5kg",
+      "qty": 2,
+      "unitPrice": 45.9,
+      "subtotal": 91.8
+    },
+    {
+      "name": "进口苹果",
+      "qty": 1.5,
+      "unitPrice": 18,
+      "subtotal": 27
+    },
+    {
+      "name": "鸡蛋10枚装",
+      "qty": 3,
+      "unitPrice": 15.9,
+      "subtotal": 47.7
+    },
+    {
+      "name": "切片面包",
+      "qty": 1,
+      "unitPrice": 9.8,
+      "subtotal": 9.8
+    }
+  ],
+  "subtotal": 209.1,
+  "itemDiscount": 10.2,
+  "couponAmount": 20,
+  "grandTotal": 178.9,
+  "amountPaid": 200,
+  "change": 21.1,
+  "member": {
+    "no": "M-20260001",
+    "earnedPoints": 178,
+    "totalPoints": 5412
+  },
+  "qrUrl": "https://example.com/receipt/TXN-20260423-1234",
+  "footer": "感谢您的惠顾，欢迎再次光临！"
+}
