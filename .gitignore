@@ -32,3 +32,4 @@ docker-compose.*.yml
 # AI
 .claude
 .agents
+skills-lock.json
