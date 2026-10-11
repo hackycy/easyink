@@ -1,0 +1,69 @@
+{
+  "files": [
+    {
+      "path": ".scratch/material-plugin-refactor/implementation-plan.md",
+      "sha256": "04d059f65471f5d05b00388104bd456b8f9a7683e3fe2f30ea4baf3523092ec6"
+    },
+    {
+      "path": ".scratch/material-plugin-refactor/issues/01-current-assembly.md",
+      "sha256": "d4f42c99a2cb21625eab9615a08ddd2ffc2f5c09fc6ea13dcb91eaf1ffcc7906"
+    },
+    {
+      "path": ".scratch/material-plugin-refactor/issues/02-rendering-schema.md",
+      "sha256": "a77a4c3d852874c3786cbbdbd7c53495d1c9e725ba18cb801224b4bc632944dd"
+    },
+    {
+      "path": ".scratch/material-plugin-refactor/issues/03-harness-reference.md",
+      "sha256": "0b78bb954540db275cd73d7516415e1f5dad82a7fd767fb308ef73fd53f6ecd7"
+    },
+    {
+      "path": ".scratch/material-plugin-refactor/issues/04-contract-boundaries.md",
+      "sha256": "67d93a11490be4de1e042fe49363d3581e9cf12919b313fbce8eaf543b417fe4"
+    },
+    {
+      "path": ".scratch/material-plugin-refactor/issues/05-host-lifecycle.md",
+      "sha256": "569c631085e6ae404e364468a8a9084303003771484c9d980be64a1d7a643013"
+    },
+    {
+      "path": ".scratch/material-plugin-refactor/issues/06-material-contributions.md",
+      "sha256": "ce812118f8d9efde0b8a8ebba9a4abdb09300b859e3acb7953180a7fac7d13cf"
+    },
+    {
+      "path": ".scratch/material-plugin-refactor/issues/07-ui-slots.md",
+      "sha256": "eda1e18b8ba134eb858d1f635266f04c55e6e97f21b7b0eee09b7deb2a766955"
+    },
+    {
+      "path": ".scratch/material-plugin-refactor/issues/08-render-session.md",
+      "sha256": "51a91e149c4cf7393968d9232a7410127f4c795c705f5f124b36fe3ac31fdf99"
+    },
+    {
+      "path": ".scratch/material-plugin-refactor/issues/09-compatibility-cutover.md",
+      "sha256": "2a0349f904df04db7f99317059d3613545d8e70d3b808823f10d665f6da7e1bf"
+    },
+    {
+      "path": ".scratch/material-plugin-refactor/issues/10-quality-documentation.md",
+      "sha256": "735eeae22d9046a07d1ed04d2ff3c4eb00c1995f90368e9f2100f7b4e4c2c6e7"
+    },
+    {
+      "path": ".scratch/material-plugin-refactor/map.md",
+      "sha256": "1157ccfb3e4a270202da620fdf81bb36c0922e306f5c768cd3b2257e755b6b51"
+    },
+    {
+      "path": ".scratch/material-plugin-refactor/roadmap.md",
+      "sha256": "9d44951c2a1fa8cf1984693a5df8526f6cc79f5b2a132bf33cc23b40e66afe5f"
+    },
+    {
+      "path": ".scratch/material-plugin-refactor/tracker.md",
+      "sha256": "84f3e66bddf7b77aa7f71566c85382e940dead69419b14b927c851f09776086b"
+    },
+    {
+      "path": "CLAUDE.md",
+      "sha256": "c923db1d840d2c404e31aa06c0432a9a3d6b87e027390871106143dd6d9668fd"
+    },
+    {
+      "path": "GLOSSARY.md",
+      "sha256": "ed7d23f4d13ff50fe84e74d5a85a005ea07d5ab4a7c528e926f14145fac5e8e1"
+    }
+  ],
+  "schema": "goal-loop/contract-baseline-v2"
+}
