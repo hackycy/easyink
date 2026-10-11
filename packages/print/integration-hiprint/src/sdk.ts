@@ -29,7 +29,7 @@ export interface HiPrintPrinter {
   readonly client: HiPrintClientLike
   readonly viewer: ManagedPrintViewer
   print: (input: HiPrintPrintRequest) => Promise<void>
-  destroy: () => void
+  destroy: ManagedPrintViewer['destroy']
 }
 
 /**
@@ -62,7 +62,7 @@ export function createHiPrintPrinter(options: HiPrintPrinterOptions): HiPrintPri
       }))
     },
     destroy() {
-      viewer.destroy()
+      return viewer.destroy()
     },
   }
 }

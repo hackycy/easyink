@@ -1,10 +1,11 @@
 import type { MaterialBindingDefinition, MaterialConditionCapability, PropSchema } from '@easyink/core'
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { LocaleMessages } from '@easyink/locales'
+import type { DesignerExtension, DesignerMaterial } from '@easyink/plugin-api/ui'
 import type { DocumentSchema, DocumentSchemaInput, MaterialNode } from '@easyink/schema'
 import type { AIMaterialDescriptor, MaterialCategory } from '@easyink/shared'
 import type { Component } from 'vue'
-import type { Contribution } from './contributions/types'
+import type { DesignerRuntimeConfig } from './runtime-config'
 
 export type MaterialIcon = Component
 
@@ -374,8 +375,10 @@ export interface EasyInkDesignerProps {
   preferenceProvider?: PreferenceProvider
   autoSave?: TemplateAutoSaveOptions
   locale?: LocaleMessages
-  setupStore?: StoreSetup
-  contributions?: Contribution[]
+  localeCode?: string
+  materials?: readonly DesignerMaterial[]
+  extensions?: readonly DesignerExtension[]
+  runtimeConfig?: DesignerRuntimeConfig
   interactionProvider?: DesignerInteractionProvider
 }
 
@@ -384,8 +387,6 @@ export interface TemplateAutoSaveOptions {
   delay?: number
   save: (schema: DocumentSchema) => Promise<void>
 }
-
-export type StoreSetup = (store: import('./store/designer-store').DesignerStore) => void
 
 export interface PreferenceProvider {
   get: (key: string) => unknown

@@ -5,11 +5,11 @@ import process from 'node:process'
 import ts from 'typescript'
 import { build } from 'vite'
 
-async function main() {
+async function checkEntry(name) {
   const root = process.cwd()
-  const entry = resolve(root, 'packages/viewer/src/test-fixtures/minimal-viewer.ts')
+  const entry = resolve(root, `packages/viewer/src/test-fixtures/${name}.ts`)
   const normalize = path => path.replaceAll('\\', '/').replace(`${root.replaceAll('\\', '/')}/`, '')
-  const forbidden = path => /(?:^|\/)(?:vue|@vue|designer|assistant-ui|assistant-designer-bridge)(?:[/.@]|$)/.test(path)
+  const forbidden = path => !path.includes('plugin-api/') && /(?:^|\/)(?:vue|@vue|designer|assistant-ui|assistant-designer-bridge)(?:[/.@]|$)/.test(path)
   let moduleIds = []
   const output = await build({
     configFile: false,
@@ -53,13 +53,17 @@ async function main() {
   const violations = [...moduleIds, ...declarations, ...declarationImports].filter(forbidden)
   if (violations.length)
     throw new Error(`Minimal Viewer imports UI: ${violations.join(', ')}`)
+  if (name === 'empty-viewer' && [...moduleIds, ...declarations].some(path => path.startsWith('packages/materials/')))
+    throw new Error('The none collection must not import concrete materials')
   const code = (Array.isArray(output) ? output : [output]).flatMap(result => result.output).filter(chunk => chunk.type === 'chunk').map(chunk => chunk.code).join('\n')
   const packageNames = ['viewer', 'core', 'schema', 'shared']
   const packages = await Promise.all(packageNames.map(async (name) => {
     const pkg = JSON.parse(await readFile(resolve(root, `packages/${name}/package.json`), 'utf8'))
     return { name: pkg.name, version: pkg.version, runtimeDependencies: Object.keys(pkg.dependencies ?? {}) }
   }))
-  process.stdout.write(`${JSON.stringify({
+  if (packages[0].runtimeDependencies.includes('@easyink/builtin'))
+    throw new Error('The Viewer host must consume the selected collection without depending on builtin')
+  return {
     javascript: {
       sha256: createHash('sha256').update(code).digest('hex'),
       moduleCount: moduleIds.length,
@@ -68,7 +72,13 @@ async function main() {
     declarations,
     packages,
     forbidden: violations,
-  }, null, 2)}\n`)
+  }
+}
+
+async function main() {
+  const selected = await checkEntry('minimal-viewer')
+  const empty = await checkEntry('empty-viewer')
+  process.stdout.write(`${JSON.stringify({ ...selected, empty }, null, 2)}\n`)
 }
 
 main().catch((error) => {

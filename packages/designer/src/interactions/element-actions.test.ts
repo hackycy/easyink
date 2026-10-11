@@ -7,13 +7,13 @@ function makeNode(id: string, input: Partial<MaterialNode> = {}): MaterialNode {
   return { id, type: 'rect', x: 0, y: 0, width: 10, height: 10, props: {}, ...input } as MaterialNode
 }
 
-function makeStore(elements: MaterialNode[], selected: string[] = []): DesignerStore {
-  const store = new DesignerStore({
+async function makeStore(elements: MaterialNode[], selected: string[] = []): Promise<DesignerStore> {
+  const store = await DesignerStore.create({ schema: {
     unit: 'px',
     page: { mode: 'fixed', width: 100, height: 100 },
     guides: { x: [], y: [] },
     elements,
-  })
+  } })
   if (selected.length > 0)
     store.selection.selectMultiple(selected)
   vi.spyOn(store.commands, 'beginTransaction')
@@ -23,9 +23,9 @@ function makeStore(elements: MaterialNode[], selected: string[] = []): DesignerS
 }
 
 describe('element actions', () => {
-  it('toggles hidden state through an undoable transaction', () => {
+  it('toggles hidden state through an undoable transaction', async () => {
     const node = makeNode('a')
-    const store = makeStore([node])
+    const store = await makeStore([node])
 
     expect(toggleMaterialHidden(store, node)).toBe(true)
 
@@ -35,10 +35,10 @@ describe('element actions', () => {
     expect(node.hidden).toBeUndefined()
   })
 
-  it('deletes hidden unlocked nodes and removes them from selection', () => {
+  it('deletes hidden unlocked nodes and removes them from selection', async () => {
     const hidden = makeNode('hidden', { hidden: true })
     const locked = makeNode('locked', { locked: true })
-    const store = makeStore([hidden, locked], ['hidden', 'locked'])
+    const store = await makeStore([hidden, locked], ['hidden', 'locked'])
 
     expect(deleteMaterialNodes(store, [hidden, locked])).toBe(1)
 

@@ -1,14 +1,14 @@
+import type { DesignerMaterial } from '@easyink/plugin-api/ui'
 /**
  * @vitest-environment happy-dom
  */
 import type { Component } from 'vue'
-import type { DesignerStore } from '../store/designer-store'
+import type { DesignerCreateOptions, DesignerStore } from '../store/designer-store'
 import type { DesignerResolvedAsset } from '../types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, defineComponent, h, nextTick, ref } from 'vue'
 import enUS from '../../../locales/src/en-US'
 import { provideDesignerStore } from '../composables'
-import { registerMaterialBundle } from '../materials/registry'
 import { DesignerStore as Store } from '../store/designer-store'
 import DesignerConfirmHost from './DesignerConfirmHost.vue'
 import ImageSourceEditor from './ImageSourceEditor.vue'
@@ -23,7 +23,7 @@ afterEach(() => {
 
 describe('image source editor', () => {
   it('commits directly typed image sources', async () => {
-    const mounted = mountImageSourceEditor()
+    const mounted = await mountImageSourceEditor()
     const input = textInput(mounted.host)
 
     input.dispatchEvent(new FocusEvent('focus'))
@@ -38,7 +38,7 @@ describe('image source editor', () => {
   })
 
   it('clears the current image source', async () => {
-    const mounted = mountImageSourceEditor({ value: 'https://example.com/old.png' })
+    const mounted = await mountImageSourceEditor({ value: 'https://example.com/old.png' })
 
     button(mounted.host, CLEAR_TITLE).click()
     await nextTick()
@@ -50,7 +50,7 @@ describe('image source editor', () => {
 
   it('disables typing, picking, and clearing together', async () => {
     const pickAsset = vi.fn(() => ({ url: 'https://example.com/new.png' }))
-    const mounted = mountImageSourceEditor({
+    const mounted = await mountImageSourceEditor({
       value: 'https://example.com/old.png',
       disabled: true,
       provider: { pickAsset },
@@ -69,7 +69,7 @@ describe('image source editor', () => {
 
   it('uses the host interaction bridge instead of rendering native inputs', async () => {
     const pickAsset = vi.fn(() => ({ url: 'https://example.com/picked.png', alt: 'Picked' }))
-    const mounted = mountImageSourceEditor({
+    const mounted = await mountImageSourceEditor({
       value: 'https://example.com/old.png',
       provider: { pickAsset },
     })
@@ -89,7 +89,7 @@ describe('image source editor', () => {
   })
 
   it('disables picking before the shell asset provider is mounted', async () => {
-    const mounted = mountImageSourceEditor()
+    const mounted = await mountImageSourceEditor()
 
     expect(mounted.host.querySelector('input[type="file"]')).toBeNull()
     expect(button(mounted.host, PICK_TITLE).disabled).toBe(true)
@@ -99,7 +99,7 @@ describe('image source editor', () => {
 
 describe('designer asset picker host', () => {
   it('registers a default shell file picker and data URL uploader', async () => {
-    const store = createStore()
+    const store = await createStore()
     const mounted = mountWithStore(store, DesignerConfirmHost)
 
     expect(store.assetPickerAvailable).toBe(true)
@@ -113,7 +113,7 @@ describe('designer asset picker host', () => {
 
 describe('properties panel image source writes', () => {
   it('writes picked images into page background without dropping existing background fields', async () => {
-    const store = createStore({
+    const store = await createStore({
       page: {
         mode: 'fixed',
         width: 210,
@@ -145,7 +145,7 @@ describe('properties panel image source writes', () => {
   })
 
   it('writes picked image material src and fills blank alt once', async () => {
-    const store = createStore({
+    const store = await createStore({
       elements: [
         imageNode('img_blank', { src: '', alt: '' }),
       ],
@@ -167,7 +167,7 @@ describe('properties panel image source writes', () => {
   })
 
   it('does not overwrite an existing image material alt', async () => {
-    const store = createStore({
+    const store = await createStore({
       elements: [
         imageNode('img_existing', { src: '', alt: 'Keep me' }),
       ],
@@ -189,12 +189,12 @@ describe('properties panel image source writes', () => {
   })
 })
 
-function mountImageSourceEditor(options: {
+async function mountImageSourceEditor(options: {
   value?: string
   disabled?: boolean
   provider?: Parameters<DesignerStore['interactions']['setProvider']>[0]
 } = {}) {
-  const store = createStore()
+  const store = await createStore()
   store.setInteractionProvider(options.provider)
   const model = ref(options.value ?? '')
   const events = {
@@ -245,73 +245,67 @@ function mountWithStore(
   app.mount(host)
   return {
     host,
-    unmount() {
+    async unmount() {
       app.unmount()
+      await store.destroy()
       host.remove()
     },
   }
 }
 
-function createStore(schema: ConstructorParameters<typeof Store>[0] = {}) {
-  const store = new Store(schema)
-  store.setLocale(enUS)
-  registerImageMaterialFixture(store)
-  return store
+async function createStore(schema: DesignerCreateOptions['schema'] = {}) {
+  return Store.create({ schema, locale: { messages: enUS }, materials: [imageMaterialFixture()] })
 }
 
-function registerImageMaterialFixture(store: Store) {
-  registerMaterialBundle(store, {
-    materials: [{
+function imageMaterialFixture(): DesignerMaterial {
+  return {
+    model: {
       type: 'image',
-      name: 'materials.image.name',
-      icon: { render: () => null },
-      category: 'basic',
-      capabilities: { bindable: true, resizable: true, rotatable: true },
+      capabilities: { resizable: true, rotatable: true },
       binding: { kind: 'ordinary', primaryProp: 'src', formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' } },
       createDefaultNode: input => imageNode(input?.id ?? 'image-1', input?.props ?? {}),
-      factory: vi.fn(() => ({ renderContent: () => () => {} })),
-      propSchemas: [
-        {
-          key: 'src',
-          label: 'materials.image.property.src',
-          type: 'image',
-          group: 'content',
-          editorOptions: {
-            valueInput: {
-              kind: 'asset-url',
-              id: 'designer.imageMaterial.pickImage',
-              source: 'image-material',
-              accept: ['image/*'],
-              pickTitle: 'materials.image.action.pick',
-              clearTitle: 'materials.image.action.clear',
-              previewTitle: 'materials.image.action.preview',
-              previewLoadingTitle: 'materials.image.action.previewLoading',
-              previewFailedTitle: 'materials.image.action.previewFailed',
-            },
+    },
+    renderer: vi.fn(() => ({ renderContent: () => () => {} })),
+    properties: [
+      {
+        key: 'src',
+        label: 'materials.image.property.src',
+        type: 'image',
+        group: 'content',
+        editorOptions: {
+          valueInput: {
+            kind: 'asset-url',
+            id: 'designer.imageMaterial.pickImage',
+            source: 'image-material',
+            accept: ['image/*'],
+            pickTitle: 'materials.image.action.pick',
+            clearTitle: 'materials.image.action.clear',
+            previewTitle: 'materials.image.action.preview',
+            previewLoadingTitle: 'materials.image.action.previewLoading',
+            previewFailedTitle: 'materials.image.action.previewFailed',
           },
         },
-        { key: 'alt', label: 'materials.image.property.alt', type: 'string', group: 'content' },
-      ],
-      localeMessages: {
-        messages: {
-          materials: {
-            image: {
-              name: 'Image',
-              property: { src: 'Image URL', alt: 'Alt Text' },
-              action: {
-                pick: 'Pick Image',
-                clear: 'Clear Image',
-                preview: 'Image Preview',
-                previewLoading: 'Image Loading',
-                previewFailed: 'Image Preview Failed',
-              },
+      },
+      { key: 'alt', label: 'materials.image.property.alt', type: 'string', group: 'content' },
+    ],
+    locale: {
+      messages: {
+        materials: {
+          image: {
+            name: 'Image',
+            property: { src: 'Image URL', alt: 'Alt Text' },
+            action: {
+              pick: 'Pick Image',
+              clear: 'Clear Image',
+              preview: 'Image Preview',
+              previewLoading: 'Image Loading',
+              previewFailed: 'Image Preview Failed',
             },
           },
         },
       },
-    }],
-    catalogs: [],
-  })
+    },
+  }
 }
 
 function imageNode(id: string, props: Record<string, unknown>) {

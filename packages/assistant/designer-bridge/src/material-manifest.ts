@@ -1,16 +1,21 @@
 import type { AssistantMaterialBindingDefinition, AssistantMaterialManifest, AssistantMaterialProp } from '@easyink/assistant-capabilities'
-import type { DesignerStore, PropSchema } from '@easyink/designer'
+import type { DeepReadonly } from '@easyink/plugin-api'
+import type { DesignerContext, PropSchema } from '@easyink/plugin-api/designer'
+import type { DesignerMaterial } from '@easyink/plugin-api/ui'
 
-export function createAssistantMaterialManifest(store: DesignerStore): AssistantMaterialManifest {
+export function createAssistantMaterialManifest(context: DesignerContext): AssistantMaterialManifest {
   return {
-    materials: store.listMaterials().map(material => ({
-      type: material.type,
-      name: material.name,
-      capabilities: material.capabilities,
-      binding: sanitizeBindingDefinition(material.binding),
-      props: material.props.map(prop => sanitizePropSchema(prop)),
-      ai: material.aiDescriptor,
-    })),
+    materials: context.getMaterials().map((entry) => {
+      const material = entry as DeepReadonly<DesignerMaterial>
+      return {
+        type: material.model.type,
+        name: material.ui?.palette?.[0]?.label ?? material.model.type,
+        capabilities: { ...material.model.capabilities, pageAware: material.model.pageAware },
+        binding: sanitizeBindingDefinition(material.model.binding),
+        props: material.properties?.map(prop => sanitizePropSchema(prop)) ?? [],
+        ai: material.ai ? JSON.parse(JSON.stringify(material.ai)) : undefined,
+      }
+    }),
   }
 }
 
@@ -18,7 +23,7 @@ function sanitizeBindingDefinition(binding: unknown): AssistantMaterialBindingDe
   return toSerializable(binding) as AssistantMaterialBindingDefinition
 }
 
-function sanitizePropSchema(prop: PropSchema): AssistantMaterialProp {
+function sanitizePropSchema(prop: DeepReadonly<PropSchema>): AssistantMaterialProp {
   return compactObject({
     key: prop.key,
     label: prop.label,

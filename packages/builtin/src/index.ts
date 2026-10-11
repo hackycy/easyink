@@ -3,9 +3,9 @@ import { builtinDesignerMaterialSets } from './designer'
 import { builtinViewerMaterialSets, registerBuiltinViewerMaterialBundle } from './viewer'
 
 export * from './ai'
+export { materials } from './all/designer'
 export * from './designer'
 export * from './types'
-export * from './viewer'
 
 export const builtinDesignerMaterialBundle = builtinDesignerMaterialSets.all
 export const builtinDesignerMaterials = builtinDesignerMaterialBundle.materials
@@ -38,3 +38,4 @@ export function registerBasicBuiltinViewerMaterials(register: BuiltinViewerRegis
 export function registerNoneBuiltinViewerMaterials(register: BuiltinViewerRegistrar): void {
   registerBuiltinViewerMaterialBundle(register, builtinNoneViewerMaterialBundle)
 }
+export * from './viewer'

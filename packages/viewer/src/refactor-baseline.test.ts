@@ -38,7 +38,7 @@ afterEach(() => document.body.replaceChildren())
 describe('g0 explicitly assembled viewer output', () => {
   it.each(['mm', 'pt', 'px'] as const)('freezes fixed-page geometry, content, copies, condition, binding and page numbers in %s', async (unit) => {
     const container = document.createElement('div')
-    const viewer = createBuiltinViewer({ container })
+    const viewer = await createBuiltinViewer({ container })
     const unknown: MaterialNode = {
       id: 'unknown',
       type: 'custom/uninstalled',
@@ -84,7 +84,7 @@ describe('g0 explicitly assembled viewer output', () => {
 
   it('freezes table-data fragments, page numbers and chart SVG output', async () => {
     const container = document.createElement('div')
-    const viewer = createBuiltinViewer({ container })
+    const viewer = await createBuiltinViewer({ container })
     const table: TableNode & { table: TableDataSchema } = {
       ...defaultNode('table-data', { id: 'items', x: 5, y: 10, width: 70, height: 16 }),
       type: 'table-data',
@@ -137,11 +137,12 @@ describe('g0 explicitly assembled viewer output', () => {
     }
   })
 
-  it('keeps a core-only Viewer empty until materials are explicitly registered', async () => {
+  it('keeps an explicitly empty Viewer selection empty', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container, materials: [] })
     try {
-      expect(viewer.materialRegistry.registeredTypes).toEqual([])
+      expect('registerMaterial' in viewer).toBe(false)
+      expect('materialRegistry' in viewer).toBe(false)
       await viewer.open({ schema: {
         version: '1.0.0',
         unit: 'mm',

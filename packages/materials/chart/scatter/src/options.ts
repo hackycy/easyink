@@ -1,6 +1,6 @@
-import type { ChartScatterPoint, ScatterChartStyleOptions } from '@easyink/material-chart-kernel'
+import type { ChartScatterPoint, ScatterChartStyleOptions } from '@easyink/material-chart-kernel/viewer'
 import type { ChartScatterProps } from './schema'
-import { createScatterEChartsOption, DEFAULT_SCATTER_PREVIEW_DATA, normalizeScatterData } from '@easyink/material-chart-kernel'
+import { createScatterEChartsOption, DEFAULT_SCATTER_PREVIEW_DATA, normalizeScatterData } from '@easyink/material-chart-kernel/viewer'
 import { CHART_SCATTER_DEFAULTS } from './schema'
 
 export function createChartScatterPreviewOption(props: Partial<ChartScatterProps>, dataInput?: unknown) {

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { DesignerAction } from '@easyink/plugin-api/ui'
+import type { ContributionOwner } from '@easyink/plugin-runtime'
 import type { MaterialNode } from '@easyink/schema'
 import type { Component } from 'vue'
 import {
@@ -56,19 +58,29 @@ import {
 import { createDefaultSchema } from '@easyink/schema'
 import { generateId } from '@easyink/shared'
 import { EiNumberInput, EiPopover, EiSwitch } from '@easyink/ui'
-import { computed, inject, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useDesignerStore } from '../composables'
-import { CONTRIBUTION_REGISTRY_KEY } from '../contributions/injection'
 import { createClipboardActions } from '../interactions/clipboard-actions'
 import { hasGroupedElement, selectedLogicalGroupIds } from '../interactions/logical-groups'
 import { selectMany } from '../interactions/selection-api'
 import { filterRotatableElements } from '../materials/capabilities'
 import { getNextTopbarZoom } from './topbar-zoom'
 
-const contributionRegistry = inject(CONTRIBUTION_REGISTRY_KEY, undefined)
-const toolbarActions = computed(() => contributionRegistry?.registry.toolbarActions ?? [])
-
 const store = useDesignerStore()
+const toolbarActions = computed(() => store.getContributions('designer.toolbar').map(entry => ({
+  action: entry.value as DesignerAction,
+  owner: entry.owner,
+})).sort((a, b) => (a.action.order ?? 0) - (b.action.order ?? 0)))
+async function runExtensionAction(action: DesignerAction, owner: ContributionOwner) {
+  const context = store.getExtensionContext(owner)
+  try {
+    await action.onClick(context)
+  }
+  catch (cause) {
+    if (!context.signal.aborted)
+      context.reportDiagnostic({ code: 'extension-action', message: `Extension action failed: ${owner.pluginId}/${action.id}`, cause })
+  }
+}
 
 // ─── Window Toggle Definitions ─────────────────────────────────
 
@@ -532,13 +544,14 @@ function toggleSnapMenu(ev: MouseEvent) {
         <component :is="wt.icon" :size="16" :stroke-width="1.5" />
       </button>
       <button
-        v-for="action in toolbarActions"
-        :key="action.id"
+        v-for="entry in toolbarActions"
+        :key="entry.action.id"
         class="ei-topbar-b__btn ei-topbar-b__btn--contribution"
-        :title="store.t(action.label)"
-        @click="contributionRegistry && action.onClick(contributionRegistry.context)"
+        :title="store.t(entry.action.label)"
+        :disabled="entry.action.disabled?.(store.getExtensionContext(entry.owner))"
+        @click="runExtensionAction(entry.action, entry.owner)"
       >
-        <component :is="action.icon" :size="16" :stroke-width="1.5" />
+        <component :is="entry.action.icon" :size="16" :stroke-width="1.5" />
       </button>
     </div>
 

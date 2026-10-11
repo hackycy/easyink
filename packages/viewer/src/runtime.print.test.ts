@@ -155,7 +155,7 @@ describe('viewer runtime print policy', () => {
 
   it('rejects schemas with unknown page modes during viewer validation', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
     const diagnostics: unknown[] = []
 
     await expect(viewer.open({
@@ -189,7 +189,7 @@ describe('viewer runtime print policy', () => {
 
   it('does not force a fixed page size for continuous-mode browser printing', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
     const pageHeight = 100
 
     await viewer.open({
@@ -215,7 +215,7 @@ describe('viewer runtime print policy', () => {
 
   it('uses cached rendered continuous metrics when continuous printing requests a fixed page size', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
 
     await viewer.open({
       schema: createContinuousSchema(),
@@ -235,7 +235,7 @@ describe('viewer runtime print policy', () => {
 
   it('keeps fixed-page browser printing constrained to the template size', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
 
     await viewer.open({ schema: createFixedSchema() })
 
@@ -280,7 +280,7 @@ describe('viewer runtime print policy', () => {
 describe('viewer runtime print behavior', () => {
   it('passes resolved print policy to print drivers', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
     const printSpy = mockWindowPrint()
     const calls: ViewerPrintContext[] = []
 
@@ -304,7 +304,7 @@ describe('viewer runtime print behavior', () => {
 
   it('uses print driver default page size mode when caller only passes driverId', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
     const calls: ViewerPrintContext[] = []
 
     viewer.registerPrintDriver({
@@ -329,7 +329,7 @@ describe('viewer runtime print behavior', () => {
     wrapper.appendChild(container)
     document.body.appendChild(wrapper)
     const diagnostics: string[] = []
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
     const styleCountBefore = document.head.querySelectorAll('style').length
     mockWindowPrint(() => {
       throw new Error('print boom')
@@ -353,7 +353,7 @@ describe('viewer runtime print behavior', () => {
   it('propagates isolated browser print failures to call diagnostics and throwOnError', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
     const callbackDiagnostics: string[] = []
     mockWindowPrint(() => {
       throw new Error('print boom')
@@ -375,7 +375,7 @@ describe('viewer runtime print behavior', () => {
   it('rejects continuous pdf printing when rendered metrics are missing', async () => {
     const container = document.createElement('div')
     const diagnostics: string[] = []
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
     const printSpy = mockWindowPrint()
 
     await viewer.open({
@@ -396,7 +396,7 @@ describe('viewer runtime print behavior', () => {
 
   it('uses browser printing by default even when print drivers are registered', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
     const printSpy = mockWindowPrint()
     const calls: ViewerPrintContext[] = []
 
@@ -416,7 +416,7 @@ describe('viewer runtime print behavior', () => {
 
   it('throws print driver failures when throwOnError is enabled', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
     viewer.registerPrintDriver({
       id: 'bad-print-driver',
       async print() {
@@ -431,7 +431,7 @@ describe('viewer runtime print behavior', () => {
 
   it('replaces print drivers with the same id', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
     const calls: string[] = []
 
     viewer.registerPrintDriver({
@@ -457,7 +457,7 @@ describe('viewer runtime print behavior', () => {
 describe('viewer runtime export behavior', () => {
   it('passes rendered pages, container, and diagnostics callback to exporters', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
     let captured: ViewerExportContext | undefined
     const diagnostics: string[] = []
     const callbackDiagnostics: string[] = []
@@ -501,7 +501,7 @@ describe('viewer runtime export behavior', () => {
 
   it('throws exporter failures when throwOnError is enabled', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
     viewer.registerExporter({
       id: 'bad-exporter',
       format: 'pdf',
@@ -517,7 +517,7 @@ describe('viewer runtime export behavior', () => {
 
   it('replaces exporters with the same id', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
     const calls: string[] = []
 
     viewer.registerExporter({

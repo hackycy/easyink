@@ -1,10 +1,11 @@
-import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { MaterialDesignerExtension } from '@easyink/core'
+import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
 import type { MaterialNode } from '@easyink/schema'
 import type { RingProgressProps } from './schema'
 import { getBindingRefs, getNodeProps } from '@easyink/schema'
 import { buildRingProgressHtml } from './rendering'
 
-function buildDesignerHtml(node: MaterialNode, context: MaterialExtensionContext): string {
+function buildDesignerHtml(node: MaterialNode, context: DesignerRendererContext): string {
   const props = getNodeProps<RingProgressProps>(node)
   const binding = getBindingRefs(node.binding)[0]
   const textOverride = binding && props.showText
@@ -13,7 +14,7 @@ function buildDesignerHtml(node: MaterialNode, context: MaterialExtensionContext
   return buildRingProgressHtml(node, props, { textOverride })
 }
 
-export function createRingProgressExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createRingProgressExtension(context: DesignerRendererContext): MaterialDesignerExtension {
   return {
     renderContent(nodeSignal, container) {
       function render() {

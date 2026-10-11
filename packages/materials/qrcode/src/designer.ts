@@ -1,4 +1,5 @@
-import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { MaterialDesignerExtension } from '@easyink/core'
+import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
 import type { MaterialNode } from '@easyink/schema'
 import type { QrcodeProps } from './schema'
 import { getBindingRefs, getNodeProps } from '@easyink/schema'
@@ -13,7 +14,7 @@ function buildPlaceholder(p: QrcodeProps, label: string): string {
   return `<div style="position:relative;width:100%;height:100%">${svg}<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center"><span style="background:rgba(255,255,255,0.8);padding:1px 4px;font-size:10px;color:${p.foreground};border-radius:2px">${label}</span></div></div>`
 }
 
-function buildHtml(node: MaterialNode, context: MaterialExtensionContext): string {
+function buildHtml(node: MaterialNode, context: DesignerRendererContext): string {
   const p = getNodeProps<QrcodeProps>(node)
   const unit = context.getSchema().unit
   const DASH_MAP: Record<string, string> = { dashed: 'dashed', dotted: 'dotted' }
@@ -45,7 +46,7 @@ function buildHtml(node: MaterialNode, context: MaterialExtensionContext): strin
   return borderStyle ? `<div style="width:100%;height:100%;${borderStyle}">${svg}</div>` : svg
 }
 
-export function createQrcodeExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createQrcodeExtension(context: DesignerRendererContext): MaterialDesignerExtension {
   return {
     renderContent(nodeSignal, container) {
       function render() {

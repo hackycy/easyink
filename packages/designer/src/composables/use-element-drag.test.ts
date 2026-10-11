@@ -12,13 +12,13 @@ function makeNode(id: string, x: number, y: number, w = 50, h = 50): MaterialNod
   return { id, type: 'rect', x, y, width: w, height: h, props: {} } as MaterialNode
 }
 
-function makeStore(elements: MaterialNode[], selected: string[], page: PageSchema = { mode: 'fixed', width: 1000, height: 1000 }): DesignerStore {
-  const store = new DesignerStore({
+async function makeStore(elements: MaterialNode[], selected: string[], page: PageSchema = { mode: 'fixed', width: 1000, height: 1000 }): Promise<DesignerStore> {
+  const store = await DesignerStore.create({ schema: {
     unit: 'px',
     page,
     guides: { x: [], y: [] },
     elements,
-  })
+  } })
   store.workbench.snap.enabled = true
   store.workbench.snap.gridSnap = false
   store.workbench.snap.guideSnap = false
@@ -73,9 +73,9 @@ function startDrag(target: HTMLElement, drag: ReturnType<typeof useElementDrag>,
 }
 
 describe('useElementDrag', () => {
-  it('moves a single selected element by pointer delta in document units', () => {
+  it('moves a single selected element by pointer delta in document units', async () => {
     const node = makeNode('n1', 10, 20)
-    const store = makeStore([node], ['n1'])
+    const store = await makeStore([node], ['n1'])
     const drag = useElementDrag(makeCtx(store))
 
     const target = document.createElement('div')
@@ -93,10 +93,10 @@ describe('useElementDrag', () => {
     expect(vi.mocked(store.commands.execute).mock.calls[0]![0]).toBeInstanceOf(MoveMaterialCommand)
   })
 
-  it('multi-selection moves every selected node by the same delta', () => {
+  it('multi-selection moves every selected node by the same delta', async () => {
     const a = makeNode('a', 0, 0)
     const b = makeNode('b', 100, 100)
-    const store = makeStore([a, b], ['a', 'b'])
+    const store = await makeStore([a, b], ['a', 'b'])
     const drag = useElementDrag(makeCtx(store))
 
     const target = document.createElement('div')
@@ -112,10 +112,10 @@ describe('useElementDrag', () => {
     expect(b.y).toBe(130)
   })
 
-  it('moves multi-selection continuously across fixed-sheet page breaks', () => {
+  it('moves multi-selection continuously across fixed-sheet page breaks', async () => {
     const a = makeNode('a', 0, 80, 10, 10)
     const b = makeNode('b', 0, 150, 10, 10)
-    const store = makeStore([a, b], ['a', 'b'], {
+    const store = await makeStore([a, b], ['a', 'b'], {
       mode: 'fixed',
       width: 100,
       height: 100,
@@ -134,9 +134,9 @@ describe('useElementDrag', () => {
     expect(b.y).toBe(200)
   })
 
-  it('keeps page boundary snap as an auxiliary page reference', () => {
+  it('keeps page boundary snap as an auxiliary page reference', async () => {
     const node = makeNode('n1', 10, 20)
-    const store = makeStore([node], ['n1'])
+    const store = await makeStore([node], ['n1'])
     const drag = useElementDrag(makeCtx(store))
 
     const target = document.createElement('div')
@@ -154,9 +154,9 @@ describe('useElementDrag', () => {
     }))
   })
 
-  it('snaps to later fixed-sheet page boundaries', () => {
+  it('snaps to later fixed-sheet page boundaries', async () => {
     const node = makeNode('n1', 0, 150, 10, 10)
-    const store = makeStore([node], ['n1'], {
+    const store = await makeStore([node], ['n1'], {
       mode: 'fixed',
       width: 100,
       height: 100,
@@ -179,11 +179,11 @@ describe('useElementDrag', () => {
     }))
   })
 
-  it('multi-selection drag commits a single transaction', () => {
+  it('multi-selection drag commits a single transaction', async () => {
     const a = makeNode('a', 0, 0)
     const b = makeNode('b', 100, 100)
     const c = makeNode('c', 200, 200)
-    const store = makeStore([a, b, c], ['a', 'b', 'c'])
+    const store = await makeStore([a, b, c], ['a', 'b', 'c'])
     const drag = useElementDrag(makeCtx(store))
 
     const target = document.createElement('div')
@@ -200,9 +200,9 @@ describe('useElementDrag', () => {
     expect(store.commands.execute).toHaveBeenCalledTimes(3)
   })
 
-  it('drag without movement does not open a transaction', () => {
+  it('drag without movement does not open a transaction', async () => {
     const node = makeNode('n1', 10, 20)
-    const store = makeStore([node], ['n1'])
+    const store = await makeStore([node], ['n1'])
     const drag = useElementDrag(makeCtx(store))
 
     const target = document.createElement('div')
@@ -216,9 +216,9 @@ describe('useElementDrag', () => {
     expect(store.commands.execute).not.toHaveBeenCalled()
   })
 
-  it('fires onDragMoved exactly once per drag, on first real movement', () => {
+  it('fires onDragMoved exactly once per drag, on first real movement', async () => {
     const node = makeNode('n1', 0, 0)
-    const store = makeStore([node], ['n1'])
+    const store = await makeStore([node], ['n1'])
     const onDragMoved = vi.fn()
     const drag = useElementDrag(makeCtx(store, onDragMoved))
 
@@ -241,9 +241,9 @@ describe('useElementDrag', () => {
     window.dispatchEvent(pdEvent('pointerup', 15, 15))
   })
 
-  it('zoom scales the document delta consistently', () => {
+  it('zoom scales the document delta consistently', async () => {
     const node = makeNode('n1', 0, 0)
-    const store = makeStore([node], ['n1'])
+    const store = await makeStore([node], ['n1'])
     store.workbench.viewport.zoom = 2 // 1 doc unit = 2 screen px
     const drag = useElementDrag(makeCtx(store))
 
@@ -259,10 +259,10 @@ describe('useElementDrag', () => {
     expect(node.y).toBe(30)
   })
 
-  it('bypasses snap when Cmd / Ctrl is held', () => {
+  it('bypasses snap when Cmd / Ctrl is held', async () => {
     const target1 = makeNode('a', 0, 0, 10, 10)
     const other = makeNode('b', 100, 0, 10, 10)
-    const store = makeStore([target1, other], ['a'])
+    const store = await makeStore([target1, other], ['a'])
     store.workbench.snap.enabled = true
     store.workbench.snap.elementSnap = true
     const drag = useElementDrag(makeCtx(store))
@@ -280,10 +280,10 @@ describe('useElementDrag', () => {
     expect(store.snapActiveLines).toHaveLength(0)
   })
 
-  it('emits element snap feedback while dragging away from an overlapping element', () => {
+  it('emits element snap feedback while dragging away from an overlapping element', async () => {
     const target1 = makeNode('a', 0, 0, 10, 10)
     const overlapped = makeNode('b', 0, 0, 10, 10)
-    const store = makeStore([target1, overlapped], ['a'])
+    const store = await makeStore([target1, overlapped], ['a'])
     store.workbench.snap.enabled = true
     store.workbench.snap.elementSnap = true
     const drag = useElementDrag(makeCtx(store))
@@ -304,9 +304,9 @@ describe('useElementDrag', () => {
     }))
   })
 
-  it('pointercancel rolls back position and skips command', () => {
+  it('pointercancel rolls back position and skips command', async () => {
     const node = makeNode('n1', 10, 20)
-    const store = makeStore([node], ['n1'])
+    const store = await makeStore([node], ['n1'])
     const drag = useElementDrag(makeCtx(store))
 
     const target = document.createElement('div')
@@ -323,10 +323,10 @@ describe('useElementDrag', () => {
     expect(store.commands.execute).not.toHaveBeenCalled()
   })
 
-  it('does not mutate selection on pointerdown (selection is the controller\'s job)', () => {
+  it('does not mutate selection on pointerdown (selection is the controller\'s job)', async () => {
     const a = makeNode('a', 0, 0)
     const b = makeNode('b', 100, 100)
-    const store = makeStore([a, b], ['a'])
+    const store = await makeStore([a, b], ['a'])
     const drag = useElementDrag(makeCtx(store))
 
     const target = document.createElement('div')

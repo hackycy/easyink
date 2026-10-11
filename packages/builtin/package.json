@@ -26,7 +26,23 @@
       "types": "./dist/none.d.mts",
       "import": "./dist/none.mjs"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./all/designer": {
+      "types": "./dist/all/designer.d.mts",
+      "import": "./dist/all/designer.mjs"
+    },
+    "./basic/designer": {
+      "types": "./dist/basic/designer.d.mts",
+      "import": "./dist/basic/designer.mjs"
+    },
+    "./all/viewer": {
+      "types": "./dist/all/viewer.d.mts",
+      "import": "./dist/all/viewer.mjs"
+    },
+    "./basic/viewer": {
+      "types": "./dist/basic/viewer.d.mts",
+      "import": "./dist/basic/viewer.mjs"
+    }
   },
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
@@ -70,6 +86,7 @@
     "@easyink/material-table-kernel": "workspace:*",
     "@easyink/material-table-static": "workspace:*",
     "@easyink/material-text": "workspace:*",
+    "@easyink/plugin-api": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*"
   }

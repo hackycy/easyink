@@ -1,6 +1,6 @@
-import type { ChartCategoryValuePoint, PieChartStyleOptions } from '@easyink/material-chart-kernel'
+import type { ChartCategoryValuePoint, PieChartStyleOptions } from '@easyink/material-chart-kernel/viewer'
 import type { ChartPiePalettePreset, ChartPieProps } from './schema'
-import { createPieEChartsOption, DEFAULT_CHART_PREVIEW_DATA, normalizeCategoryValueData } from '@easyink/material-chart-kernel'
+import { createPieEChartsOption, DEFAULT_CHART_PREVIEW_DATA, normalizeCategoryValueData } from '@easyink/material-chart-kernel/viewer'
 import { CHART_PIE_DEFAULTS } from './schema'
 
 export const CHART_PIE_PALETTE_OPTIONS: Array<{ label: string, value: ChartPiePalettePreset }> = [

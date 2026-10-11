@@ -1,4 +1,5 @@
-import type { MaterialExtensionContext, NodeSignal } from '@easyink/core'
+import type { NodeSignal } from '@easyink/core'
+import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
 import type { MaterialNode } from '@easyink/schema'
 import { createDefaultSchema } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
@@ -8,9 +9,23 @@ import { installCanvasTextMeasurement } from './test-utils'
 
 installCanvasTextMeasurement()
 
-function createContext(): MaterialExtensionContext {
+function createContext(): DesignerRendererContext {
   const schema = createDefaultSchema()
   return {
+    signal: new AbortController().signal,
+    onDispose: () => {},
+    getDataSources: () => [],
+    getMaterials: () => [],
+    isEditing: () => false,
+    replaceDocument: () => {},
+    readDocumentExtension: () => undefined,
+    writeDocumentExtension: () => {},
+    registerDataSource: () => {},
+    confirm: async () => false,
+    pickAsset: async () => null,
+    pickFileText: async () => null,
+    executeCommand: async () => { throw new Error('No commands installed') },
+    reportDiagnostic: () => {},
     getSchema: () => schema,
     getNode: () => undefined,
     getSelection: () => ({ ids: [], count: 0, isEmpty: true }),

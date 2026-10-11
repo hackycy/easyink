@@ -30,7 +30,7 @@ import { useEasyInkPrint } from './hooks/useEasyInkPrint'
 import { usePrinter } from './hooks/useHiPrint'
 import { useLodopPrint } from './hooks/useLodopPrint'
 import { useRenderApiService } from './hooks/useRenderApiService'
-import { setupPlaygroundViewerMaterials } from './viewer-materials'
+import { playgroundViewerMaterials } from './viewer-materials'
 
 const props = defineProps<{
   schema: DocumentSchema
@@ -51,6 +51,7 @@ const iframeRef = ref<HTMLIFrameElement>()
 let viewerHost: ViewerHost | undefined
 let viewerViewport: HTMLElement | undefined
 let viewer: ViewerRuntime | undefined
+let disposed = false
 const exportRuntime = createExportRuntime({ entry: 'preview' })
 
 const zoom = ref(100)
@@ -75,6 +76,8 @@ onMounted(async () => {
     return
 
   await waitForIframeDocument(iframeRef.value)
+  if (disposed)
+    return
   const iframeHost = createIframeViewerHost(iframeRef.value)
   const viewerMount = setupIframeSurface(iframeHost)
   viewerViewport = iframeHost.mount
@@ -85,23 +88,30 @@ onMounted(async () => {
     print: iframeHost.print,
   })
 
-  viewer = createViewer({ host: viewerHost, fontProvider: playgroundFontProvider })
-  setupPlaygroundViewerMaterials(viewer)
-  registerOutputIntegrations(viewer)
-  await viewer.open({
+  const runtime = await createViewer({ host: viewerHost, fontProvider: playgroundFontProvider, materials: playgroundViewerMaterials })
+  if (disposed) {
+    await runtime.destroy()
+    return
+  }
+  viewer = runtime
+  registerOutputIntegrations(runtime)
+  await runtime.open({
     schema: props.schema,
     data: props.data,
   })
 
+  if (disposed)
+    return
   updatePageCount()
   document.addEventListener('keydown', handleKeyDown)
 })
 
 onBeforeUnmount(() => {
+  disposed = true
   document.removeEventListener('keydown', handleKeyDown)
   viewerViewport?.removeEventListener('wheel', handleWheel)
   viewerViewport?.removeEventListener('scroll', handleScroll)
-  viewer?.destroy()
+  void viewer?.destroy()
   viewer = undefined
   viewerHost = undefined
   viewerViewport = undefined

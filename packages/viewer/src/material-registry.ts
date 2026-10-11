@@ -1,88 +1,115 @@
-import type { MaterialBindingDefinition, MaterialConditionDefinition } from '@easyink/core'
+import type { MaterialBindingDefinition, MaterialConditionCapability, MaterialConditionDefinition } from '@easyink/core'
+import type { ViewerContext, ViewerRenderer } from '@easyink/plugin-api/viewer'
 import type { MaterialNode } from '@easyink/schema'
-import type { FragmentPaginator, MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from './types'
+import type { createViewerMaterialHost } from './material-host'
+import type { FragmentPaginator, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from './types'
 import { resolveMaterialConditionCapability, trustedViewerHtml } from '@easyink/core'
-import { escapeHtml } from '@easyink/shared'
+import { deepClone, escapeHtml } from '@easyink/shared'
 
-/**
- * Registry mapping material type strings to their viewer render extensions.
- * When a type is not found, renders a diagnostic placeholder.
- */
+type MaterialConsumer = Awaited<ReturnType<typeof createViewerMaterialHost>>
+export type MaterialRenderInput = ViewerRenderContext & Pick<ViewerContext, 'pageNumber' | 'totalPages' | 'copyIndex'>
+
+/** Read-only framework consumer; declarations and acquired caches belong to the Host consumer. */
 export class MaterialRendererRegistry {
-  private _renderers = new Map<string, MaterialViewerExtension>()
-  private _bindings = new Map<string, MaterialBindingDefinition>()
-  private _pageAwareTypes = new Set<string>()
+  constructor(private readonly consumer: MaterialConsumer, private readonly document?: Document) {}
 
-  register(type: string, binding: MaterialBindingDefinition, extension: MaterialViewerExtension): void {
-    this._renderers.set(type, extension)
-    this._bindings.set(type, binding)
-    if (extension.pageAware) {
-      this._pageAwareTypes.add(type)
+  async load(types: readonly string[]): Promise<void> {
+    for (const type of new Set(types)) {
+      const implementation = await this.consumer.getRenderer(type)
+      if (this.consumer.host.state !== 'active')
+        return
+      if (implementation && !('render' in implementation))
+        throw new Error(`Render Session consumer is not yet implemented for ${type}`)
     }
-  }
-
-  unregister(type: string): void {
-    this._renderers.delete(type)
-    this._bindings.delete(type)
-    this._pageAwareTypes.delete(type)
   }
 
   has(type: string): boolean {
-    return this._renderers.has(type)
+    return !!this.consumer.host.registry.getMaterial(type)
   }
 
-  render(node: MaterialNode, context: ViewerRenderContext): ViewerRenderOutput {
-    const ext = this._renderers.get(node.type)
-    if (!ext) {
-      return renderUnknownMaterial(node)
-    }
-    return ext.render(node, context)
+  render(node: MaterialNode, context: ViewerRenderContext | MaterialRenderInput): ViewerRenderOutput {
+    const renderer = this.renderer(node.type)
+    return renderer ? renderer.render(freezeSnapshot(node), this.context(node, context)) : renderUnknownMaterial(node)
   }
 
   measure(node: MaterialNode, context: ViewerMeasureContext): ViewerMeasureResult | null {
-    const ext = this._renderers.get(node.type)
-    if (!ext?.measure)
-      return null
-    return ext.measure(node, context)
+    const renderer = this.renderer(node.type)
+    return renderer?.measure?.(freezeSnapshot(node), this.context(node, context)) ?? null
   }
 
-  getRenderSize(node: MaterialNode, context: ViewerRenderContext): ViewerRenderSize {
-    const ext = this._renderers.get(node.type)
-    const size = ext?.getRenderSize?.(node, context)
-    return {
-      width: size?.width ?? node.width,
-      height: size?.height ?? node.height,
-    }
+  getRenderSize(node: MaterialNode, context: ViewerRenderContext | MaterialRenderInput): ViewerRenderSize {
+    const size = this.renderer(node.type)?.getRenderSize?.(freezeSnapshot(node), this.context(node, context))
+    return { width: size?.width ?? node.width, height: size?.height ?? node.height }
   }
 
   getFragmentPaginator(node: MaterialNode): FragmentPaginator | undefined {
-    const ext = this._renderers.get(node.type)
-    if (!ext?.fragmentPaginator?.canPaginate(node))
-      return undefined
-    return ext.fragmentPaginator
+    const paginator = this.renderer(node.type)?.fragmentPaginator
+    return paginator?.canPaginate(node) ? paginator : undefined
   }
 
   isPageAware(type: string): boolean {
-    return this._pageAwareTypes.has(type)
+    return this.consumer.host.registry.getMaterial(type)?.value.model.pageAware ?? false
   }
 
   getBinding(type: string): MaterialBindingDefinition | undefined {
-    return this._bindings.get(type)
+    return deepClone(this.consumer.host.registry.getMaterial(type)?.value.model.binding) as MaterialBindingDefinition | undefined
   }
 
   getCondition(type: string): MaterialConditionDefinition | undefined {
-    return resolveMaterialConditionCapability(this._renderers.get(type)?.condition)
+    return resolveMaterialConditionCapability(deepClone(this.consumer.host.registry.getMaterial(type)?.value.model.condition) as MaterialConditionCapability)
   }
 
   get registeredTypes(): string[] {
-    return [...this._renderers.keys()]
+    return this.consumer.host.registry.materials.map(entry => entry.key)
   }
 
-  clear(): void {
-    this._renderers.clear()
-    this._bindings.clear()
-    this._pageAwareTypes.clear()
+  private renderer(type: string): ViewerRenderer | undefined {
+    if (this.consumer.host.state !== 'active')
+      throw new Error('Viewer material consumer is disposed')
+    const implementation = this.consumer.peekRenderer(type)
+    return implementation && 'render' in implementation ? implementation : undefined
   }
+
+  private context(node: MaterialNode, input: ViewerRenderContext | ViewerMeasureContext | MaterialRenderInput): ViewerContext {
+    const resources = this.consumer.host.resources(node.type)
+    const document = 'document' in input ? input.document : this.document
+    if (!document)
+      throw new Error('Viewer material context requires a target document')
+    return Object.freeze({
+      ...resources,
+      document,
+      data: readonlySnapshot(input.data),
+      resolvedProps: readonlySnapshot('resolvedProps' in input ? input.resolvedProps : node.props),
+      unit: input.unit,
+      zoom: 'zoom' in input ? input.zoom : 1,
+      pageIndex: 'pageIndex' in input ? input.pageIndex : 0,
+      pageNumber: 'pageNumber' in input ? input.pageNumber : 'pageIndex' in input ? input.pageIndex + 1 : 1,
+      totalPages: 'totalPages' in input ? input.totalPages : 1,
+      copyIndex: 'copyIndex' in input ? input.copyIndex : 0,
+      reportDiagnostic: (diagnostic: { code: string, message: string, nodeId?: string, cause?: unknown }) => {
+        if (!resources.signal.aborted)
+          input.reportDiagnostic?.({ ...diagnostic, severity: 'warning' })
+      },
+    })
+  }
+}
+
+function readonlySnapshot<T>(value: T): T {
+  return freezeSnapshot(deepClone(value))
+}
+
+function freezeSnapshot<T>(value: T): T {
+  const seen = new WeakSet<object>()
+  function freeze(current: unknown) {
+    if (!current || typeof current !== 'object' || seen.has(current))
+      return
+    seen.add(current)
+    for (const child of Object.values(current))
+      freeze(child)
+    Object.freeze(current)
+  }
+  freeze(value)
+  return value
 }
 
 function renderUnknownMaterial(node: MaterialNode): ViewerRenderOutput {

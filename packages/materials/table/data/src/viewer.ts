@@ -2,7 +2,7 @@ import type { FragmentPaginator, LayoutFragment } from '@easyink/core'
 import type { BindingRef, MaterialNode, TableCellSchema, TableDataSchema, TableRowSchema } from '@easyink/schema'
 import type { TableDataProps } from './schema'
 import { createFragmentFromNode, extractCollectionPath, formatBindingDisplayValue, resolveBindingValue, resolveFieldFromRecord, trustedViewerHtml } from '@easyink/core'
-import { computeAutoRowHeights, computeRowScaleWithVirtualRows, renderPlainTextCell, renderTableHtml } from '@easyink/material-table-kernel'
+import { computeAutoRowHeights, computeRowScaleWithVirtualRows, renderPlainTextCell, renderTableHtml } from '@easyink/material-table-kernel/viewer'
 import { getNodeProps, isTableNode } from '@easyink/schema'
 import { TABLE_DATA_PLACEHOLDER_ROW_COUNT } from './layout'
 

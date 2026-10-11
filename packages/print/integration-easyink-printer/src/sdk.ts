@@ -70,7 +70,7 @@ export interface EasyInkPrinter {
   print: (input: EasyInkPrinterPrintInput) => Promise<void>
   printPdf: (input: EasyInkPrinterPrintPdfInput) => Promise<void>
   printHtml: (input: EasyInkPrinterPrintHtmlInput) => Promise<void>
-  destroy: () => void
+  destroy: ManagedPrintViewer['destroy']
 }
 
 /**
@@ -129,7 +129,7 @@ export function createEasyInkPrinter(options: EasyInkPrinterOptions): EasyInkPri
         await client.waitForJob(jobId)
     },
     destroy() {
-      viewer.destroy()
+      return viewer.destroy()
     },
   }
 

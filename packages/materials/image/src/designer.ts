@@ -1,10 +1,11 @@
-import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { MaterialDesignerExtension } from '@easyink/core'
+import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
 import type { MaterialNode } from '@easyink/schema'
 import type { ImageProps } from './schema'
 import { getBindingRefs, getNodeProps } from '@easyink/schema'
 import { escapeAttr } from '@easyink/shared'
 
-function buildHtml(node: MaterialNode, context: MaterialExtensionContext): string {
+function buildHtml(node: MaterialNode, context: DesignerRendererContext): string {
   const p = getNodeProps<ImageProps>(node)
   const unit = context.getSchema().unit
   const DASH_MAP: Record<string, string> = { dashed: 'dashed', dotted: 'dotted' }
@@ -38,7 +39,7 @@ function getContentKey(node: MaterialNode): string {
   return `${p.src}\0${p.fit}\0${p.alt}\0${p.backgroundColor}\0${p.borderWidth}\0${p.borderColor}\0${p.borderType}\0${binding}`
 }
 
-export function createImageExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createImageExtension(context: DesignerRendererContext): MaterialDesignerExtension {
   return {
     renderContent(nodeSignal, container) {
       let prevKey = ''

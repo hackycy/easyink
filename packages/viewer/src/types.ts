@@ -1,4 +1,6 @@
 import type { BindingFormatDiagnostic, FontProvider, FragmentPaginateInput, FragmentPaginateResult, FragmentPaginator, MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from '@easyink/core'
+import type { LocaleTree } from '@easyink/plugin-api/material'
+import type { ViewerMaterial } from '@easyink/plugin-api/viewer'
 import type { DocumentSchema } from '@easyink/schema'
 import type { DiagnosticCategory, DiagnosticSeverity, ExportEntry, ExportFormat, ExportPhase } from '@easyink/shared'
 import type { ViewerHost } from './viewer-host'
@@ -13,6 +15,8 @@ export type { FragmentPaginateInput, FragmentPaginateResult, FragmentPaginator, 
 // ---------------------------------------------------------------------------
 
 export interface ViewerOptions {
+  materials?: readonly ViewerMaterial[]
+  locale?: { code?: string, messages?: LocaleTree }
   mode?: DocumentSchema['page']['mode']
   container?: HTMLElement
   host?: ViewerHost

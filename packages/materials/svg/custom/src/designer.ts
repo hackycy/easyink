@@ -1,4 +1,5 @@
-import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { MaterialDesignerExtension } from '@easyink/core'
+import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
 import type { MaterialNode } from '@easyink/schema'
 import type { SvgCustomProps } from './schema'
 import { getBindingRefs, getNodeProps } from '@easyink/schema'
@@ -29,7 +30,7 @@ function buildSvgLogoPlaceholder(label?: string): string {
   ].join('')
 }
 
-function buildDesignerHtml(node: MaterialNode, context: MaterialExtensionContext): string {
+function buildDesignerHtml(node: MaterialNode, context: DesignerRendererContext): string {
   const binding = getBindingRefs(node.binding)[0]
   if (binding) {
     const label = context.getBindingLabel(binding)
@@ -43,7 +44,7 @@ function buildDesignerHtml(node: MaterialNode, context: MaterialExtensionContext
   return buildSvgCustomMarkup(props)
 }
 
-export function createSvgCustomExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createSvgCustomExtension(context: DesignerRendererContext): MaterialDesignerExtension {
   return {
     renderContent(nodeSignal, container) {
       function render() {

@@ -14,11 +14,13 @@ export class FontService {
   revision = 0
   private target?: Document | ShadowRoot
   private preloadGeneration = 0
+  private generation = 0
   private diagnosticKeys = markRaw(new Set<string>())
 
   constructor(private readonly diagnostics: DiagnosticsChannel) {}
 
   setProvider(provider?: FontProvider): void {
+    this.generation++
     this.manager.setProvider(provider)
     this.diagnosticKeys.clear()
     this.bumpRevision()
@@ -47,16 +49,17 @@ export class FontService {
       return true
 
     const shouldReportDiagnostic = options.reportDiagnostic ?? true
+    const generation = this.generation
     try {
       await this.manager.ensureFontLoaded(request, this.target)
-      if (this.isStalePreload(options.preloadGeneration))
+      if (generation !== this.generation || this.isStalePreload(options.preloadGeneration))
         return false
       this.diagnosticKeys.delete(fontDiagnosticKey(request))
       this.bumpRevision()
       return true
     }
     catch (err) {
-      if (this.isStalePreload(options.preloadGeneration))
+      if (generation !== this.generation || this.isStalePreload(options.preloadGeneration))
         return false
       this.bumpRevision()
       const diagnosticKey = fontDiagnosticKey(request)
@@ -89,6 +92,7 @@ export class FontService {
   }
 
   clear(): void {
+    this.generation++
     this.manager.clear()
     this.target = undefined
     this.preloadGeneration += 1

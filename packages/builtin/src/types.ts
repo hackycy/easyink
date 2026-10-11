@@ -1,4 +1,5 @@
-import type { LazyMaterialExtensionFactory, MaterialBindingDefinition, MaterialConditionCapability, MaterialExtensionFactory, MaterialViewerExtension, PropSchema } from '@easyink/core'
+import type { MaterialBindingDefinition, MaterialConditionCapability, MaterialViewerExtension, PropSchema } from '@easyink/core'
+import type { DesignerRenderer } from '@easyink/plugin-api/designer'
 import type { MaterialNode } from '@easyink/schema'
 import type { AIMaterialDescriptor, MaterialCategory } from '@easyink/shared'
 import type { Component } from 'vue'
@@ -28,8 +29,8 @@ export interface BuiltinDesignerMaterialRegistration {
   condition?: MaterialConditionCapability
   binding: MaterialBindingDefinition
   createDefaultNode: (input?: Partial<MaterialNode>, unit?: string) => MaterialNode
-  factory: MaterialExtensionFactory
-  lazyFactory?: LazyMaterialExtensionFactory
+  factory: DesignerRenderer
+  lazyFactory?: () => Promise<DesignerRenderer>
   aiDescriptor?: AIMaterialDescriptor
   /** Designer property schemas owned by this material. */
   propSchemas?: PropSchema[]

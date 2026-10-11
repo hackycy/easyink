@@ -1,6 +1,7 @@
 import type { LocaleMessages } from './types'
 
 const zhCN: LocaleMessages = {
+  materials: { catalog: { basic: '基础', data: '数据', chart: '图表', svg: 'SVG', utility: '工具' } },
   designer: {
     ai: {
       title: 'AI 模板生成',

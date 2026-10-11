@@ -1,7 +1,7 @@
 import type { PageLayerRenderPlan, PageLayerRenderPlanBuckets, PagePlanEntry, TextWatermarkPageLayerPlan, TrustedViewerHtml } from '@easyink/core'
 import type { MaterialNode, PageBackground, PageSchema } from '@easyink/schema'
-import type { MaterialRendererRegistry } from './material-registry'
-import type { ViewerDiagnosticEvent, ViewerRenderContext, ViewerRenderSize } from './types'
+import type { MaterialRendererRegistry, MaterialRenderInput } from './material-registry'
+import type { ViewerDiagnosticEvent, ViewerRenderSize } from './types'
 import { groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, readTrustedViewerHtml, resolvePageLayerPlans, resolvePageLayerStackIndex, trustedViewerHtml } from '@easyink/core'
 import { escapeHtml, UNIT_FACTOR } from '@easyink/shared'
 import { isErrorSentinel, safeRender } from './diagnostic-middleware'
@@ -47,11 +47,14 @@ export function renderPages(
     appendPageLayers(document, pageEl, pageLayerBuckets.underContent, page, unit, diagnostics)
     pageEl.appendChild(contentLayer)
 
-    const context: ViewerRenderContext = {
+    const context: MaterialRenderInput = {
       document,
       data,
       resolvedProps: {},
       pageIndex: page.index,
+      pageNumber: page.index + 1,
+      totalPages: pages.length,
+      copyIndex: page.copyIndex ?? 0,
       unit,
       zoom,
       reportDiagnostic: diagnostic => diagnostics.push({

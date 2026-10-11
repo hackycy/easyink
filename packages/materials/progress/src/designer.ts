@@ -1,10 +1,11 @@
-import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { MaterialDesignerExtension } from '@easyink/core'
+import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
 import type { MaterialNode } from '@easyink/schema'
 import type { ProgressProps } from './schema'
 import { getBindingRefs, getNodeProps } from '@easyink/schema'
 import { buildProgressHtml } from './rendering'
 
-function buildDesignerHtml(node: MaterialNode, context: MaterialExtensionContext): string {
+function buildDesignerHtml(node: MaterialNode, context: DesignerRendererContext): string {
   const props = getNodeProps<ProgressProps>(node)
   const binding = getBindingRefs(node.binding)[0]
   const textOverride = binding && props.showText
@@ -13,7 +14,7 @@ function buildDesignerHtml(node: MaterialNode, context: MaterialExtensionContext
   return buildProgressHtml(node, props, { textOverride, unit: context.getSchema().unit })
 }
 
-export function createProgressExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createProgressExtension(context: DesignerRendererContext): MaterialDesignerExtension {
   return {
     renderContent(nodeSignal, container) {
       function render() {

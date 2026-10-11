@@ -23,10 +23,14 @@
   },
   "dependencies": {
     "@easyink/core": "workspace:*",
+    "@easyink/plugin-api": "workspace:*",
+    "@easyink/plugin-runtime": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*"
   },
   "devDependencies": {
-    "@easyink/builtin": "workspace:*"
+    "@easyink/builtin": "workspace:*",
+    "@easyink/material-image": "workspace:*",
+    "@easyink/material-text": "workspace:*"
   }
 }

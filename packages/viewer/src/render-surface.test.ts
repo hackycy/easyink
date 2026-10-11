@@ -2,13 +2,13 @@ import type { PagePlanEntry } from '@easyink/core'
 import type { MaterialNode, PageSchema } from '@easyink/schema'
 import { trustedViewerHtml } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
+import { createViewerMaterialHost } from './material-host'
 import { MaterialRendererRegistry } from './material-registry'
 import { renderPages } from './render-surface'
 
 describe('renderPages', () => {
-  it('uses the registered render-size callback for wrapper dimensions', () => {
+  it('uses the registered render-size callback for wrapper dimensions', async () => {
     const container = document.createElement('div')
-    const registry = new MaterialRendererRegistry()
     const node: MaterialNode = {
       id: 'custom-1',
       type: 'custom',
@@ -31,10 +31,7 @@ describe('renderPages', () => {
       height: 60,
     }
 
-    registry.register('custom', { kind: 'none' }, {
-      render: () => ({ html: trustedViewerHtml('<div>custom</div>') }),
-      getRenderSize: () => ({ height: 7 }),
-    })
+    const registry = new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [{ model: { type: 'custom', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'fixture', type: 'custom', x: 0, y: 0, width: 10, height: 10, rotation: 0, props: {} }) }, renderer: { render: () => ({ html: trustedViewerHtml('<div>custom</div>') }), getRenderSize: () => ({ height: 7 }) } }] }), document)
 
     renderPages(pages, registry, {
       container,
@@ -52,9 +49,9 @@ describe('renderPages', () => {
     expect(element!.style.height).toBe('7mm')
   })
 
-  it('applies page background styles consistently for repeat modes', () => {
+  it('applies page background styles consistently for repeat modes', async () => {
     const container = document.createElement('div')
-    const registry = new MaterialRendererRegistry()
+    const registry = new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [] }), document)
     const pageSchema: PageSchema = {
       mode: 'fixed',
       width: 80,
@@ -93,9 +90,9 @@ describe('renderPages', () => {
     expect(page!.style.backgroundPosition).toBe('0mm 8mm')
   })
 
-  it('applies page font to the viewer page root', () => {
+  it('applies page font to the viewer page root', async () => {
     const container = document.createElement('div')
-    const registry = new MaterialRendererRegistry()
+    const registry = new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [] }), document)
     const pageSchema: PageSchema = {
       mode: 'fixed',
       width: 80,
@@ -124,9 +121,9 @@ describe('renderPages', () => {
     expect(page!.style.fontFamily).toBe('"ZCOOL KuaiLe"')
   })
 
-  it('renders text watermark as a page overlay', () => {
+  it('renders text watermark as a page overlay', async () => {
     const container = document.createElement('div')
-    const registry = new MaterialRendererRegistry()
+    const registry = new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [] }), document)
     const pageSchema: PageSchema = {
       mode: 'fixed',
       width: 80,
@@ -173,9 +170,8 @@ describe('renderPages', () => {
     expect(tile!.style.transform).toContain('rotate(-30deg)')
   })
 
-  it('renders page layer placements around the content layer in stack order', () => {
+  it('renders page layer placements around the content layer in stack order', async () => {
     const container = document.createElement('div')
-    const registry = new MaterialRendererRegistry()
     const node: MaterialNode = {
       id: 'content-1',
       type: 'custom',
@@ -186,9 +182,7 @@ describe('renderPages', () => {
       props: {},
     }
 
-    registry.register('custom', { kind: 'none' }, {
-      render: () => ({ html: trustedViewerHtml('<div>content</div>') }),
-    })
+    const registry = new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [{ model: { type: 'custom', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'fixture', type: 'custom', x: 0, y: 0, width: 10, height: 10, rotation: 0, props: {} }) }, renderer: { render: () => ({ html: trustedViewerHtml('<div>content</div>') }) } }] }), document)
 
     renderPages([{
       index: 0,
@@ -228,9 +222,9 @@ describe('renderPages', () => {
     ])
   })
 
-  it('skips page watermark when disabled or blank', () => {
+  it('skips page watermark when disabled or blank', async () => {
     const container = document.createElement('div')
-    const registry = new MaterialRendererRegistry()
+    const registry = new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [] }), document)
 
     renderPages([{
       index: 0,

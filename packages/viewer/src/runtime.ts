@@ -1,7 +1,7 @@
-import type { InternalHooks, MaterialBindingDefinition, PagePlan, PaginationResult, ViewerMeasureResult } from '@easyink/core'
+import type { InternalHooks, PagePlan, PaginationResult, ViewerMeasureResult } from '@easyink/core'
+import type { DisposeResult } from '@easyink/plugin-runtime'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type {
-  MaterialViewerExtension,
   PrintDriver,
   ViewerDiagnosticEvent,
   ViewerExporter,
@@ -21,6 +21,7 @@ import { deepClone, UNIT_FACTOR } from '@easyink/shared'
 import { applyBindingsToProps, projectBindings } from './binding-projector'
 import { resolveConditionalSchema } from './conditional-schema'
 import { collectFontFamilies, loadAndInjectFonts } from './font-loader'
+import { createViewerMaterialHost } from './material-host'
 import { MaterialRendererRegistry } from './material-registry'
 import { PrintPolicyError, resolvePrintPolicy } from './print-policy'
 import { runPrintWithIsolation } from './print-service'
@@ -35,7 +36,8 @@ export class ViewerRuntime {
   private _diagnosticHandler?: (event: ViewerDiagnosticEvent) => void
   private _exporters: ViewerExporter[] = []
   private _printDrivers: PrintDriver[] = []
-  private _materialRegistry = new MaterialRendererRegistry()
+  private _materialRegistry!: MaterialRendererRegistry
+  private _assembly!: Awaited<ReturnType<typeof createViewerMaterialHost>>
   private _fontManager: FontManager
   private _hooks: InternalHooks
   private _host?: ViewerHost
@@ -43,16 +45,61 @@ export class ViewerRuntime {
   private _destroyed = false
   private _emittingHookFailure = false
 
-  constructor(options: ViewerOptions = {}) {
+  private constructor(options: ViewerOptions = {}) {
     this._options = options
-    this._host = options.host
-      ?? (options.iframe
-        ? createIframeViewerHost(options.iframe)
-        : options.container
-          ? createBrowserViewerHost(options.container)
-          : undefined)
     this._fontManager = new FontManager(options.fontProvider)
     this._hooks = createInternalHooks()
+  }
+
+  static async create(options: ViewerOptions = {}): Promise<ViewerRuntime> {
+    const runtime = new ViewerRuntime(options)
+    let targetDocument: Document | undefined
+    runtime._assembly = await createViewerMaterialHost({ kind: 'viewer', materials: options.materials ?? [], locale: options.locale }, (_registry, resources) => {
+      resources.onDispose(() => {
+        runtime._schema = undefined
+      })
+      resources.onDispose(() => {
+        runtime._data = {}
+      })
+      resources.onDispose(() => {
+        runtime._exporters = []
+      })
+      resources.onDispose(() => {
+        runtime._printDrivers = []
+      })
+      resources.onDispose(() => {
+        runtime._renderedPageMetrics = []
+      })
+      let fontInvalidationFailure: { cause: unknown } | undefined
+      resources.onDispose(() => {
+        if (fontInvalidationFailure)
+          throw fontInvalidationFailure.cause
+        runtime._fontManager.clear()
+      })
+      // Invalidating work is synchronous; cleanup errors still flow through DisposeResult.
+      resources.signal.addEventListener('abort', () => {
+        try {
+          runtime._fontManager.clear()
+        }
+        catch (cause) {
+          fontInvalidationFailure = { cause }
+        }
+      }, { once: true })
+      runtime._host = options.host
+        ?? (options.iframe
+          ? createIframeViewerHost(options.iframe)
+          : options.container
+            ? createBrowserViewerHost(options.container)
+            : undefined)
+      resources.onDispose(() => runtime._host?.clear())
+      if (runtime._host) {
+        targetDocument = runtime._host.document
+        if (!targetDocument || !runtime._host.mount)
+          throw new Error('Viewer surface requires a document and mount')
+      }
+    })
+    runtime._materialRegistry = new MaterialRendererRegistry(runtime._assembly, targetDocument)
+    return runtime
   }
 
   // ---------------------------------------------------------------------------
@@ -78,7 +125,7 @@ export class ViewerRuntime {
     }
 
     // 2. Hook: beforeSchemaNormalize + schema normalization
-    const schemaForNormalize = this.callSchemaNormalizeHook(input.schema)
+    const schemaForNormalize = this.callSchemaNormalizeHook(deepClone(input.schema))
     const normalizedSchema = normalizeDocumentSchema(schemaForNormalize)
     this._schema = normalizedSchema
 
@@ -111,6 +158,9 @@ export class ViewerRuntime {
 
     // Stage 1: Font loading
     await this.loadFonts(diagnostics, runtimeSchema)
+    this.ensureNotDestroyed()
+    await this._materialRegistry.load(runtimeSchema.elements.map(node => node.type))
+    this.ensureNotDestroyed()
 
     // Stage 2: Binding projection
     const resolvedPropsMap = this.resolveAllBindings(diagnostics, runtimeSchema)
@@ -393,27 +443,17 @@ export class ViewerRuntime {
     }
   }
 
-  destroy(): void {
+  destroy(): Promise<DisposeResult> {
     this._destroyed = true
-    this._schema = undefined
-    this._data = {}
-    this._materialRegistry.clear()
-    this._exporters = []
-    this._printDrivers = []
-    this._renderedPageMetrics = []
-    this._fontManager.clear()
-    this._host?.clear()
+    return this._assembly.destroy()
   }
 
   // ---------------------------------------------------------------------------
   // Registration API
   // ---------------------------------------------------------------------------
 
-  registerMaterial(type: string, binding: MaterialBindingDefinition, extension: MaterialViewerExtension): void {
-    this._materialRegistry.register(type, binding, extension)
-  }
-
   registerExporter(exporter: ViewerExporter): void {
+    this.ensureNotDestroyed()
     const index = this._exporters.findIndex(item => item.id === exporter.id)
     if (index >= 0)
       this._exporters[index] = exporter
@@ -422,6 +462,7 @@ export class ViewerRuntime {
   }
 
   registerPrintDriver(driver: PrintDriver): void {
+    this.ensureNotDestroyed()
     const index = this._printDrivers.findIndex(item => item.id === driver.id)
     if (index >= 0)
       this._printDrivers[index] = driver
@@ -451,10 +492,6 @@ export class ViewerRuntime {
 
   get fontManager(): FontManager {
     return this._fontManager
-  }
-
-  get materialRegistry(): MaterialRendererRegistry {
-    return this._materialRegistry
   }
 
   // ---------------------------------------------------------------------------

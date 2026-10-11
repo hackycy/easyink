@@ -1,13 +1,13 @@
 import type {
   BehaviorRegistration,
   MaterialDesignerExtension,
-  MaterialExtensionContext,
   MaterialGeometry,
   Rect,
   Selection,
   SelectionDecorationDef,
   SelectionType,
 } from '@easyink/core'
+import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
 import type { MaterialNode } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
 import type SignaturePad from 'signature_pad'
@@ -90,7 +90,7 @@ function createSignatureSelectionType(): SelectionType {
   }
 }
 
-function createSignatureBehavior(context: MaterialExtensionContext): BehaviorRegistration {
+function createSignatureBehavior(context: DesignerRendererContext): BehaviorRegistration {
   return {
     id: 'signature.canvas-select',
     eventKinds: ['pointer-down', 'command'],
@@ -139,7 +139,7 @@ function toolbarButtonStyle(active?: boolean, disabled?: boolean): Record<string
   return style
 }
 
-function createSignatureDecorations(context: MaterialExtensionContext): SelectionDecorationDef[] {
+function createSignatureDecorations(context: DesignerRendererContext): SelectionDecorationDef[] {
   const LocalizedSignatureToolbar = defineComponent({
     name: 'EasyInkLocalizedSignatureToolbar',
     props: {
@@ -456,7 +456,7 @@ async function loadSignaturePad(): Promise<typeof SignaturePad> {
   return (await import('signature_pad')).default
 }
 
-export function createSignatureExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createSignatureExtension(context: DesignerRendererContext): MaterialDesignerExtension {
   return {
     renderContent(nodeSignal, container) {
       let disposed = false

@@ -1,11 +1,12 @@
-import type { DatasourceDropHandler, MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { DatasourceDropHandler, MaterialDesignerExtension } from '@easyink/core'
+import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { ChartCustomProps } from './schema'
 import { createChartDesignerRenderHost, mountFullECharts } from '@easyink/material-chart-kernel/full'
 import { getBindingRefs, getNodeProps } from '@easyink/schema'
 import { resolveChartCustomOption, resolveChartCustomProps } from './options'
 
-export function createChartCustomExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createChartCustomExtension(context: DesignerRendererContext): MaterialDesignerExtension {
   return {
     renderContent(nodeSignal, container) {
       container.replaceChildren()
@@ -40,7 +41,7 @@ function createDesignerOption(node: MaterialNode) {
   }).option
 }
 
-function createDatasourceDropHandler(context: MaterialExtensionContext): DatasourceDropHandler {
+function createDatasourceDropHandler(context: DesignerRendererContext): DatasourceDropHandler {
   return {
     onDragOver(_field, _point, node) {
       return {

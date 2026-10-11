@@ -1,5 +1,7 @@
 import type { AssistantPatchOperation, AssistantResult } from '@easyink/assistant-capabilities'
-import type { ContributionContext } from '@easyink/designer'
+import type { DeepReadonly } from '@easyink/plugin-api'
+import type { DesignerContext } from '@easyink/plugin-api/designer'
+import type { DocumentSchema, DocumentSchemaInput } from '@easyink/schema'
 import { applyAssistantPatch, selectAssistantPatchOperationsForElements } from '@easyink/assistant-capabilities'
 
 interface AssistantDesignerExtension {
@@ -10,79 +12,75 @@ interface AssistantDesignerExtension {
 }
 
 export function applyAssistantResultToDesigner(
-  store: ContributionContext['store'],
+  store: DesignerContext,
   result: AssistantResult,
 ): void {
-  const beforeApplySchema = cloneJson(store.schema)
-  store.setSchema(result.schema)
+  const beforeApplySchema = cloneJson(store.getSchema())
+  store.replaceDocument(result.schema)
   if (result.dataSource) {
-    store.dataSourceRegistry.registerSource(result.dataSource)
+    store.registerDataSource(result.dataSource)
   }
-  store.setExtension('assistant', {
+  store.writeDocumentExtension('assistant', {
     lastResultId: result.id,
     appliedAt: Date.now(),
     beforeApplySchema,
     afterApplySchema: cloneJson(result.schema),
   })
-  store.markDraftModified()
 }
 
 export function applyAssistantPatchToDesigner(
-  store: ContributionContext['store'],
+  store: DesignerContext,
   operations: AssistantPatchOperation[],
 ): boolean {
   if (!operations.length)
     return false
-  const beforeApplySchema = cloneJson(store.schema)
+  const beforeApplySchema = cloneJson(store.getSchema())
   const nextSchema = applyAssistantPatch(beforeApplySchema as unknown as Record<string, unknown>, operations)
-  store.setSchema(nextSchema)
-  store.setExtension('assistant', {
-    ...store.getExtension<AssistantDesignerExtension>('assistant'),
+  store.replaceDocument(nextSchema)
+  store.writeDocumentExtension('assistant', {
+    ...(store.readDocumentExtension('assistant') as AssistantDesignerExtension | undefined),
     appliedAt: Date.now(),
     beforeApplySchema,
     afterApplySchema: cloneJson(nextSchema),
   })
-  store.markDraftModified()
   return true
 }
 
 export function applySelectedAssistantElementsToDesigner(
-  store: ContributionContext['store'],
+  store: DesignerContext,
   operations: AssistantPatchOperation[],
 ): boolean {
-  const selectedOperations = selectAssistantPatchOperationsForElements(operations, store.schema, store.selection.ids)
+  const selectedOperations = selectAssistantPatchOperationsForElements(operations, cloneJson<DocumentSchema>(store.getSchema()), [...store.getSelection().ids])
   return applyAssistantPatchToDesigner(store, selectedOperations)
 }
 
 export function applyAssistantDataSourceToDesigner(
-  store: ContributionContext['store'],
+  store: DesignerContext,
   dataSource: NonNullable<AssistantResult['dataSource']>,
 ): void {
-  const beforeApplySchema = cloneJson(store.schema)
-  store.dataSourceRegistry.registerSource(dataSource)
-  store.setExtension('assistant', {
-    ...store.getExtension<AssistantDesignerExtension>('assistant'),
+  const beforeApplySchema = cloneJson(store.getSchema())
+  store.registerDataSource(dataSource)
+  store.writeDocumentExtension('assistant', {
+    ...(store.readDocumentExtension('assistant') as AssistantDesignerExtension | undefined),
     appliedAt: Date.now(),
     beforeApplySchema,
-    afterApplySchema: cloneJson(store.schema),
+    afterApplySchema: cloneJson(store.getSchema()),
   })
-  store.markDraftModified()
 }
 
-export function rollbackAssistantDesigner(store: ContributionContext['store']): boolean {
-  const assistant = store.getExtension<AssistantDesignerExtension>('assistant')
+export function rollbackAssistantDesigner(store: DesignerContext): boolean {
+  const assistant = store.readDocumentExtension('assistant') as AssistantDesignerExtension | undefined
   if (!assistant?.beforeApplySchema)
     return false
-  store.setSchema(assistant.beforeApplySchema)
-  store.setExtension('assistant', {
+  store.replaceDocument(assistant.beforeApplySchema as DocumentSchemaInput)
+  store.writeDocumentExtension('assistant', {
     ...assistant,
     afterApplySchema: undefined,
     appliedAt: Date.now(),
   })
-  store.markDraftModified()
   return true
 }
 
-function cloneJson<T>(value: T): T {
+function cloneJson<T>(value: DeepReadonly<T>): T {
   return JSON.parse(JSON.stringify(value)) as T
 }

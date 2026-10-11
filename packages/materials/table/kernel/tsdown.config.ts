@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsdown'
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: { index: 'src/index.ts', viewer: 'src/viewer.ts', locale: 'src/locale.ts' },
   dts: true,
   exports: true,
   publint: true,

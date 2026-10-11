@@ -1,4 +1,4 @@
-import type { DocumentSchema } from '@easyink/viewer'
+import type { DocumentSchema, ViewerOptions } from '@easyink/viewer'
 import { describe, expect, it, vi } from 'vitest'
 import { createManagedPrintViewer, EasyInkPrintError, getViewerPages, resolvePrintLandscape, resolvePrintOffset, resolvePrintSize, resolveViewerPdfPages, toMillimeters } from './index'
 
@@ -134,5 +134,87 @@ describe('print core utilities', () => {
 
     expect(setupViewer).toHaveBeenCalledTimes(1)
     expect(print).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases the owned mount when Host creation rejects', async () => {
+    const material: NonNullable<ViewerOptions['materials']>[number] = {
+      model: { type: 'duplicate', binding: { kind: 'none' as const }, createDefaultNode: () => ({ id: 'duplicate', type: 'duplicate', x: 0, y: 0, width: 1, height: 1, props: {} }) },
+      renderer: { render: () => ({}) },
+    }
+    const managed = createManagedPrintViewer({ viewer: 'dom', viewerOptions: { materials: [material, material] } })
+    const before = document.body.childElementCount
+    await expect(managed.printWithDriver({ schema: createFixedSchema() }, { id: 'duplicate', print: async () => {} })).rejects.toMatchObject({ cause: { code: 'duplicate-identity' } })
+    expect(document.body.childElementCount).toBe(before)
+  })
+
+  it('releases a failed setup and awaits resource cleanup', async () => {
+    const release = Promise.withResolvers<void>()
+    const cleanupStarted = Promise.withResolvers<void>()
+    const cause = new Error('setup failed')
+    const material: NonNullable<ViewerOptions['materials']>[number] = {
+      model: { type: 'cleanup', binding: { kind: 'none' as const }, createDefaultNode: () => ({ id: 'cleanup', type: 'cleanup', x: 0, y: 0, width: 1, height: 1, props: {} }) },
+      loadRenderer: async (ctx) => {
+        ctx.onDispose(async () => {
+          cleanupStarted.resolve()
+          await release.promise
+        })
+        return { render: () => ({}) }
+      },
+    }
+    const managed = createManagedPrintViewer({ viewer: 'dom', viewerOptions: { materials: [material] }, setupViewer: async (viewer) => {
+      await viewer.open({ schema: { ...createFixedSchema(), elements: [material.model.createDefaultNode()] } })
+      throw cause
+    } })
+    const before = document.body.childElementCount
+    const rejected = managed.printWithDriver({ schema: createFixedSchema() }, { id: 'setup', print: async () => {} }).catch(error => error)
+    await cleanupStarted.promise
+    const disposal = managed.destroy()
+    expect(managed.destroy()).toBe(disposal)
+    expect(document.body.childElementCount).toBe(before)
+    release.resolve()
+    await disposal
+    expect(await rejected).toBe(cause)
+  })
+
+  it('invalidates an awaited setup and leaves a later print session intact', async () => {
+    const started = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const setupViewer = vi.fn(async () => {
+      if (setupViewer.mock.calls.length === 1) {
+        started.resolve()
+        await release.promise
+      }
+    })
+    const managed = createManagedPrintViewer({ viewer: 'dom', viewerOptions: { materials: [] }, autoDestroy: false, setupViewer })
+    const print = vi.fn(async () => {})
+    const input = { schema: createFixedSchema() }
+    const driver = { id: 'pending', print }
+    const before = document.body.childElementCount
+    const pending = managed.printWithDriver(input, driver).catch(error => error)
+    await started.promise
+    await managed.destroy()
+    await managed.printWithDriver(input, driver)
+    release.resolve()
+    expect(await pending).toMatchObject({ code: 'PRINT_VIEWER_DISPOSED' })
+    expect(print).toHaveBeenCalledOnce()
+    expect(document.body.childElementCount).toBe(before + 1)
+    await managed.destroy()
+    expect(document.body.childElementCount).toBe(before)
+  })
+
+  it('returns material cleanup failures through the managed destroy result', async () => {
+    const cause = new Error('material cleanup')
+    const material: NonNullable<ViewerOptions['materials']>[number] = {
+      model: { type: 'cleanup-error', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'cleanup-error', type: 'cleanup-error', x: 0, y: 0, width: 1, height: 1, props: {} }) },
+      renderer: { render: (_node, ctx) => {
+        ctx.onDispose(() => {
+          throw cause
+        })
+        return {}
+      } },
+    }
+    const managed = createManagedPrintViewer({ viewer: 'dom', autoDestroy: false, viewerOptions: { materials: [material] } })
+    await managed.printWithDriver({ schema: { ...createFixedSchema(), elements: [material.model.createDefaultNode()] } }, { id: 'cleanup-error', print: async () => {} })
+    expect((await managed.destroy()).errors).toMatchObject([{ phase: 'scope', cause }])
   })
 })

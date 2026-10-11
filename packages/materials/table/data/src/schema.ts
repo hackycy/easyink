@@ -1,6 +1,6 @@
-import type { TableBaseProps } from '@easyink/material-table-kernel'
+import type { TableBaseProps } from '@easyink/material-table-kernel/viewer'
 import type { MaterialNode, TableDataSchema, TableNode } from '@easyink/schema'
-import { createDefaultLayout, createDefaultTopology, TABLE_BASE_CAPABILITIES, TABLE_BASE_DEFAULTS } from '@easyink/material-table-kernel'
+import { createDefaultLayout, createDefaultTopology, TABLE_BASE_CAPABILITIES, TABLE_BASE_DEFAULTS } from '@easyink/material-table-kernel/viewer'
 import { convertUnit, generateId } from '@easyink/shared'
 
 export const TABLE_DATA_TYPE = 'table-data'

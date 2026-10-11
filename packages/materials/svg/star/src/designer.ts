@@ -1,4 +1,5 @@
-import type { BehaviorRegistration, EditingSessionRef, MaterialDesignerExtension, MaterialExtensionContext, MaterialGeometry, Rect, Selection, SelectionType, SubPropertySchema, TransactionAPI } from '@easyink/core'
+import type { BehaviorRegistration, EditingSessionRef, MaterialDesignerExtension, MaterialGeometry, Rect, Selection, SelectionType, SubPropertySchema, TransactionAPI } from '@easyink/core'
+import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
 import type { MaterialNode } from '@easyink/schema'
 import type { SvgStarControlSelection, SvgStarProps } from './schema'
 import { undoBoundaryMiddleware } from '@easyink/core'
@@ -170,7 +171,7 @@ function createStarHandleBehavior(): BehaviorRegistration {
   }
 }
 
-function createStarDecorationComponent(context: MaterialExtensionContext) {
+function createStarDecorationComponent(context: DesignerRendererContext) {
   return defineComponent({
     name: 'SvgStarDecoration',
     props: {
@@ -296,7 +297,7 @@ function createStarDecorationComponent(context: MaterialExtensionContext) {
   })
 }
 
-export function createSvgStarExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createSvgStarExtension(context: DesignerRendererContext): MaterialDesignerExtension {
   return {
     renderContent(nodeSignal, container) {
       function render() {

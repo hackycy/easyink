@@ -1,8 +1,10 @@
 export * from './ai'
 export * from './datasource'
 export * from './designer'
+export { tableData } from './designer-material'
 export * from './layout'
 export * from './locale'
 export * from './prop-schemas'
 export * from './schema'
+
 export * from './viewer'

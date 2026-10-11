@@ -7,13 +7,13 @@ function makeNode(id: string, x = 0, y = 0): MaterialNode {
   return { id, type: 'rect', x, y, width: 50, height: 50, props: {} } as MaterialNode
 }
 
-function makeStore(elements: MaterialNode[], selected: string[] = [], page: PageSchema = { mode: 'fixed', width: 1000, height: 1000 }): DesignerStore {
-  const store = new DesignerStore({
+async function makeStore(elements: MaterialNode[], selected: string[] = [], page: PageSchema = { mode: 'fixed', width: 1000, height: 1000 }): Promise<DesignerStore> {
+  const store = await DesignerStore.create({ schema: {
     unit: 'px',
     page,
     guides: { x: [], y: [] },
     elements,
-  })
+  } })
 
   if (selected.length > 0)
     store.selection.selectMultiple(selected)
@@ -26,9 +26,9 @@ function makeStore(elements: MaterialNode[], selected: string[] = [], page: Page
 }
 
 describe('createClipboardActions', () => {
-  it('rolls back a failed cut transaction and keeps selection intact', () => {
+  it('rolls back a failed cut transaction and keeps selection intact', async () => {
     const node = makeNode('node-1')
-    const store = makeStore([node], ['node-1'])
+    const store = await makeStore([node], ['node-1'])
     const actions = createClipboardActions(store, () => [node])
 
     vi.spyOn(store.commands, 'execute').mockImplementation(() => {
@@ -43,9 +43,9 @@ describe('createClipboardActions', () => {
     expect(store.clipboard).toHaveLength(1)
   })
 
-  it('rolls back a failed paste transaction without changing selection', () => {
+  it('rolls back a failed paste transaction without changing selection', async () => {
     const node = makeNode('copy-source', 10, 20)
-    const store = makeStore([])
+    const store = await makeStore([])
     const actions = createClipboardActions(store, () => [])
 
     store.clipboard = [node]
@@ -60,10 +60,10 @@ describe('createClipboardActions', () => {
     expect(store.selection.ids).toEqual([])
   })
 
-  it('skips locked nodes when deleting selection', () => {
+  it('skips locked nodes when deleting selection', async () => {
     const locked = { ...makeNode('locked'), locked: true }
     const unlocked = makeNode('open')
-    const store = makeStore([locked, unlocked], ['locked', 'open'])
+    const store = await makeStore([locked, unlocked], ['locked', 'open'])
     const actions = createClipboardActions(store, () => [locked, unlocked])
     const executeSpy = vi.spyOn(store.commands, 'execute')
 
@@ -75,9 +75,9 @@ describe('createClipboardActions', () => {
     expect(executeSpy).toHaveBeenCalledOnce()
   })
 
-  it('duplicates continuously across fixed-sheet page breaks', () => {
+  it('duplicates continuously across fixed-sheet page breaks', async () => {
     const node = makeNode('node-1', 80, 80)
-    const store = makeStore([node], ['node-1'], {
+    const store = await makeStore([node], ['node-1'], {
       mode: 'fixed',
       width: 100,
       height: 100,

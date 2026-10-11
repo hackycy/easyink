@@ -1,7 +1,7 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { TableStaticProps } from './schema'
 import { formatBindingDisplayValue, resolveBindingValue, trustedViewerHtml } from '@easyink/core'
-import { renderPlainTextCell, renderTableHtml } from '@easyink/material-table-kernel'
+import { renderPlainTextCell, renderTableHtml } from '@easyink/material-table-kernel/viewer'
 import { getNodeProps, isTableNode } from '@easyink/schema'
 
 interface ViewerRenderContext {

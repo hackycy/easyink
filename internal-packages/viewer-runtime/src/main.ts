@@ -1,5 +1,5 @@
 import type { DocumentSchema, DocumentSchemaInput, ViewerDiagnosticEvent } from '@easyink/viewer'
-import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+import { materials } from '@easyink/builtin/all/viewer'
 import { createViewer, normalizeDocumentSchema } from '@easyink/viewer'
 import './polyfills'
 import './style.css'
@@ -29,10 +29,7 @@ async function boot(): Promise<void> {
       throw new Error('easyink root is missing')
 
     const schema = normalizeRuntimeSchema(payload.schema)
-    const viewer = createViewer({ container: root })
-    registerBuiltinViewerMaterials((type, binding, extension) => {
-      viewer.registerMaterial(type, binding, extension)
-    })
+    const viewer = await createViewer({ container: root, materials })
     await viewer.open({
       schema,
       data: isRecord(payload.data) ? payload.data : {},

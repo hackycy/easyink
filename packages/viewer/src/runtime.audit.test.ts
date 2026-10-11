@@ -98,7 +98,7 @@ describe('viewer audit risk regressions', () => {
       value: printSpy,
     })
 
-    const viewer = createViewer({ iframe })
+    const viewer = await createViewer({ iframe })
     await viewer.open({ schema: fixedSchema([textNode('title', undefined, { content: 'Iframe' })]) })
 
     expect(iframe.contentDocument!.querySelector('.ei-viewer-page')).not.toBeNull()
@@ -114,7 +114,7 @@ describe('viewer audit risk regressions', () => {
   it('injects loaded fonts into an iframe host document', async () => {
     const iframe = document.createElement('iframe')
     document.body.appendChild(iframe)
-    const viewer = createViewer({
+    const viewer = await createViewer({
       iframe,
       fontProvider: {
         async listFonts() {
@@ -136,7 +136,7 @@ describe('viewer audit risk regressions', () => {
     const iframe = document.createElement('iframe')
     document.body.appendChild(iframe)
     const host = createIframeViewerHost(iframe)
-    const viewer = createViewer({ host })
+    const viewer = await createViewer({ host })
 
     const result = await viewer.open({ schema: fixedSchema([textNode('hosted', undefined, { content: 'Host' })]) })
 
@@ -146,7 +146,7 @@ describe('viewer audit risk regressions', () => {
 
   it('resolves bindings from runtime data without data source descriptors', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
     const schema = fixedSchema([
       textNode('customer', { sourceId: 'customer', fieldPath: 'customer/name' }),
       textNode('total', { sourceId: 'order', sourceTag: 'order-tag', fieldPath: 'order/total' }),
@@ -166,7 +166,7 @@ describe('viewer audit risk regressions', () => {
 
   it('projects bound remote svg urls into the custom svg renderer', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
 
     await viewer.open({
       schema: fixedSchema([
@@ -185,7 +185,7 @@ describe('viewer audit risk regressions', () => {
 
   it('projects bound svg text into the sanitized custom svg renderer', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
 
     await viewer.open({
       schema: fixedSchema([
@@ -205,7 +205,7 @@ describe('viewer audit risk regressions', () => {
 
   it('keeps root-shaped payloads when sourceId collides with a field name', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
 
     await viewer.open({
       schema: fixedSchema([
@@ -227,7 +227,7 @@ describe('viewer audit risk regressions', () => {
 
   it('renders unwrapped root payloads without descriptor field matching', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
 
     await viewer.open({
       schema: fixedSchema([
@@ -246,7 +246,7 @@ describe('viewer audit risk regressions', () => {
 
   it('resolves table-data collections from the runtime data root', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
 
     await viewer.open({
       schema: fixedSchema([tableNode()]),
@@ -297,7 +297,7 @@ describe('viewer audit risk regressions', () => {
   })
 
   it('returns one thumbnail entry per rendered page', async () => {
-    const viewer = createViewer()
+    const viewer = await createViewer()
     await viewer.open({ schema: fixedSchema([textNode('title', undefined, { content: 'Thumb' })]) })
 
     const result = await viewer.render()
@@ -309,7 +309,7 @@ describe('viewer audit risk regressions', () => {
   it('emits diagnostics for font, export, print, and diagnostics hook failures', async () => {
     const container = document.createElement('div')
     const { diagnostics, onDiagnostic } = collectDiagnostics()
-    const viewer = createViewer({
+    const viewer = await createViewer({
       container,
       fontProvider: {
         async listFonts() {

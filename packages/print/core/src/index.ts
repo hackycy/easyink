@@ -3,6 +3,7 @@ import type {
   DocumentSchema,
   PrintDriver,
   ViewerDiagnosticEvent,
+  ViewerOptions,
   ViewerPageMetrics,
   ViewerPrintContext,
   ViewerPrintPageSizeMode,
@@ -67,6 +68,8 @@ export interface ManagedPrintViewerOptions {
   iframe?: HTMLIFrameElement
   document?: Document
   setupViewer?: ManagedPrintViewerSetup
+  /** Complete material declarations are selected before Host creation. */
+  viewerOptions?: Omit<ViewerOptions, 'host' | 'container' | 'iframe'>
 }
 
 export interface ManagedPrintInput extends ViewerTaskCallbacks {
@@ -78,7 +81,7 @@ export interface ManagedPrintInput extends ViewerTaskCallbacks {
 export interface ManagedPrintViewer {
   readonly viewerKind: ManagedPrintViewerKind
   printWithDriver: (input: ManagedPrintInput, driver: PrintDriver) => Promise<void>
-  destroy: () => void
+  destroy: ViewerRuntime['destroy']
 }
 
 /**
@@ -276,21 +279,30 @@ export function createManagedPrintViewer(options: ManagedPrintViewerOptions = {}
   return new ManagedPrintViewerRuntime(options)
 }
 
+interface ManagedViewerSession {
+  disposed: boolean
+  viewer?: ViewerRuntime
+  ownedElement?: HTMLElement
+  creation?: Promise<ViewerRuntime>
+  disposal?: ReturnType<ViewerRuntime['destroy']>
+}
+
 class ManagedPrintViewerRuntime implements ManagedPrintViewer {
   readonly viewerKind: ManagedPrintViewerKind
 
-  private viewerRuntime: ViewerRuntime | undefined
-  private ownedElement: HTMLElement | undefined
+  private session?: ManagedViewerSession
 
   constructor(private readonly options: ManagedPrintViewerOptions) {
     this.viewerKind = options.viewer ?? (options.container ? 'dom' : 'iframe')
   }
 
   async printWithDriver(input: ManagedPrintInput, driver: PrintDriver): Promise<void> {
-    const viewer = await this.ensureViewer()
-    await this.options.setupViewer?.(viewer)
-    viewer.registerPrintDriver(driver)
+    const session = this.ensureSession()
     try {
+      const viewer = await session.creation!
+      await this.options.setupViewer?.(viewer)
+      this.assertCurrent(session)
+      viewer.registerPrintDriver(driver)
       await viewer.open({
         schema: input.schema,
         data: input.data,
@@ -307,31 +319,56 @@ class ManagedPrintViewerRuntime implements ManagedPrintViewer {
     }
     finally {
       if (this.options.autoDestroy !== false)
-        this.destroy()
+        await this.disposeSession(session)
     }
   }
 
-  destroy(): void {
-    this.viewerRuntime?.destroy()
-    this.viewerRuntime = undefined
-
-    if (this.ownedElement) {
-      this.ownedElement.remove()
-      this.ownedElement = undefined
-    }
+  destroy(): ReturnType<ViewerRuntime['destroy']> {
+    return this.session ? this.disposeSession(this.session) : Promise.resolve({ errors: [] })
   }
 
-  private async ensureViewer(): Promise<ViewerRuntime> {
-    if (this.viewerRuntime)
-      return this.viewerRuntime
+  private disposeSession(session: ManagedViewerSession): ReturnType<ViewerRuntime['destroy']> {
+    if (session.disposal)
+      return session.disposal
+    session.disposed = true
+    const cleanup = session.viewer?.destroy()
+    session.ownedElement?.remove()
+    session.ownedElement = undefined
+    session.disposal = cleanup ?? Promise.resolve({ errors: [] })
+    return session.disposal
+  }
 
+  private ensureSession(): ManagedViewerSession {
+    if (this.session && !this.session.disposed)
+      return this.session
+    const session: ManagedViewerSession = { disposed: false }
+    this.session = session
+    session.creation = this.createSessionViewer(session).catch(async (error) => {
+      await this.disposeSession(session)
+      throw error
+    })
+    return session
+  }
+
+  private assertCurrent(session: ManagedViewerSession): void {
+    if (session.disposed)
+      throw new EasyInkPrintError('Managed Viewer was destroyed', 'PRINT_VIEWER_DISPOSED')
+  }
+
+  private async createSessionViewer(session: ManagedViewerSession): Promise<ViewerRuntime> {
     const doc = this.resolveDocument()
     const host = this.viewerKind === 'iframe'
-      ? await this.createIframeHost(doc)
-      : this.createDomHost(doc)
+      ? await this.createIframeHost(doc, session)
+      : this.createDomHost(doc, session)
 
-    this.viewerRuntime = createViewer({ host })
-    return this.viewerRuntime
+    this.assertCurrent(session)
+    const viewer = await createViewer({ ...this.options.viewerOptions, host })
+    if (session.disposed) {
+      await viewer.destroy()
+      this.assertCurrent(session)
+    }
+    session.viewer = viewer
+    return viewer
   }
 
   private resolveDocument(): Document {
@@ -341,23 +378,24 @@ class ManagedPrintViewerRuntime implements ManagedPrintViewer {
     return doc
   }
 
-  private createDomHost(doc: Document) {
+  private createDomHost(doc: Document, session: ManagedViewerSession) {
     const container = this.options.container ?? this.createManagedElement(doc, 'div')
     if (!this.options.container)
-      this.ownedElement = container
+      session.ownedElement = container
 
     container.id ||= 'easyink-viewer-root'
     prepareManagedMount(container)
     return createBrowserViewerHost(container)
   }
 
-  private async createIframeHost(doc: Document) {
+  private async createIframeHost(doc: Document, session: ManagedViewerSession) {
     const iframe = this.options.iframe ?? this.createManagedElement(doc, 'iframe')
     if (!this.options.iframe)
-      this.ownedElement = iframe
+      session.ownedElement = iframe
 
     prepareManagedFrame(iframe)
     await waitForIframeDocument(iframe)
+    this.assertCurrent(session)
     const host = createIframeViewerHost(iframe)
     prepareManagedDocument(host.document)
     prepareManagedMount(host.mount)

@@ -16,7 +16,7 @@ afterEach(() => {
 
 describe('prop schema editor text file import', () => {
   it('limits string input by schema min and max character counts', async () => {
-    const store = createStore()
+    const store = await createStore()
     const events = {
       previews: [] as Array<[string, unknown]>,
       changes: [] as Array<[string, unknown]>,
@@ -68,7 +68,7 @@ describe('prop schema editor text file import', () => {
   })
 
   it('imports text files into code props through the interaction bridge', async () => {
-    const store = createStore()
+    const store = await createStore()
     const pickFileText = vi.fn(() => ({ text: '<svg viewBox="0 0 1 1"></svg>', name: 'logo.svg' }))
     store.setInteractionProvider({ pickFileText })
     const events = {
@@ -117,8 +117,8 @@ describe('prop schema editor text file import', () => {
     mounted.unmount()
   })
 
-  it('disables the import action when no text file picker is available', () => {
-    const store = createStore()
+  it('disables the import action when no text file picker is available', async () => {
+    const store = await createStore()
     const schema: PropSchema = {
       key: 'content',
       label: 'designer.property.content',
@@ -144,8 +144,8 @@ describe('prop schema editor text file import', () => {
   })
 })
 
-function createStore() {
-  const store = new DesignerStore()
+async function createStore() {
+  const store = await DesignerStore.create({ })
   store.setLocale(enUS)
   return store
 }

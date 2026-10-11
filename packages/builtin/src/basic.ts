@@ -25,29 +25,25 @@ import {
   IconText,
 } from '@easyink/icons'
 import {
-  BARCODE_CAPABILITIES,
   BARCODE_TYPE,
   barcodeAIMaterialDescriptor,
   barcodeDesignerPropSchemas,
   barcodeLocaleMessages,
   createBarcodeExtension,
-  createBarcodeNode,
   renderBarcode,
 } from '@easyink/material-barcode'
+import { barcodeModel } from '@easyink/material-barcode/material-model'
 import {
   createEllipseExtension,
-  createEllipseNode,
-  ELLIPSE_CAPABILITIES,
   ELLIPSE_TYPE,
   ellipseAIMaterialDescriptor,
   ellipseDesignerPropSchemas,
   ellipseLocaleMessages,
   renderEllipse,
 } from '@easyink/material-ellipse'
+import { ellipseModel } from '@easyink/material-ellipse/material-model'
 import {
   createFlowRowExtension,
-  createFlowRowNode,
-  FLOW_ROW_CAPABILITIES,
   FLOW_ROW_TYPE,
   flowRowAIMaterialDescriptor,
   flowRowDesignerPropSchemas,
@@ -55,151 +51,138 @@ import {
   measureFlowRow,
   renderFlowRow,
 } from '@easyink/material-flow-row'
+import { flowRowModel } from '@easyink/material-flow-row/material-model'
 import {
   createImageExtension,
-  createImageNode,
-  IMAGE_CAPABILITIES,
   IMAGE_TYPE,
   imageAIMaterialDescriptor,
   imageDesignerPropSchemas,
   imageLocaleMessages,
   renderImage,
 } from '@easyink/material-image'
+import { imageModel } from '@easyink/material-image/material-model'
 import {
   createLineExtension,
-  createLineNode,
   createLineViewerExtension,
-  LINE_CAPABILITIES,
   LINE_TYPE,
   lineAIMaterialDescriptor,
   lineDesignerPropSchemas,
   lineLocaleMessages,
 } from '@easyink/material-line'
+import { lineModel } from '@easyink/material-line/material-model'
 import {
   createPageNumberExtension,
-  createPageNumberNode,
-  PAGE_NUMBER_CAPABILITIES,
   PAGE_NUMBER_TYPE,
   pageNumberAIMaterialDescriptor,
   pageNumberDesignerPropSchemas,
   pageNumberLocaleMessages,
   renderPageNumber,
 } from '@easyink/material-page-number'
+import { pageNumberModel } from '@easyink/material-page-number/material-model'
 import {
   createProgressExtension,
-  createProgressNode,
-  PROGRESS_CAPABILITIES,
   PROGRESS_TYPE,
   progressAIMaterialDescriptor,
   progressDesignerPropSchemas,
   progressLocaleMessages,
   renderProgress,
 } from '@easyink/material-progress'
+import { progressModel } from '@easyink/material-progress/material-model'
 import {
   createQrcodeExtension,
-  createQrcodeNode,
-  QRCODE_CAPABILITIES,
   QRCODE_TYPE,
   qrcodeAIMaterialDescriptor,
   qrcodeDesignerPropSchemas,
   qrcodeLocaleMessages,
   renderQrcode,
 } from '@easyink/material-qrcode'
+import { qrcodeModel } from '@easyink/material-qrcode/material-model'
 import {
   createRatingExtension,
-  createRatingNode,
-  RATING_CAPABILITIES,
   RATING_TYPE,
   ratingAIMaterialDescriptor,
   ratingDesignerPropSchemas,
   ratingLocaleMessages,
   renderRating,
 } from '@easyink/material-rating'
+import { ratingModel } from '@easyink/material-rating/material-model'
 import {
   createRectExtension,
-  createRectNode,
-  RECT_CAPABILITIES,
   RECT_TYPE,
   rectAIMaterialDescriptor,
   rectDesignerPropSchemas,
   rectLocaleMessages,
   renderRect,
 } from '@easyink/material-rect'
+import { rectModel } from '@easyink/material-rect/material-model'
 import {
   createRingProgressExtension,
-  createRingProgressNode,
   renderRingProgress,
-  RING_PROGRESS_CAPABILITIES,
   RING_PROGRESS_TYPE,
   ringProgressAIMaterialDescriptor,
   ringProgressDesignerPropSchemas,
   ringProgressLocaleMessages,
 } from '@easyink/material-ring-progress'
+import { ringProgressModel } from '@easyink/material-ring-progress/material-model'
 import {
   createSvgCustomExtension,
-  createSvgCustomNode,
   renderSvgCustom,
-  SVG_CUSTOM_CAPABILITIES,
   SVG_CUSTOM_TYPE,
   svgCustomAIMaterialDescriptor,
   svgCustomDesignerPropSchemas,
   svgCustomLocaleMessages,
 } from '@easyink/material-svg-custom'
+import { svgCustomModel } from '@easyink/material-svg-custom/material-model'
 import {
   createSvgHeartExtension,
-  createSvgHeartNode,
   renderSvgHeart,
-  SVG_HEART_CAPABILITIES,
   SVG_HEART_TYPE,
   svgHeartAIMaterialDescriptor,
   svgHeartDesignerPropSchemas,
   svgHeartLocaleMessages,
 } from '@easyink/material-svg-heart'
+import { svgHeartModel } from '@easyink/material-svg-heart/material-model'
 import {
   createSvgStarExtension,
-  createSvgStarNode,
   renderSvgStar,
-  SVG_STAR_CAPABILITIES,
   SVG_STAR_TYPE,
   svgStarAIMaterialDescriptor,
   svgStarDesignerPropSchemas,
   svgStarLocaleMessages,
 } from '@easyink/material-svg-star'
+import { svgStarModel } from '@easyink/material-svg-star/material-model'
 import {
   createTableDataExtension,
-  createTableDataNode,
   measureTableData,
   renderTableData,
-  TABLE_DATA_CAPABILITIES,
   TABLE_DATA_TYPE,
   tableDataAIMaterialDescriptor,
   tableDataDesignerPropSchemas,
   tableDataFragmentPaginator,
   tableDataLocaleMessages,
 } from '@easyink/material-table-data'
+import { tableDataModel } from '@easyink/material-table-data/material-model'
 import { tableKernelLocaleMessages } from '@easyink/material-table-kernel'
 import {
   createTableStaticExtension,
-  createTableStaticNode,
   renderTableStatic,
-  TABLE_STATIC_CAPABILITIES,
   TABLE_STATIC_TYPE,
   tableStaticAIMaterialDescriptor,
   tableStaticDesignerPropSchemas,
   tableStaticLocaleMessages,
 } from '@easyink/material-table-static'
+import { tableStaticModel } from '@easyink/material-table-static/material-model'
 import {
   createTextExtension,
-  createTextNode,
   getTextRenderSize,
   measureText,
   renderText,
-  TEXT_CAPABILITIES,
   TEXT_TYPE,
   textAIMaterialDescriptor,
   textDesignerPropSchemas,
   textLocaleMessages,
 } from '@easyink/material-text'
+import { textModel } from '@easyink/material-text/material-model'
 import {
   barcodeMaterialBinding,
   customMaterialBinding,
@@ -210,20 +193,9 @@ import {
   ratingMaterialBinding,
   ringProgressMaterialBinding,
   svgCustomMaterialBinding,
-  textMaterialBinding,
 } from './bindings'
 
-export type {
-  BuiltinDesignerCatalogGroupRegistration,
-  BuiltinDesignerCatalogRegistration,
-  BuiltinDesignerMaterialBundle,
-  BuiltinDesignerMaterialRegistration,
-  BuiltinLocaleMessages,
-  BuiltinMaterialSet,
-  BuiltinViewerMaterialBundle,
-  BuiltinViewerMaterialRegistration,
-  BuiltinViewerRegistrar,
-} from './types'
+export { materials } from './basic/designer'
 
 function tableSectionFilter(sectionId: BuiltinPanelSectionId): boolean {
   return sectionId !== 'binding'
@@ -299,224 +271,173 @@ export const builtinDesignerMaterialBundle: BuiltinDesignerMaterialBundle = {
   localeMessages: mergeLocaleMessages(tableKernelLocaleMessages, builtinCatalogLocaleMessages),
   materials: [
     {
-      type: TEXT_TYPE,
+      ...textModel,
       name: 'materials.text.name',
       icon: IconText,
       category: 'basic',
-      capabilities: TEXT_CAPABILITIES,
-      binding: textMaterialBinding,
       aiDescriptor: textAIMaterialDescriptor,
-      createDefaultNode: createTextNode,
       factory: createTextExtension,
       propSchemas: textDesignerPropSchemas,
       localeMessages: textLocaleMessages,
     },
     {
-      type: IMAGE_TYPE,
+      ...imageModel,
       name: 'materials.image.name',
       icon: IconImage,
       category: 'basic',
-      capabilities: IMAGE_CAPABILITIES,
-      binding: imageMaterialBinding,
       aiDescriptor: imageAIMaterialDescriptor,
-      createDefaultNode: createImageNode,
       factory: createImageExtension,
       propSchemas: imageDesignerPropSchemas,
       localeMessages: imageLocaleMessages,
     },
     {
-      type: BARCODE_TYPE,
+      ...barcodeModel,
       name: 'materials.barcode.name',
       icon: IconBarcode,
       category: 'basic',
-      capabilities: BARCODE_CAPABILITIES,
-      binding: barcodeMaterialBinding,
       aiDescriptor: barcodeAIMaterialDescriptor,
-      createDefaultNode: createBarcodeNode,
       factory: createBarcodeExtension,
       propSchemas: barcodeDesignerPropSchemas,
       localeMessages: barcodeLocaleMessages,
     },
     {
-      type: QRCODE_TYPE,
+      ...qrcodeModel,
       name: 'materials.qrcode.name',
       icon: IconQrcode,
       category: 'basic',
-      capabilities: QRCODE_CAPABILITIES,
-      binding: qrcodeMaterialBinding,
       aiDescriptor: qrcodeAIMaterialDescriptor,
-      createDefaultNode: createQrcodeNode,
       factory: createQrcodeExtension,
       propSchemas: qrcodeDesignerPropSchemas,
       localeMessages: qrcodeLocaleMessages,
     },
     {
-      type: LINE_TYPE,
+      ...lineModel,
       name: 'materials.line.name',
       icon: IconLine,
       category: 'basic',
-      capabilities: LINE_CAPABILITIES,
-      binding: noMaterialBinding,
       aiDescriptor: lineAIMaterialDescriptor,
-      createDefaultNode: createLineNode,
       factory: createLineExtension,
       propSchemas: lineDesignerPropSchemas,
       localeMessages: lineLocaleMessages,
     },
     {
-      type: RECT_TYPE,
+      ...rectModel,
       name: 'materials.rect.name',
       icon: IconRect,
       category: 'basic',
-      capabilities: RECT_CAPABILITIES,
-      binding: noMaterialBinding,
       aiDescriptor: rectAIMaterialDescriptor,
-      createDefaultNode: createRectNode,
       factory: createRectExtension,
       propSchemas: rectDesignerPropSchemas,
       localeMessages: rectLocaleMessages,
     },
     {
-      type: ELLIPSE_TYPE,
+      ...ellipseModel,
       name: 'materials.ellipse.name',
       icon: IconEllipse,
       category: 'basic',
-      capabilities: ELLIPSE_CAPABILITIES,
-      binding: noMaterialBinding,
       aiDescriptor: ellipseAIMaterialDescriptor,
-      createDefaultNode: createEllipseNode,
       factory: createEllipseExtension,
       propSchemas: ellipseDesignerPropSchemas,
       localeMessages: ellipseLocaleMessages,
     },
     {
-      type: TABLE_STATIC_TYPE,
+      ...tableStaticModel,
       name: 'materials.tableStatic.name',
       icon: IconTable,
       category: 'data',
-      capabilities: TABLE_STATIC_CAPABILITIES,
-      binding: customMaterialBinding,
       aiDescriptor: tableStaticAIMaterialDescriptor,
-      createDefaultNode: createTableStaticNode,
       factory: createTableStaticExtension,
       propSchemas: tableStaticDesignerPropSchemas,
       localeMessages: tableStaticLocaleMessages,
       sectionFilter: tableSectionFilter,
     },
     {
-      type: TABLE_DATA_TYPE,
+      ...tableDataModel,
       name: 'materials.tableData.name',
       icon: IconDataTable,
       category: 'data',
-      capabilities: TABLE_DATA_CAPABILITIES,
-      binding: customMaterialBinding,
       aiDescriptor: tableDataAIMaterialDescriptor,
-      createDefaultNode: createTableDataNode,
       factory: createTableDataExtension,
       propSchemas: tableDataDesignerPropSchemas,
       localeMessages: tableDataLocaleMessages,
       sectionFilter: tableSectionFilter,
     },
     {
-      type: FLOW_ROW_TYPE,
+      ...flowRowModel,
       name: 'materials.flowRow.name',
       icon: IconLayoutPanelTop,
       category: 'data',
-      capabilities: FLOW_ROW_CAPABILITIES,
-      binding: customMaterialBinding,
       aiDescriptor: flowRowAIMaterialDescriptor,
-      createDefaultNode: createFlowRowNode,
       factory: createFlowRowExtension,
       propSchemas: flowRowDesignerPropSchemas,
       localeMessages: flowRowLocaleMessages,
     },
     {
-      type: RING_PROGRESS_TYPE,
+      ...ringProgressModel,
       name: 'materials.ringProgress.name',
       icon: IconRingProgress,
       category: 'data',
-      capabilities: RING_PROGRESS_CAPABILITIES,
-      binding: ringProgressMaterialBinding,
       aiDescriptor: ringProgressAIMaterialDescriptor,
-      createDefaultNode: createRingProgressNode,
       factory: createRingProgressExtension,
       propSchemas: ringProgressDesignerPropSchemas,
       localeMessages: ringProgressLocaleMessages,
     },
     {
-      type: PROGRESS_TYPE,
+      ...progressModel,
       name: 'materials.progress.name',
       icon: IconProgress,
       category: 'data',
-      capabilities: PROGRESS_CAPABILITIES,
-      binding: progressMaterialBinding,
       aiDescriptor: progressAIMaterialDescriptor,
-      createDefaultNode: createProgressNode,
       factory: createProgressExtension,
       propSchemas: progressDesignerPropSchemas,
       localeMessages: progressLocaleMessages,
     },
     {
-      type: RATING_TYPE,
+      ...ratingModel,
       name: 'materials.rating.name',
       icon: IconRating,
       category: 'data',
-      capabilities: RATING_CAPABILITIES,
-      binding: ratingMaterialBinding,
       aiDescriptor: ratingAIMaterialDescriptor,
-      createDefaultNode: createRatingNode,
       factory: createRatingExtension,
       propSchemas: ratingDesignerPropSchemas,
       localeMessages: ratingLocaleMessages,
     },
     {
-      type: SVG_CUSTOM_TYPE,
+      ...svgCustomModel,
       name: 'materials.svgCustom.name',
       icon: IconSvg,
       category: 'svg',
-      capabilities: SVG_CUSTOM_CAPABILITIES,
-      binding: svgCustomMaterialBinding,
       aiDescriptor: svgCustomAIMaterialDescriptor,
-      createDefaultNode: createSvgCustomNode,
       factory: createSvgCustomExtension,
       propSchemas: svgCustomDesignerPropSchemas,
       localeMessages: svgCustomLocaleMessages,
     },
     {
-      type: SVG_STAR_TYPE,
+      ...svgStarModel,
       name: 'materials.svgStar.name',
       icon: IconStar,
       category: 'svg',
-      capabilities: SVG_STAR_CAPABILITIES,
-      binding: noMaterialBinding,
       aiDescriptor: svgStarAIMaterialDescriptor,
-      createDefaultNode: createSvgStarNode,
       factory: createSvgStarExtension,
       propSchemas: svgStarDesignerPropSchemas,
       localeMessages: svgStarLocaleMessages,
     },
     {
-      type: SVG_HEART_TYPE,
+      ...svgHeartModel,
       name: 'materials.svgHeart.name',
       icon: IconHeart,
       category: 'svg',
-      capabilities: SVG_HEART_CAPABILITIES,
-      binding: noMaterialBinding,
       aiDescriptor: svgHeartAIMaterialDescriptor,
-      createDefaultNode: createSvgHeartNode,
       factory: createSvgHeartExtension,
       propSchemas: svgHeartDesignerPropSchemas,
       localeMessages: svgHeartLocaleMessages,
     },
     {
-      type: PAGE_NUMBER_TYPE,
+      ...pageNumberModel,
       name: 'materials.pageNumber.name',
       icon: IconPageNumber,
       category: 'utility',
-      capabilities: PAGE_NUMBER_CAPABILITIES,
-      binding: noMaterialBinding,
       aiDescriptor: pageNumberAIMaterialDescriptor,
-      createDefaultNode: createPageNumberNode,
       factory: createPageNumberExtension,
       propSchemas: pageNumberDesignerPropSchemas,
       localeMessages: pageNumberLocaleMessages,
@@ -576,8 +497,7 @@ export const builtinDesignerMaterials = builtinDesignerMaterialBundle.materials
 export const builtinViewerMaterialBundle: BuiltinViewerMaterialBundle = {
   materials: [
     {
-      type: TEXT_TYPE,
-      binding: textMaterialBinding,
+      ...textModel,
       extension: {
         render: (node, ctx) => renderText(node, ctx),
         measure: (node, ctx) => measureText(node, ctx),
@@ -592,8 +512,7 @@ export const builtinViewerMaterialBundle: BuiltinViewerMaterialBundle = {
     { type: ELLIPSE_TYPE, binding: noMaterialBinding, extension: { render: (node, ctx) => renderEllipse(node, ctx.unit) } },
     { type: TABLE_STATIC_TYPE, binding: customMaterialBinding, extension: { render: (node, ctx) => renderTableStatic(node, ctx) } },
     {
-      type: TABLE_DATA_TYPE,
-      binding: customMaterialBinding,
+      ...tableDataModel,
       extension: {
         render: (node, ctx) => renderTableData(node, ctx),
         measure: (node, ctx) => measureTableData(node, ctx),
@@ -601,8 +520,7 @@ export const builtinViewerMaterialBundle: BuiltinViewerMaterialBundle = {
       },
     },
     {
-      type: FLOW_ROW_TYPE,
-      binding: customMaterialBinding,
+      ...flowRowModel,
       extension: {
         render: (node, ctx) => renderFlowRow(node, ctx),
         measure: (node, ctx) => measureFlowRow(node, ctx),
@@ -615,8 +533,7 @@ export const builtinViewerMaterialBundle: BuiltinViewerMaterialBundle = {
     { type: SVG_STAR_TYPE, binding: noMaterialBinding, extension: { render: node => renderSvgStar(node) } },
     { type: SVG_HEART_TYPE, binding: noMaterialBinding, extension: { render: (node, ctx) => renderSvgHeart(node, ctx.unit) } },
     {
-      type: PAGE_NUMBER_TYPE,
-      binding: noMaterialBinding,
+      ...pageNumberModel,
       extension: {
         render: (node, ctx) => renderPageNumber(node, ctx),
         pageAware: true,
@@ -631,3 +548,14 @@ export function registerBuiltinViewerMaterials(register: BuiltinViewerRegistrar)
   for (const material of builtinViewerMaterials)
     register(material.type, material.binding, material.extension)
 }
+export type {
+  BuiltinDesignerCatalogGroupRegistration,
+  BuiltinDesignerCatalogRegistration,
+  BuiltinDesignerMaterialBundle,
+  BuiltinDesignerMaterialRegistration,
+  BuiltinLocaleMessages,
+  BuiltinMaterialSet,
+  BuiltinViewerMaterialBundle,
+  BuiltinViewerMaterialRegistration,
+  BuiltinViewerRegistrar,
+} from './types'

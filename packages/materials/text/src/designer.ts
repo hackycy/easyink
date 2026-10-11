@@ -1,4 +1,5 @@
-import type { MaterialControlPolicy, MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { MaterialControlPolicy, MaterialDesignerExtension } from '@easyink/core'
+import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
 import type { MaterialNode } from '@easyink/schema'
 import { getBindingRefs } from '@easyink/schema'
 import { escapeHtml } from '@easyink/shared'
@@ -14,7 +15,7 @@ const AUTO_HEIGHT_CONTROL_POLICY: MaterialControlPolicy = {
   },
 }
 
-function buildHtml(node: MaterialNode, context: MaterialExtensionContext): string {
+function buildHtml(node: MaterialNode, context: DesignerRendererContext): string {
   const p = getTextProps(node)
   const unit = context.getSchema().unit
   const prefix = p.prefix ? escapeHtml(p.prefix) : ''
@@ -50,7 +51,7 @@ function buildHtml(node: MaterialNode, context: MaterialExtensionContext): strin
   return `<div style="${style}"><span style="${textStyle}">${display || '&nbsp;'}</span></div>`
 }
 
-function resolveDesignerDisplayText(node: MaterialNode, context: MaterialExtensionContext): string {
+function resolveDesignerDisplayText(node: MaterialNode, context: DesignerRendererContext): string {
   const p = getTextProps(node)
   const binding = getBindingRefs(node.binding)[0]
   if (binding) {
@@ -61,7 +62,7 @@ function resolveDesignerDisplayText(node: MaterialNode, context: MaterialExtensi
   return context.t('materials.text.placeholder.empty')
 }
 
-function syncAutoHeight(node: MaterialNode, context: MaterialExtensionContext): void {
+function syncAutoHeight(node: MaterialNode, context: DesignerRendererContext): void {
   if (!isTextAutoHeight(node))
     return
   const measured = measureTextNode(node, resolveDesignerDisplayText(node, context))
@@ -76,7 +77,7 @@ function syncAutoHeight(node: MaterialNode, context: MaterialExtensionContext): 
   })
 }
 
-export function createTextExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createTextExtension(context: DesignerRendererContext): MaterialDesignerExtension {
   return {
     renderContent(nodeSignal, container) {
       function render() {

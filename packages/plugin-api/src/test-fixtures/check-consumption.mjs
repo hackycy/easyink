@@ -11,8 +11,8 @@ const forbidden = path => /(?:^|\/)(?:vue|@vue|designer|viewer|assistant-[^/]*)(
 // /plugin-api/designer and /plugin-api/viewer are contracts, not host implementations.
 const forbiddenDependency = path => !path.includes('plugin-api/') && forbidden(path)
 
-async function checkEntry(name, allowVue) {
-  const entry = resolve(root, `packages/plugin-api/src/test-fixtures/${name}.ts`)
+async function checkEntry(name, allowVue, packageName = 'plugin-api', label = name) {
+  const entry = resolve(root, `packages/${packageName}/src/test-fixtures/${name}.ts`)
   const program = ts.createProgram([entry], {
     target: ts.ScriptTarget.ESNext,
     module: ts.ModuleKind.ESNext,
@@ -51,7 +51,7 @@ async function checkEntry(name, allowVue) {
   const chunks = (Array.isArray(output) ? output : [output]).flatMap(result => result.output).filter(chunk => chunk.type === 'chunk')
   const code = chunks.map(chunk => chunk.code).join('\n')
   return {
-    entry: name,
+    entry: label,
     javascriptSha256: createHash('sha256').update(code).digest('hex'),
     moduleCount: modules.length,
     declarationCount: declarations.length,
@@ -70,9 +70,14 @@ async function main() {
   }
   if (Object.keys(api.dependencies).some(forbiddenDependency))
     throw new Error('plugin-api depends on a host implementation or UI runtime')
+  const runtime = JSON.parse(await readFile(resolve(root, 'packages/plugin-runtime/package.json'), 'utf8'))
+  if (Object.keys(runtime.dependencies).some(forbiddenDependency) || api.dependencies['@easyink/plugin-runtime'])
+    throw new Error('plugin-runtime imports a host/UI dependency or forms a cycle with plugin-api')
   const results = []
   for (const [entry, allowVue] of [['root', false], ['model', false], ['designer', false], ['viewer', false], ['ui', true]])
     results.push(await checkEntry(entry, allowVue))
+  results.push(await checkEntry('kernel', false, 'plugin-runtime', 'runtime'))
+  results.push(await checkEntry('consumer', true, 'plugin-runtime', 'runtime-consumer'))
   process.stdout.write(`${JSON.stringify(results, null, 2)}\n`)
 }
 

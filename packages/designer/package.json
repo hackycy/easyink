@@ -32,10 +32,17 @@
     "@easyink/datasource": "workspace:*",
     "@easyink/icons": "workspace:*",
     "@easyink/locales": "workspace:*",
+    "@easyink/plugin-api": "workspace:*",
+    "@easyink/plugin-runtime": "workspace:*",
     "@easyink/prop-schemas": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*",
     "@easyink/ui": "workspace:*",
     "mutative": "catalog:framework"
+  },
+  "devDependencies": {
+    "@easyink/builtin": "workspace:*",
+    "@easyink/material-image": "workspace:*",
+    "@easyink/material-text": "workspace:*"
   }
 }
