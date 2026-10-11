@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { PropCommitContext, SubPropertySchema } from '@easyink/core'
+import type { MaterialUI } from '@easyink/plugin-api/ui'
 import type { BindingRef, DataContractBinding, DocumentSchema, MaterialNode, PageSchema } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { Component } from 'vue'
@@ -19,6 +20,7 @@ import { createPagePropertyDescriptors, defaultDocumentPatch, defaultPagePatch, 
 import BindingSection from './BindingSection.vue'
 import ConditionEditor from './ConditionEditor.vue'
 import MaterialDataBindingEditor from './MaterialDataBindingEditor.vue'
+import MaterialPropertiesView from './MaterialPropertiesView.vue'
 import PagePropertyEditor from './PagePropertyEditor.vue'
 import PropSchemaEditor from './PropSchemaEditor.vue'
 
@@ -32,6 +34,17 @@ const selectedElements = computed(() => {
 const selectedElement = computed(() =>
   selectedElements.value.length === 1 ? selectedElements.value[0] : undefined,
 )
+const materialProperties = computed(() => {
+  const node = selectedElement.value
+  const entry = node && store.getContributions('designer.properties').find(entry => entry.key === node.type)
+  return entry ? { owner: entry.owner, declaration: entry.value as NonNullable<MaterialUI['properties']> } : undefined
+})
+let nextPropertiesMount = 0
+const propertiesMountKey = computed(() => {
+  void selectedElement.value
+  void store.editingSession.activeSession
+  return ++nextPropertiesMount
+})
 
 const selectedElementRotatable = computed(() =>
   isElementRotatable(store, selectedElement.value),
@@ -380,7 +393,7 @@ const materialSchemas = computed<PropSchema[]>(() => {
     return []
   const def = store.getMaterial(selectedElement.value.type)
   return [
-    ...(def?.props ?? []),
+    ...(materialProperties.value?.declaration.mode === 'replace-body' ? [] : def?.props ?? []),
     ...createLayoutBehaviorPropSchemas({ page: store.schema.page }),
   ]
 })
@@ -773,6 +786,14 @@ function isPropInputDisabled(schema: PropSchema): boolean {
           </div>
         </EiPanel>
       </template>
+
+      <MaterialPropertiesView
+        v-if="canEditSelectedElement && isSectionVisible('props') && materialProperties"
+        :key="propertiesMountKey"
+        :declaration="materialProperties.declaration"
+        :owner="materialProperties.owner"
+        :node-id="selectedElement.id"
+      />
 
       <!-- Sub-property layer: auto-derived from editing session selection -->
       <template v-if="canEditSelectedElement && subPropertySchema && isSectionVisible('overlay')">

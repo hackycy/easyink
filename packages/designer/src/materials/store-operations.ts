@@ -16,7 +16,10 @@ export function createStoreRendererOperations(
     getDataSources: () => store.dataSourceRegistry.getSources(),
     getMaterials: () => assembly.getMaterials(),
     getBindingLabel: binding => binding.fieldLabel || binding.fieldPath || '',
-    t: key => assembly.t(key),
+    t: (key) => {
+      void store.localeRevision
+      return assembly.t(key)
+    },
     executeCommand: (command, args) => assembly.executeCommand(command, args),
     commitCommand: (command) => {
       store.commands.execute(command)

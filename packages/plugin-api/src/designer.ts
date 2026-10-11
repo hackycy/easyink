@@ -4,6 +4,9 @@ import type { BindingRef, DocumentSchema, DocumentSchemaInput, MaterialNode } fr
 import type { LocaleDeclaration, MaterialDeclaration, RendererDeclaration } from './material'
 import type { DeepReadonly, ResourceContext } from './resources'
 
+/** Private host identity shared by short-lived UI contexts for one installation. */
+export const DESIGNER_CONTEXT_TOKEN = Symbol('easyink.designer.context-token')
+
 export type { MaterialModel } from './material'
 export type { PropSchema } from '@easyink/core'
 
@@ -68,6 +71,7 @@ export interface DesignerQueries {
 }
 
 export interface DesignerContext extends DesignerQueries, ResourceContext {
+  readonly [DESIGNER_CONTEXT_TOKEN]?: object
   readonly commitCommand: (command: Command) => void
   /** Existing synchronous draft transaction protocol; no atomicity across await. */
   readonly tx: TransactionAPI

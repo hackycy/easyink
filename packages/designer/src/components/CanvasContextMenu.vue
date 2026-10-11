@@ -22,6 +22,7 @@ import {
 import { generateId } from '@easyink/shared'
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useDesignerStore } from '../composables'
+import { useDesignerActions } from '../composables/use-designer-actions'
 import { createClipboardActions } from '../interactions/clipboard-actions'
 import { hasGroupedElement, selectedLogicalGroupIds } from '../interactions/logical-groups'
 import { selectMany } from '../interactions/selection-api'
@@ -42,6 +43,7 @@ interface ContextMenuGroup {
 }
 
 const store = useDesignerStore()
+const { actions: extensionActions, run: runExtensionAction } = useDesignerActions('designer.context-menu')
 
 const visible = ref(false)
 const menuX = ref(0)
@@ -378,7 +380,21 @@ defineExpose({ onContextMenu })
           <span v-if="item.shortcut" class="ei-context-menu__shortcut">{{ item.shortcut }}</span>
         </div>
       </template>
-      <div v-if="snapshotGroups.length === 0" class="ei-context-menu__empty">
+      <div v-if="extensionActions.length && snapshotGroups.length" class="ei-context-menu__divider" />
+      <div v-if="extensionActions.length" class="ei-context-menu__extensions">
+        <div
+          v-for="entry in extensionActions"
+          :key="entry.key"
+          class="ei-context-menu__item ei-context-menu__item--extension"
+          :class="{ 'ei-context-menu__item--disabled': entry.disabled }"
+          @click="!entry.disabled && (visible = false, runExtensionAction(entry))"
+        >
+          <component :is="entry.action.icon" v-if="entry.action.icon" class="ei-context-menu__icon" :size="14" :stroke-width="1.5" />
+          <span class="ei-context-menu__label">{{ entry.label }}</span>
+          <span v-if="entry.failed" role="status">Extension unavailable.</span>
+        </div>
+      </div>
+      <div v-if="snapshotGroups.length === 0 && extensionActions.length === 0" class="ei-context-menu__empty">
         {{ store.t('designer.context.noActions') }}
       </div>
     </div>

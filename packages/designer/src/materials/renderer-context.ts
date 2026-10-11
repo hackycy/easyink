@@ -2,6 +2,7 @@ import type { TxOptions } from '@easyink/core'
 import type { DeepReadonly, ResourceContext } from '@easyink/plugin-api'
 import type { DesignerContext, DesignerRendererContext } from '@easyink/plugin-api/designer'
 import type { MaterialNode } from '@easyink/schema'
+import { DESIGNER_CONTEXT_TOKEN } from '@easyink/plugin-api/designer'
 import { deepClone } from '@easyink/shared'
 
 /** Fixed operations implemented by the framework, separate from the plugin context. */
@@ -132,9 +133,12 @@ export function createDesignerRendererContext(operations: DesignerRendererOperat
 }
 
 /** Independent UI and command consumers receive only their declared permissions. */
-export function createDesignerContext(operations: DesignerRendererOperations, resources: ResourceContext): DesignerContext {
+export function createDesignerContext(operations: DesignerRendererOperations, resources: ResourceContext, token?: object): DesignerContext {
   const { requestPropertyPanel: _panel, getZoom: _zoom, getPageEl: _page, on: _on, emit: _emit, ...context } = createDesignerRendererContext(operations, resources)
-  return Object.freeze(context)
+  const result = { ...context } as DesignerContext
+  if (token)
+    Object.defineProperty(result, DESIGNER_CONTEXT_TOKEN, { value: token })
+  return Object.freeze(result)
 }
 
 function snapshot<T>(value: T): DeepReadonly<T> {

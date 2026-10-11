@@ -6,7 +6,8 @@ import type { DesignerExtension } from '@easyink/plugin-api/ui'
 import type { PropType } from 'vue'
 import { DexieAssistantStore } from '@easyink/assistant-store'
 import { IconSparkles } from '@easyink/icons'
-import { defineAsyncComponent, defineComponent, h, ref } from 'vue'
+import { DESIGNER_CONTEXT_TOKEN } from '@easyink/plugin-api/designer'
+import { defineAsyncComponent, defineComponent, h, ref, shallowRef } from 'vue'
 import {
   applyAssistantDataSourceToDesigner,
   applyAssistantPatchToDesigner,
@@ -18,13 +19,6 @@ import { assistantLocaleMessages } from './locale'
 import { createAssistantMaterialManifest } from './material-manifest'
 
 const AssistantPanel = defineAsyncComponent(() => import('./AssistantPanel.vue'))
-const ContextAssistantPanel = defineComponent({
-  inheritAttrs: false,
-  props: { context: { type: Object as PropType<DesignerContext>, required: true } },
-  setup(props, { attrs }) {
-    return () => h(AssistantPanel, { ...attrs, context: props.context, open: Boolean(attrs.open) })
-  },
-})
 
 export interface CreateAssistantContributionOptions {
   id?: string
@@ -35,24 +29,47 @@ export interface CreateAssistantContributionOptions {
 }
 
 export function createAssistantContribution(options: CreateAssistantContributionOptions = {}): DesignerExtension {
-  const states = new WeakMap<DesignerContext, ReturnType<typeof createState>>()
+  const states = new WeakMap<object, ReturnType<typeof createState>>()
   function createState(context: DesignerContext) {
     const open = ref(false)
     const store = new DexieAssistantStore('easyink-assistant-ui')
     context.onDispose(() => {
       open.value = false
-      states.delete(context)
+      states.delete(context[DESIGNER_CONTEXT_TOKEN] ?? context)
     })
     return { open, store }
   }
   function state(context: DesignerContext) {
-    let value = states.get(context)
+    const key = context[DESIGNER_CONTEXT_TOKEN] ?? context
+    let value = states.get(key)
     if (!value) {
       value = createState(context)
-      states.set(context, value)
+      states.set(key, value)
     }
     return value
   }
+  const panelState: DesignerCommand<void, ReturnType<typeof createState>> = { id: 'assistant.panelState', handler: (_args, ctx) => state(ctx) }
+  const ContextAssistantPanel = defineComponent({
+    inheritAttrs: false,
+    props: { context: { type: Object as PropType<DesignerContext>, required: true } },
+    setup(props, { attrs }) {
+      const current = shallowRef<ReturnType<typeof createState>>()
+      const failure = shallowRef<unknown>()
+      void props.context.executeCommand(panelState, undefined).then((value) => {
+        if (!props.context.signal.aborted)
+          current.value = value
+      }).catch((cause) => {
+        if (!props.context.signal.aborted)
+          failure.value = cause
+      })
+      return () => {
+        if (failure.value)
+          throw failure.value
+        const value = current.value
+        return value ? h(AssistantPanel, { ...attrs, context: props.context, open: value.open.value, store: value.store }) : null
+      }
+    },
+  })
   const open: DesignerCommand = { id: 'assistant.open', handler: (_args, ctx) => {
     state(ctx).open.value = true
   } }
@@ -71,18 +88,16 @@ export function createAssistantContribution(options: CreateAssistantContribution
   return {
     id: options.id ?? 'easyink.assistant',
     locale: assistantLocaleMessages,
-    commands: [open, close, toggle, apply, patch, selected, dataSource, rollback, attach],
+    commands: [open, close, toggle, panelState, apply, patch, selected, dataSource, rollback, attach],
     ui: {
       toolbar: [{ id: 'assistant.toggle', icon: IconSparkles, label: options.label ?? 'designer.assistant.toolbar.label', onClick: ctx => ctx.executeCommand(toggle, undefined) }],
       overlays: [{
         id: 'assistant.panel',
         component: ContextAssistantPanel,
         getProps: ctx => ({
-          'open': state(ctx).open.value,
-          'onUpdate:open': (next: boolean) => { state(ctx).open.value = next },
-          'onRequestClose': () => { state(ctx).open.value = false },
+          'onUpdate:open': (next: boolean) => ctx.executeCommand(next ? open : close, undefined),
+          'onRequestClose': () => ctx.executeCommand(close, undefined),
           'endpoint': options.endpoint,
-          'store': state(ctx).store,
           'conversationId': options.id ?? 'easyink.assistant',
           'llmConfig': options.llmConfig,
           'plugins': options.plugins ?? [],

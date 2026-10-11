@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import type { DesignerAction } from '@easyink/plugin-api/ui'
-import type { ContributionOwner } from '@easyink/plugin-runtime'
 import type { MaterialNode } from '@easyink/schema'
 import type { Component } from 'vue'
 import {
@@ -60,6 +58,7 @@ import { generateId } from '@easyink/shared'
 import { EiNumberInput, EiPopover, EiSwitch } from '@easyink/ui'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useDesignerStore } from '../composables'
+import { useDesignerActions } from '../composables/use-designer-actions'
 import { createClipboardActions } from '../interactions/clipboard-actions'
 import { hasGroupedElement, selectedLogicalGroupIds } from '../interactions/logical-groups'
 import { selectMany } from '../interactions/selection-api'
@@ -67,20 +66,7 @@ import { filterRotatableElements } from '../materials/capabilities'
 import { getNextTopbarZoom } from './topbar-zoom'
 
 const store = useDesignerStore()
-const toolbarActions = computed(() => store.getContributions('designer.toolbar').map(entry => ({
-  action: entry.value as DesignerAction,
-  owner: entry.owner,
-})).sort((a, b) => (a.action.order ?? 0) - (b.action.order ?? 0)))
-async function runExtensionAction(action: DesignerAction, owner: ContributionOwner) {
-  const context = store.getExtensionContext(owner)
-  try {
-    await action.onClick(context)
-  }
-  catch (cause) {
-    if (!context.signal.aborted)
-      context.reportDiagnostic({ code: 'extension-action', message: `Extension action failed: ${owner.pluginId}/${action.id}`, cause })
-  }
-}
+const { actions: toolbarActions, run: runExtensionAction } = useDesignerActions('designer.toolbar')
 
 // ─── Window Toggle Definitions ─────────────────────────────────
 
@@ -543,16 +529,6 @@ function toggleSnapMenu(ev: MouseEvent) {
       >
         <component :is="wt.icon" :size="16" :stroke-width="1.5" />
       </button>
-      <button
-        v-for="entry in toolbarActions"
-        :key="entry.action.id"
-        class="ei-topbar-b__btn ei-topbar-b__btn--contribution"
-        :title="store.t(entry.action.label)"
-        :disabled="entry.action.disabled?.(store.getExtensionContext(entry.owner))"
-        @click="runExtensionAction(entry.action, entry.owner)"
-      >
-        <component :is="entry.action.icon" :size="16" :stroke-width="1.5" />
-      </button>
     </div>
 
     <div class="ei-topbar-b__divider" />
@@ -863,6 +839,21 @@ function toggleSnapMenu(ev: MouseEvent) {
           </EiPopover>
         </div>
       </template>
+      <div v-if="toolbarActions.length" class="ei-topbar-b__divider" />
+      <div v-if="toolbarActions.length" class="ei-topbar-b__group ei-topbar-b__extensions">
+        <button
+          v-for="entry in toolbarActions"
+          :key="entry.key"
+          class="ei-topbar-b__btn ei-topbar-b__btn--extension"
+          :title="entry.failed ? `${entry.label}: Extension unavailable.` : entry.label"
+          :disabled="entry.disabled"
+          @click="runExtensionAction(entry)"
+        >
+          <component :is="entry.action.icon" v-if="entry.action.icon" :size="16" :stroke-width="1.5" />
+          <span v-else>{{ entry.label }}</span>
+          <span v-if="entry.failed" role="status">Extension unavailable.</span>
+        </button>
+      </div>
     </div>
 
     <!-- Scroll right arrow -->

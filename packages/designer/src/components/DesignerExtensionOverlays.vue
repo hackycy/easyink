@@ -16,7 +16,7 @@ const panels = computed(() => store.getContributions('designer.overlay').map(ent
 <template>
   <div ref="root" class="ei-designer__overlay-root" />
   <template v-if="root">
-    <Teleport v-for="entry in panels" :key="entry.panel.id" :to="root">
+    <Teleport v-for="entry in panels" :key="`${entry.owner.installationId}:${entry.owner.contributionId}`" :to="root">
       <DesignerExtensionView :declaration="entry.panel" :owner="entry.owner" />
     </Teleport>
   </template>

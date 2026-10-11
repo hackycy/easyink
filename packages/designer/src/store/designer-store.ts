@@ -1,9 +1,9 @@
 import type { EphemeralPanelDef, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, PropertyPanelOverlay } from '@easyink/core'
 import type { DeepReadonly } from '@easyink/plugin-api'
-import type { DesignerCommand, DesignerContext } from '@easyink/plugin-api/designer'
+import type { DesignerCommand, DesignerContext, MaterialPropertiesContext } from '@easyink/plugin-api/designer'
 import type { LocaleTree } from '@easyink/plugin-api/material'
 import type { DesignerExtension, DesignerMaterial } from '@easyink/plugin-api/ui'
-import type { CapabilityPoint, ConsumerContext, ContributionOwner, DisposeResult, HostRegistry } from '@easyink/plugin-runtime'
+import type { CapabilityPoint, CleanupError, ConsumerContext, ContributionOwner, DisposeResult, HostRegistry } from '@easyink/plugin-runtime'
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
 import type { PaperPreset } from '@easyink/shared'
 import type { DesignerRendererOperations } from '../materials/renderer-context'
@@ -20,6 +20,7 @@ import { DesignerInteractionService } from '../interactions/interaction-service'
 import { createDesignerMaterialHost } from '../materials/host-consumer'
 import { createDesignerContext } from '../materials/renderer-context'
 import { createStoreRendererOperations } from '../materials/store-operations'
+import { UIMountScope } from '../materials/ui-mount-scope'
 import { DiagnosticsChannel } from './diagnostics'
 import { FontService } from './font-service'
 import { LOADING_EXTENSION, MaterialConsumer } from './material-consumer'
@@ -92,6 +93,10 @@ export class DesignerStore {
   private _registry!: HostRegistry<DesignerMaterial>
   private _rendererOperations!: DesignerRendererOperations
   private readonly _contexts = markRaw(new Map<string, DesignerContext>())
+  private readonly _contextTokens = markRaw(new Map<string, object>())
+  private readonly _uiMounts = markRaw(new Set<UIMountScope>())
+  private readonly _uiCleanupErrors = markRaw<CleanupError[]>([])
+  private _destruction?: Promise<DisposeResult>
   private _disposed = false
   private readonly _loadingTypes = markRaw(new Set<string>())
   localeRevision = 0
@@ -165,10 +170,16 @@ export class DesignerStore {
         },
         () => store._loadingTypes.clear(),
         () => store._contexts.clear(),
+        () => store._contextTokens.clear(),
       ]
       // Scope cleanup is reverse ordered; all framework consumers stop independently.
       for (const cleanup of cleanups.reverse())
         resources.onDispose(cleanup)
+      resources.onDispose(async () => {
+        for (const mount of [...store._uiMounts].reverse())
+          await mount.dispose()
+        store._uiMounts.clear()
+      })
       let invalidationFailure: { cause: unknown } | undefined
       resources.onDispose(() => {
         if (invalidationFailure)
@@ -495,9 +506,79 @@ export class DesignerStore {
     const cached = this._contexts.get(key)
     if (cached)
       return cached
-    const context = createDesignerContext(this._rendererOperations, this._consumerResources.resources(owner))
+    const context = createDesignerContext(this._rendererOperations, this._consumerResources.resources(owner), this.contextToken(owner))
     this._contexts.set(key, context)
     return context
+  }
+
+  /** Framework UI consumers own a shorter context for each component mount. */
+  mountUIContext(owner: ContributionOwner) {
+    this.assertActive()
+    const scope = markRaw(new UIMountScope(this._consumerResources.resources(owner), owner, this._uiCleanupErrors))
+    this._uiMounts.add(scope)
+    const context = createDesignerContext(this._rendererOperations, scope.resources, this.contextToken(owner))
+    return {
+      context,
+      dispose: () => {
+        const result = scope.dispose()
+        void result.then(() => this._uiMounts.delete(scope))
+        return result
+      },
+    }
+  }
+
+  mountPropertiesContext(owner: ContributionOwner, nodeId: string, getRoot: () => HTMLElement | null) {
+    const mount = this.mountUIContext(owner)
+    const node = this.getElementById(nodeId)
+    const session = this.editingSession.activeSession
+    const assertTarget = () => {
+      mount.context.signal.throwIfAborted()
+      if (!node || node !== this.getElementById(nodeId) || this.selection.ids.length !== 1 || this.selection.ids[0] !== nodeId || this.editingSession.activeSession !== session || node.locked || node.hidden)
+        throw new Error('Material properties target is no longer current')
+    }
+    const context: MaterialPropertiesContext = Object.freeze({
+      signal: mount.context.signal,
+      onDispose: mount.context.onDispose,
+      getSchema: mount.context.getSchema,
+      getNode: mount.context.getNode,
+      getSelection: mount.context.getSelection,
+      isEditing: mount.context.isEditing,
+      getDataSources: mount.context.getDataSources,
+      getMaterials: mount.context.getMaterials,
+      getBindingLabel: mount.context.getBindingLabel,
+      t: mount.context.t,
+      get node() {
+        assertTarget()
+        return mount.context.getNode(nodeId)!
+      },
+      tx: Object.freeze<MaterialPropertiesContext['tx']>({
+        run: <TNode extends MaterialNode>(id: string, mutator: (draft: TNode) => void, options?: import('@easyink/core').TxOptions) => {
+          assertTarget()
+          if (id !== nodeId)
+            throw new Error('Material properties may only edit their current node')
+          mount.context.tx.run<TNode>(id, (draft) => {
+            mutator(draft)
+            assertTarget()
+          }, options)
+          this.markDraftModified()
+        },
+        batch: (run) => {
+          assertTarget()
+          return mount.context.tx.batch(() => {
+            const result = run()
+            assertTarget()
+            return result
+          })
+        },
+      }),
+      flushPendingEdits: () => {
+        assertTarget()
+        const active = document.activeElement
+        if (active instanceof HTMLElement && (getRoot()?.contains(active) || this.getPageEl()?.contains(active)))
+          active.blur()
+      },
+    })
+    return { context, dispose: mount.dispose }
   }
 
   private async executePluginCommand<TArgs, TResult>(command: DesignerCommand<TArgs, TResult>, args: TArgs): Promise<TResult> {
@@ -517,6 +598,16 @@ export class DesignerStore {
   private assertActive(): void {
     if (this._disposed)
       throw new Error('Designer is disposed')
+  }
+
+  private contextToken(owner: ContributionOwner): object {
+    const key = `${owner.installationId}:${owner.pluginId}`
+    let token = this._contextTokens.get(key)
+    if (!token) {
+      token = {}
+      this._contextTokens.set(key, token)
+    }
+    return token
   }
 
   // ─── Element geometry ───────────────────────────────────────────
@@ -572,8 +663,11 @@ export class DesignerStore {
   // ─── Cleanup ──────────────────────────────────────────────────
 
   destroy(): Promise<DisposeResult> {
+    if (this._destruction)
+      return this._destruction
     this._disposed = true
-    return this._assembly.destroy()
+    this._destruction = this._assembly.destroy().then(result => Object.freeze({ errors: Object.freeze([...result.errors, ...this._uiCleanupErrors]) }))
+    return this._destruction
   }
 }
 

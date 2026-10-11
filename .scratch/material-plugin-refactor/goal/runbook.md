@@ -1,7 +1,7 @@
 # 物料能力装配层重构 Goal Runbook
 
 Schema: `goal-loop/runbook-v2`
-Revision: `179`
+Revision: `194`
 
 ## Contract Baseline
 
@@ -26,16 +26,16 @@ Revision: `179`
 | G0: 冻结行为与消费基线 | passed | none | `implementation-plan.md -> G0: 冻结行为与消费基线` | `goal/history/G0.md` | `G0-E0031` | `G0@G0-E0031` |
 | G1: 契约与唯一装配内核 | passed | G0 | `implementation-plan.md -> G1: 契约与唯一装配内核` | `goal/history/G1.md` | `G1-E0098` | `G1@G1-E0098` |
 | G2: text 与 image 双宿主完整切片 | passed | G1 | `implementation-plan.md -> G2: text 与 image 双宿主完整切片` | `goal/history/G2.md` | `G2-E0051` | `G2@G2-E0051` |
-| G3: Designer UI 与受控服务迁移 | active | G2 | `implementation-plan.md -> G3: Designer UI 与受控服务迁移` | `goal/history/G3.md` | `G3-E0001` | `G2@G2-E0051` |
-| G4: Render Session 与输出所有权 | planned | G3 | `implementation-plan.md -> G4: Render Session 与输出所有权` | `—` | `—` | `G3 pending` |
+| G3: Designer UI 与受控服务迁移 | passed | G2 | `implementation-plan.md -> G3: Designer UI 与受控服务迁移` | `goal/history/G3.md` | `G3-E0016` | `G3@G3-E0016` |
+| G4: Render Session 与输出所有权 | active | G3 | `implementation-plan.md -> G4: Render Session 与输出所有权` | `goal/history/G4.md` | `G4-E0001` | `G3@G3-E0016` |
 | G5: 全部物料与实际宿主切换 | planned | G4 | `implementation-plan.md -> G5: 全部物料与实际宿主切换` | `—` | `—` | `G4 pending` |
 | G6: 0.1.0 候选制品与手动发布交接 | planned | G5 | `implementation-plan.md -> G6: 0.1.0 候选制品与手动发布交接` | `—` | `—` | `G5 pending` |
 
 ## Current Checkpoint
 
-- Gate: `G3: Designer UI 与受控服务迁移`
-- History: `goal/history/G3.md`
-- History head: `G3-E0001`
+- Gate: `G4: Render Session 与输出所有权`
+- History: `goal/history/G4.md`
+- History head: `G4-E0001`
 - Last completed slice: `none`
 - Current slice: `none`
 - Checks: `none`
