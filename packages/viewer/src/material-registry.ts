@@ -11,11 +11,23 @@ export type MaterialRenderInput = ViewerRenderContext & Pick<ViewerContext, 'pag
 
 /** Read-only framework consumer; declarations and acquired caches belong to the Host consumer. */
 export class MaterialRendererRegistry {
+  private readonly loadFailures = new Map<string, unknown>()
+
   constructor(private readonly consumer: MaterialConsumer, private readonly document?: Document) {}
 
   async load(types: readonly string[]): Promise<void> {
     for (const type of new Set(types)) {
-      const implementation = await this.consumer.getRenderer(type)
+      let implementation
+      try {
+        implementation = await this.consumer.getRenderer(type)
+        this.loadFailures.delete(type)
+      }
+      catch (cause) {
+        if (this.consumer.host.state !== 'active')
+          return
+        this.loadFailures.set(type, cause)
+        continue
+      }
       if (this.consumer.host.state !== 'active')
         return
       if (implementation && !('render' in implementation))
@@ -29,7 +41,17 @@ export class MaterialRendererRegistry {
 
   render(node: MaterialNode, context: ViewerRenderContext | MaterialRenderInput): ViewerRenderOutput {
     const renderer = this.renderer(node.type)
-    return renderer ? renderer.render(freezeSnapshot(node), this.context(node, context)) : renderUnknownMaterial(node)
+    if (renderer)
+      return renderer.render(freezeSnapshot(node), this.context(node, context))
+    const failed = this.loadFailures.has(node.type)
+    context.reportDiagnostic?.({
+      code: failed ? 'MATERIAL_LOAD_ERROR' : 'UNKNOWN_MATERIAL',
+      severity: 'warning',
+      message: failed ? `Material loader failed: ${node.type}` : `Material is not installed: ${node.type}`,
+      nodeId: node.id,
+      cause: this.loadFailures.get(node.type),
+    })
+    return renderUnknownMaterial(node, failed ? 'Unavailable' : 'Unknown')
   }
 
   measure(node: MaterialNode, context: ViewerMeasureContext): ViewerMeasureResult | null {
@@ -112,9 +134,9 @@ function freezeSnapshot<T>(value: T): T {
   return value
 }
 
-function renderUnknownMaterial(node: MaterialNode): ViewerRenderOutput {
+function renderUnknownMaterial(node: MaterialNode, label: string): ViewerRenderOutput {
   const typeText = escapeHtml(node.type)
   return {
-    html: trustedViewerHtml(`<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#fff3f3;border:1px dashed #ff4d4f;color:#ff4d4f;font-size:12px;box-sizing:border-box;">[Unknown: ${typeText}]</div>`),
+    html: trustedViewerHtml(`<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#fff3f3;border:1px dashed #ff4d4f;color:#ff4d4f;font-size:12px;box-sizing:border-box;">[${label}: ${typeText}]</div>`),
   }
 }

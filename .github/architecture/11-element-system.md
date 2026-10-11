@@ -2,6 +2,14 @@
 
 EasyInk 的物料体系覆盖”内容元素”和”结构元素”两类对象。`table / chart / svg` 是一级类别。
 
+## 完整物料入口（G2）
+
+text/image 的根入口导出 Designer 完整物料 `text`/`image`，`/viewer` 导出同名 Viewer 完整物料。两端复用物料包内的唯一 `MaterialModel`：type、binding、condition、capabilities、默认节点工厂属于模型；renderer、properties、palette、locale、AI 属于对应声明。应用在创建前传入完整数组，不补装目录或 AI 插件。
+
+节点工厂、默认值、模型类型和纯渲染 helper 保留原根入口，Viewer 从 `/viewer` 使用同一实现。text 的测量和可见溢出尺寸仍由 renderer 提供；替换 renderer 不改变共享 binding/condition。未知节点在两端保留并显示诊断，缺核心 renderer/loader 在创建时拒绝，已声明 loader 的运行失败只使该物料局部不可用。
+
+下文旧注册形状用于尚待后续 Gate 清理的基线描述；G2 只验证 text/image 完整切片与集合生成，不表示全部物料迁移完成。可运行用法见 [text/image 完整组合](../../docs/advanced/material-composition.md)。
+
 ## 11.1 物料定义
 
 每个物料都由四部分组成：

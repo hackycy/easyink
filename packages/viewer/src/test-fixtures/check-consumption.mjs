@@ -78,7 +78,10 @@ async function checkEntry(name) {
 async function main() {
   const selected = await checkEntry('minimal-viewer')
   const empty = await checkEntry('empty-viewer')
-  process.stdout.write(`${JSON.stringify({ ...selected, empty }, null, 2)}\n`)
+  const textImage = await checkEntry('text-image-viewer')
+  if ([...textImage.javascript.workspaceModules, ...textImage.declarations].some(path => /packages\/(?:builtin|materials\/(?!text\/|image\/))/.test(path)))
+    throw new Error('Text/image Viewer must consume only the selected material packages')
+  process.stdout.write(`${JSON.stringify({ ...selected, empty, textImage }, null, 2)}\n`)
 }
 
 main().catch((error) => {

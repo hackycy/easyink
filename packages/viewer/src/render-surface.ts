@@ -58,12 +58,12 @@ export function renderPages(
       unit,
       zoom,
       reportDiagnostic: diagnostic => diagnostics.push({
-        category: 'datasource',
+        category: diagnostic.code === 'UNKNOWN_MATERIAL' || diagnostic.code === 'MATERIAL_LOAD_ERROR' ? 'viewer' : 'datasource',
         severity: diagnostic.severity,
         code: diagnostic.code,
         message: diagnostic.message,
         nodeId: diagnostic.nodeId,
-        scope: 'datasource',
+        scope: diagnostic.code === 'UNKNOWN_MATERIAL' || diagnostic.code === 'MATERIAL_LOAD_ERROR' ? 'material' : 'datasource',
         cause: diagnostic.cause,
       }),
     }

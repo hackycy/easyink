@@ -8,4 +8,5 @@ it('consumes emitted Viewer collections and rejects legacy registration without 
   const result = JSON.parse(execFileSync(process.execPath, [script], { encoding: 'utf8', timeout: 30000 }))
   expect(result.forbidden).toEqual([])
   expect(result.empty.forbidden).toEqual([])
+  expect(result.textImage.forbidden).toEqual([])
 }, 35000)

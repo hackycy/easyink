@@ -1,5 +1,13 @@
 # 18. 构建与产物
 
+## 完整物料与集合生成（G2）
+
+text/image 分别构建 Designer 根入口和纯 `/viewer` 入口；两端导出同名完整物料以及适用的工厂、默认值、类型和 helper。最小 Viewer 消费夹具从真实 package exports 检查 JavaScript 与声明图，排除 Designer、Vue 和 Assistant UI，并确认只引入选中的 text/image 包。
+
+builtin 的 `src/collection-source.ts` 是 all/basic 成员和顺序的维护源。`tsdown.config.ts` 在构建阶段生成 `all/designer`、`all/viewer`、`basic/designer`、`basic/viewer` 四个静态入口；消费者无需运行生成器。all 两端的历史 chart 顺序各自保留，basic 为 17 项，none 为空。
+
+G2 的产物检查同时追踪 Designer 入口 chunk 的静态依赖；以 `node packages/designer/src/test-fixtures/check-consumption.mjs --check-lazy` 检查 chart-custom 的重型实现。当前根/聚合路径仍提前加载完整 ECharts，D3 未通过；此段不表示 all/basic 旧装配面已完成 G5 收口。
+
 ## 18.1 构建工具链
 
 | 工具 | 用途 |

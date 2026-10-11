@@ -1,15 +1,15 @@
 import type { DocumentSchema, MaterialNode, TableDataSchema, TableNode } from '@easyink/schema'
 import { createHash } from 'node:crypto'
-import { builtinDesignerMaterials } from '@easyink/builtin'
+import { materials as builtinDesignerMaterials } from '@easyink/builtin/all'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createViewer } from './index'
 import { createBuiltinViewer } from './test-fixtures/builtin-viewer'
 
 function defaultNode(type: string, partial: Partial<MaterialNode> = {}, unit = 'mm'): MaterialNode {
-  const material = builtinDesignerMaterials.find(material => material.type === type)
+  const material = builtinDesignerMaterials.find(material => material.model.type === type)
   if (!material)
     throw new Error(`Missing baseline material ${type}`)
-  return material.createDefaultNode({ id: type, ...partial }, unit)
+  return material.model.createDefaultNode({ id: type, ...partial }, unit)
 }
 
 function pageSnapshot(container: HTMLElement) {
