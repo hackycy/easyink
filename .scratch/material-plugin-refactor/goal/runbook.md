@@ -1,7 +1,7 @@
 # 物料能力装配层重构 Goal Runbook
 
 Schema: `goal-loop/runbook-v2`
-Revision: `32`
+Revision: `45`
 
 ## Contract Baseline
 
@@ -24,7 +24,7 @@ Revision: `32`
 | Gate | Status | Depends on | Plan contract | History | History head | Unlock evidence |
 | --- | --- | --- | --- | --- | --- | --- |
 | G0: 冻结行为与消费基线 | passed | none | `implementation-plan.md -> G0: 冻结行为与消费基线` | `goal/history/G0.md` | `G0-E0031` | `G0@G0-E0031` |
-| G1: 契约与唯一装配内核 | active | G0 | `implementation-plan.md -> G1: 契约与唯一装配内核` | `goal/history/G1.md` | `G1-E0001` | `G0@G0-E0031` |
+| G1: 契约与唯一装配内核 | active | G0 | `implementation-plan.md -> G1: 契约与唯一装配内核` | `goal/history/G1.md` | `G1-E0014` | `G0@G0-E0031` |
 | G2: text 与 image 双宿主完整切片 | planned | G1 | `implementation-plan.md -> G2: text 与 image 双宿主完整切片` | `—` | `—` | `G1 pending` |
 | G3: Designer UI 与受控服务迁移 | planned | G2 | `implementation-plan.md -> G3: Designer UI 与受控服务迁移` | `—` | `—` | `G2 pending` |
 | G4: Render Session 与输出所有权 | planned | G3 | `implementation-plan.md -> G4: Render Session 与输出所有权` | `—` | `—` | `G3 pending` |
@@ -35,13 +35,13 @@ Revision: `32`
 
 - Gate: `G1: 契约与唯一装配内核`
 - History: `goal/history/G1.md`
-- History head: `G1-E0001`
-- Last completed slice: `none`
+- History head: `G1-E0014`
+- Last completed slice: `S1c`
 - Current slice: `none`
-- Checks: `none`
+- Checks: `R1=pass, R2=pass, R3=pass, R4=pass`
 - Satisfied exits: `none`
 - Manual acceptance: `none`
 - Blocker: `none`
-- Risks: `none`
-- Next action: `select the first slice from the Gate contract`
+- Risks: `plugin-runtime 与双 Host 尚未实现；Viewer 会话分页仍复用 core 形状，完整会话调度不属于本轮验证`
+- Next action: `继续 G1 S2：新增 plugin-runtime owned staging、组合校验、locale、Scope 初始化/销毁事务；无旧 API 桥接`
 - Contract revision: `校正包族 glob，排除依赖目录和不存在的可选路径`

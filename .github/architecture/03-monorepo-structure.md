@@ -8,6 +8,7 @@ easyink/
 │   ├── shared/                 # @easyink/shared — 通用类型、工具、常量
 │   ├── schema/                 # @easyink/schema — Schema 类型、默认值、迁移、序列化、校验
 │   ├── core/                   # @easyink/core — 命令、选择、几何、分页、字体、物料协议
+│   ├── plugin-api/             # @easyink/plugin-api — 物料和扩展公共声明，UI 类型独立入口
 │   ├── datasource/             # @easyink/datasource — 字段树、数据源引用、绑定格式模板
 │   ├── viewer/                 # @easyink/viewer — ViewerRuntime、预览、打印、导出、缩略图
 │   ├── export/
@@ -57,6 +58,14 @@ easyink/
 - CommandManager、SelectionModel
 - 历史（undo/redo）由 CommandManager 内部栈管理，无独立 HistoryModel
 - 几何计算、辅助线、吸附、分页计划、区域模型
+
+### `@easyink/plugin-api`
+
+- `./material` 提供共享模型、binding、静态能力、condition/pageAware、locale 和 AI 声明。
+- `./designer` 提供完整 Designer 物料、只读查询、受控编辑及参数/结果关联的命令；`./viewer` 提供同步 renderer、受管 loader 与可选会话实现声明。
+- `./ui` 单独引用 Vue，声明物料目录、专属属性组件及独立工具栏、右键和弹层扩展。根、material、designer、viewer 入口不重导出 UI。
+- 依赖 core/schema/shared 的领域协议及 datasource 描述类型，不依赖 Designer/Viewer 实现；底层包不反向依赖 plugin-api。
+- 当前已落地的是公共声明与消费夹具；plugin-runtime 和现有宿主接入仍在实施中。
 
 ### `@easyink/builtin`
 

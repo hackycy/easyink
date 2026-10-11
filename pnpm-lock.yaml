@@ -1287,6 +1287,24 @@ importers:
         specifier: workspace:*
         version: link:../../shared
 
+  packages/plugin-api:
+    dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../core
+      '@easyink/datasource':
+        specifier: workspace:*
+        version: link:../datasource
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../shared
+      vue:
+        specifier: catalog:framework
+        version: 3.5.31(typescript@6.0.2)
+
   packages/print/core:
     dependencies:
       '@easyink/export-runtime':

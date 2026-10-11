@@ -2,6 +2,14 @@
 
 EasyInk 当前保留扩展抽象，但它的目标是支撑内置体系演进，而不是立刻开放成稳定的第三方插件平台。
 
+## 已落地的公共声明入口
+
+`@easyink/plugin-api` 已提供独立的 material/designer/viewer/ui 构建入口。完整物料声明包含同一共享模型和对应宿主 renderer 或 loader；目录、属性、locale 与 AI 可以缺省。模型拥有 binding、condition 与 pageAware，renderer 负责绘制和设计交互。独立 UI/命令扩展以自己的 id 声明，无需伪造物料。
+
+Designer UI 组件和回调取得受控上下文。组件业务 props 不得覆盖 `context`；物料属性上下文与独立 Designer 上下文类型不同。命令调用保留参数和结果类型。纯 Viewer 入口的 JavaScript 与声明依赖图均不包含 Vue、Designer 或 Assistant UI。
+
+验证入口是 `packages/plugin-api/src/test-fixtures/check-consumption.mjs` 与 `contracts.test.ts`：消费真实 exports 和已生成声明，负向夹具使用 `@ts-expect-error` 验证缺失 renderer、编辑权限、只读查询、异步 render 和组件 context 错配。当前 Host 创建、登记事务和旧宿主注册表替换尚未落地，下文描述既有实现。
+
 ## 9.1 当前边界
 
 当前版本的扩展机制只服务以下场景：
