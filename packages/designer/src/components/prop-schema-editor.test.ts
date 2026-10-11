@@ -53,10 +53,17 @@ describe('prop schema editor text file import', () => {
     input.dispatchEvent(new Event('blur', { bubbles: true }))
     await flush()
 
+    const supplementaryCharacter = String.fromCodePoint(0x20000)
+    input.focus()
+    input.value = `${supplementaryCharacter}A`
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    input.dispatchEvent(new Event('blur', { bubbles: true }))
+    await flush()
+
     expect(input.minLength).toBe(1)
-    expect(input.maxLength).toBe(1)
-    expect(events.previews).toEqual([['character', 'A'], ['character', '满']])
-    expect(events.changes).toEqual([['character', 'A'], ['character', '满']])
+    expect(input.hasAttribute('maxlength')).toBe(false)
+    expect(events.previews).toEqual([['character', 'A'], ['character', '满'], ['character', supplementaryCharacter]])
+    expect(events.changes).toEqual([['character', 'A'], ['character', '满'], ['character', supplementaryCharacter]])
     mounted.unmount()
   })
 

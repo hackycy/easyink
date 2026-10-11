@@ -1,7 +1,7 @@
 # 物料能力装配层重构 Goal Runbook
 
 Schema: `goal-loop/runbook-v2`
-Revision: `2`
+Revision: `32`
 
 ## Contract Baseline
 
@@ -23,8 +23,8 @@ Revision: `2`
 
 | Gate | Status | Depends on | Plan contract | History | History head | Unlock evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| G0: 冻结行为与消费基线 | active | none | `implementation-plan.md -> G0: 冻结行为与消费基线` | `goal/history/G0.md` | `G0-E0001` | `no predecessor` |
-| G1: 契约与唯一装配内核 | planned | G0 | `implementation-plan.md -> G1: 契约与唯一装配内核` | `—` | `—` | `G0 pending` |
+| G0: 冻结行为与消费基线 | passed | none | `implementation-plan.md -> G0: 冻结行为与消费基线` | `goal/history/G0.md` | `G0-E0031` | `G0@G0-E0031` |
+| G1: 契约与唯一装配内核 | active | G0 | `implementation-plan.md -> G1: 契约与唯一装配内核` | `goal/history/G1.md` | `G1-E0001` | `G0@G0-E0031` |
 | G2: text 与 image 双宿主完整切片 | planned | G1 | `implementation-plan.md -> G2: text 与 image 双宿主完整切片` | `—` | `—` | `G1 pending` |
 | G3: Designer UI 与受控服务迁移 | planned | G2 | `implementation-plan.md -> G3: Designer UI 与受控服务迁移` | `—` | `—` | `G2 pending` |
 | G4: Render Session 与输出所有权 | planned | G3 | `implementation-plan.md -> G4: Render Session 与输出所有权` | `—` | `—` | `G3 pending` |
@@ -33,9 +33,9 @@ Revision: `2`
 
 ## Current Checkpoint
 
-- Gate: `G0: 冻结行为与消费基线`
-- History: `goal/history/G0.md`
-- History head: `G0-E0001`
+- Gate: `G1: 契约与唯一装配内核`
+- History: `goal/history/G1.md`
+- History head: `G1-E0001`
 - Last completed slice: `none`
 - Current slice: `none`
 - Checks: `none`

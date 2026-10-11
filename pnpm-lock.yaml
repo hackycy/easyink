@@ -1428,6 +1428,10 @@ importers:
       '@easyink/shared':
         specifier: workspace:*
         version: link:../shared
+    devDependencies:
+      '@easyink/builtin':
+        specifier: workspace:*
+        version: link:../builtin
 
   playground:
     dependencies:

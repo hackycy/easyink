@@ -1,7 +1,7 @@
 import type { DocumentSchema, MaterialNode, TableNode } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
-import { createViewer } from './index'
 import { applyStackFlowLayout } from './stack-flow-layout'
+import { createBuiltinViewer as createViewer } from './test-fixtures/builtin-viewer'
 
 function makeNode(id: string, overrides: Partial<MaterialNode> = {}): MaterialNode {
   return {

@@ -3,7 +3,8 @@ import type { ViewerRuntime } from './runtime'
 import type { ViewerDiagnosticEvent } from './types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyBindingsToProps, projectBindings } from './binding-projector'
-import { createIframeViewerHost, createViewer } from './index'
+import { createIframeViewerHost } from './index'
+import { createBuiltinViewer as createViewer } from './test-fixtures/builtin-viewer'
 
 function textNode(id: string, binding?: MaterialNode['binding'], props: Record<string, unknown> = {}): MaterialNode {
   return {

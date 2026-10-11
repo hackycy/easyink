@@ -2,8 +2,9 @@ import type { DocumentSchema, TableNode } from '@easyink/schema'
 import type { ViewerRuntime } from './runtime'
 import type { ViewerExportContext, ViewerPageMetrics, ViewerPrintContext, ViewerPrintOptions, ViewerPrintPolicy } from './types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createViewer, resolvePrintPolicy } from './index'
+import { resolvePrintPolicy } from './index'
 import { buildPrintStyles } from './print-service'
+import { createBuiltinViewer as createViewer } from './test-fixtures/builtin-viewer'
 
 function createItemsTable(): TableNode {
   return {

@@ -1,0 +1,1118 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`g0 persisted document baseline > characterizes existing codec losses without treating them as round-trip preservation 1`] = `
+{
+  "elements": [
+    {
+      "custom": {
+        "nested": [
+          "keep",
+          42,
+          false,
+        ],
+      },
+      "height": 8,
+      "id": "unknown",
+      "renderCondition": {
+        "groups": [
+          {
+            "conditions": [
+              {
+                "operator": {
+                  "compare": "exists",
+                },
+                "source": {
+                  "path": "customer/name",
+                },
+              },
+            ],
+          },
+        ],
+        "whenHidden": "reserve",
+        "whenMatched": "show",
+      },
+      "type": "custom/uninstalled",
+      "width": 20,
+      "x": 2,
+      "y": 3,
+    },
+    {
+      "customTableProp": "keep",
+      "extensions": {
+        "table": {
+          "kind": "data",
+          "layout": {
+            "borderAppearance": "all",
+            "borderWidth": 0.2,
+          },
+          "topology": {
+            "columns": [
+              {
+                "ratio": 1,
+              },
+            ],
+            "rows": [
+              {
+                "cells": [
+                  {
+                    "content": {
+                      "text": "Name",
+                    },
+                  },
+                ],
+                "height": 8,
+                "role": "header",
+              },
+              {
+                "cells": [
+                  {
+                    "binding": {
+                      "fieldPath": "items/name",
+                      "sourceId": "invoice",
+                    },
+                  },
+                ],
+                "height": 8,
+                "role": "repeat-template",
+              },
+            ],
+          },
+        },
+      },
+      "height": 24,
+      "id": "table",
+      "type": "table-data",
+      "width": 80,
+      "x": 0,
+      "y": 20,
+    },
+    {
+      "categories": [
+        "A",
+      ],
+      "customChartProp": true,
+      "height": 12,
+      "id": "chart",
+      "type": "chart-bar",
+      "values": [
+        3,
+      ],
+      "width": 40,
+      "x": 0,
+      "y": 44,
+    },
+    {
+      "format": "{current}/{total}",
+      "height": 8,
+      "id": "page-number",
+      "type": "page-number",
+      "width": 20,
+      "x": 60,
+      "y": 50,
+    },
+  ],
+  "page": {
+    "copies": 2,
+    "height": 60,
+    "pages": 2,
+    "viewer": "fixed",
+    "width": 80,
+  },
+  "unit": "mm",
+  "x": [
+    2,
+  ],
+  "y": [
+    3,
+  ],
+}
+`;
+
+exports[`g0 persisted document baseline > freezes benchmark decoding, custom fields, condition and legacy table conversion 1`] = `
+{
+  "decoded": {
+    "compat": {
+      "passthrough": {
+        "customDocument": {
+          "keep": true,
+        },
+        "page.customPage": "opaque",
+      },
+      "rawGuideGroupKey": "g",
+    },
+    "elements": [
+      {
+        "height": 8,
+        "id": "unknown",
+        "props": {
+          "custom": {
+            "keep": true,
+          },
+        },
+        "renderCondition": {
+          "groups": [
+            {
+              "conditions": [
+                {
+                  "operator": {
+                    "compare": "exists",
+                  },
+                  "source": {
+                    "path": "customer/name",
+                  },
+                },
+              ],
+            },
+          ],
+          "whenHidden": "reserve",
+          "whenMatched": "show",
+        },
+        "type": "custom/uninstalled",
+        "width": 20,
+        "x": 2,
+        "y": 3,
+      },
+      {
+        "height": 50,
+        "id": "chart",
+        "props": {
+          "categories": [
+            "A",
+          ],
+          "values": [
+            3,
+          ],
+        },
+        "type": "chart-bar",
+        "width": 100,
+        "x": 0,
+        "y": 0,
+      },
+      {
+        "height": 50,
+        "id": "table",
+        "props": {
+          "extensions": {
+            "table": {
+              "sections": [
+                {
+                  "kind": "body",
+                  "rows": [
+                    {
+                      "cells": [
+                        {
+                          "content": 42,
+                        },
+                      ],
+                      "height": 8,
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+        "table": {
+          "kind": "static",
+          "layout": {},
+          "topology": {
+            "columns": [
+              {
+                "ratio": 1,
+              },
+            ],
+            "rows": [
+              {
+                "cells": [
+                  {
+                    "content": {
+                      "text": "42",
+                    },
+                  },
+                ],
+                "height": 8,
+                "role": "normal",
+              },
+            ],
+          },
+        },
+        "type": "table-static",
+        "width": 100,
+        "x": 0,
+        "y": 0,
+      },
+      {
+        "height": 50,
+        "id": "page",
+        "props": {
+          "format": "{current}/{total}",
+        },
+        "type": "page-number",
+        "width": 100,
+        "x": 0,
+        "y": 0,
+      },
+    ],
+    "guides": {
+      "groups": [
+        {
+          "id": "guide",
+          "x": [
+            5,
+          ],
+          "y": [
+            6,
+          ],
+        },
+      ],
+      "x": [
+        10,
+      ],
+      "y": [
+        20,
+      ],
+    },
+    "page": {
+      "copies": 2,
+      "height": 60,
+      "mode": "fixed",
+      "pages": 2,
+      "width": 80,
+    },
+    "unit": "pt",
+    "version": "1.0.0",
+  },
+  "encoded": {
+    "customDocument": {
+      "keep": true,
+    },
+    "elements": [
+      {
+        "custom": {
+          "keep": true,
+        },
+        "height": 8,
+        "id": "unknown",
+        "renderCondition": {
+          "groups": [
+            {
+              "conditions": [
+                {
+                  "operator": {
+                    "compare": "exists",
+                  },
+                  "source": {
+                    "path": "customer/name",
+                  },
+                },
+              ],
+            },
+          ],
+          "whenHidden": "reserve",
+          "whenMatched": "show",
+        },
+        "type": "custom/uninstalled",
+        "width": 20,
+        "x": 2,
+        "y": 3,
+      },
+      {
+        "categories": [
+          "A",
+        ],
+        "height": 50,
+        "id": "chart",
+        "type": "chart-bar",
+        "values": [
+          3,
+        ],
+        "width": 100,
+        "x": 0,
+        "y": 0,
+      },
+      {
+        "extensions": {
+          "table": {
+            "kind": "static",
+            "layout": {},
+            "topology": {
+              "columns": [
+                {
+                  "ratio": 1,
+                },
+              ],
+              "rows": [
+                {
+                  "cells": [
+                    {
+                      "content": {
+                        "text": "42",
+                      },
+                    },
+                  ],
+                  "height": 8,
+                  "role": "normal",
+                },
+              ],
+            },
+          },
+        },
+        "height": 50,
+        "id": "table",
+        "type": "table-static",
+        "width": 100,
+        "x": 0,
+        "y": 0,
+      },
+      {
+        "format": "{current}/{total}",
+        "height": 50,
+        "id": "page",
+        "type": "page-number",
+        "width": 100,
+        "x": 0,
+        "y": 0,
+      },
+    ],
+    "g": [
+      {
+        "id": "guide",
+        "x": [
+          5,
+        ],
+        "y": [
+          6,
+        ],
+      },
+    ],
+    "page": {
+      "copies": 2,
+      "height": 60,
+      "pages": 2,
+      "viewer": "fixed",
+      "width": 80,
+    },
+    "unit": "pt",
+    "x": [
+      10,
+    ],
+    "y": [
+      20,
+    ],
+  },
+}
+`;
+
+exports[`g0 persisted document baseline > freezes canonical normalization in mm without changing nodes or custom fields 1`] = `
+{
+  "elements": [
+    {
+      "binding": {
+        "fieldPath": "customer/name",
+        "sourceId": "customer",
+      },
+      "break": {
+        "after": "page",
+      },
+      "children": [
+        {
+          "height": 5,
+          "id": "child",
+          "props": {
+            "opaque": true,
+          },
+          "type": "custom/child",
+          "width": 5,
+          "x": 0,
+          "y": 0,
+        },
+      ],
+      "extensions": {
+        "vendor": {
+          "enabled": true,
+        },
+      },
+      "height": 8,
+      "id": "unknown",
+      "placement": {
+        "mode": "fixed",
+      },
+      "print": "each",
+      "props": {
+        "custom": {
+          "nested": [
+            "keep",
+            42,
+            false,
+          ],
+        },
+      },
+      "renderCondition": {
+        "groups": [
+          {
+            "conditions": [
+              {
+                "operator": {
+                  "compare": "exists",
+                },
+                "source": {
+                  "path": "customer/name",
+                },
+              },
+            ],
+          },
+        ],
+        "whenHidden": "reserve",
+        "whenMatched": "show",
+      },
+      "repeat": {
+        "scope": "every-output-page",
+      },
+      "type": "custom/uninstalled",
+      "width": 20,
+      "x": 2,
+      "y": 3,
+    },
+    {
+      "height": 24,
+      "id": "table",
+      "props": {
+        "customTableProp": "keep",
+      },
+      "table": {
+        "kind": "data",
+        "layout": {
+          "borderAppearance": "all",
+          "borderWidth": 0.2,
+        },
+        "showFooter": false,
+        "showHeader": true,
+        "topology": {
+          "columns": [
+            {
+              "ratio": 1,
+            },
+          ],
+          "rows": [
+            {
+              "cells": [
+                {
+                  "content": {
+                    "text": "Name",
+                  },
+                },
+              ],
+              "height": 8,
+              "role": "header",
+            },
+            {
+              "cells": [
+                {
+                  "binding": {
+                    "fieldPath": "items/name",
+                    "sourceId": "invoice",
+                  },
+                },
+              ],
+              "height": 8,
+              "role": "repeat-template",
+            },
+          ],
+        },
+      },
+      "type": "table-data",
+      "width": 80,
+      "x": 0,
+      "y": 20,
+    },
+    {
+      "binding": {
+        "kind": "data-contract",
+        "mappings": {
+          "value": {
+            "select": {
+              "path": "items/qty",
+            },
+            "sourceId": "invoice",
+          },
+        },
+      },
+      "height": 12,
+      "id": "chart",
+      "props": {
+        "categories": [
+          "A",
+        ],
+        "customChartProp": true,
+        "values": [
+          3,
+        ],
+      },
+      "type": "chart-bar",
+      "width": 40,
+      "x": 0,
+      "y": 44,
+    },
+    {
+      "height": 8,
+      "id": "page-number",
+      "props": {
+        "format": "{current}/{total}",
+      },
+      "repeat": {
+        "scope": "every-output-page",
+      },
+      "type": "page-number",
+      "width": 20,
+      "x": 60,
+      "y": 50,
+    },
+  ],
+  "extensions": {
+    "vendor": {
+      "data": [
+        "opaque",
+      ],
+    },
+  },
+  "groups": [
+    {
+      "id": "group",
+      "memberIds": [
+        "unknown",
+        "chart",
+      ],
+    },
+  ],
+  "guides": {
+    "x": [
+      2,
+    ],
+    "y": [
+      3,
+    ],
+  },
+  "meta": {
+    "name": "G0 canonical",
+  },
+  "page": {
+    "background": undefined,
+    "blankPolicy": undefined,
+    "copies": 2,
+    "extensions": {
+      "vendor": "page",
+    },
+    "font": undefined,
+    "grid": undefined,
+    "height": 60,
+    "layers": undefined,
+    "layout": {
+      "strategy": "absolute",
+    },
+    "mode": "fixed",
+    "offsetX": undefined,
+    "offsetY": undefined,
+    "pageModel": {
+      "kind": "paged-paper",
+      "paper": {
+        "height": 60,
+        "width": 80,
+      },
+    },
+    "pages": 2,
+    "pagination": {
+      "orphanPolicy": undefined,
+      "pageCount": 2,
+      "strategy": "fixed-sheets",
+    },
+    "print": {
+      "horizontalOffset": 1,
+      "orientation": "landscape",
+    },
+    "radius": undefined,
+    "reflow": {
+      "strategy": "measure-only",
+    },
+    "scale": undefined,
+    "width": 80,
+  },
+  "unit": "mm",
+  "version": "1.0.0",
+}
+`;
+
+exports[`g0 persisted document baseline > freezes canonical normalization in pt without changing nodes or custom fields 1`] = `
+{
+  "elements": [
+    {
+      "binding": {
+        "fieldPath": "customer/name",
+        "sourceId": "customer",
+      },
+      "break": {
+        "after": "page",
+      },
+      "children": [
+        {
+          "height": 5,
+          "id": "child",
+          "props": {
+            "opaque": true,
+          },
+          "type": "custom/child",
+          "width": 5,
+          "x": 0,
+          "y": 0,
+        },
+      ],
+      "extensions": {
+        "vendor": {
+          "enabled": true,
+        },
+      },
+      "height": 8,
+      "id": "unknown",
+      "placement": {
+        "mode": "fixed",
+      },
+      "print": "each",
+      "props": {
+        "custom": {
+          "nested": [
+            "keep",
+            42,
+            false,
+          ],
+        },
+      },
+      "renderCondition": {
+        "groups": [
+          {
+            "conditions": [
+              {
+                "operator": {
+                  "compare": "exists",
+                },
+                "source": {
+                  "path": "customer/name",
+                },
+              },
+            ],
+          },
+        ],
+        "whenHidden": "reserve",
+        "whenMatched": "show",
+      },
+      "repeat": {
+        "scope": "every-output-page",
+      },
+      "type": "custom/uninstalled",
+      "width": 20,
+      "x": 2,
+      "y": 3,
+    },
+    {
+      "height": 24,
+      "id": "table",
+      "props": {
+        "customTableProp": "keep",
+      },
+      "table": {
+        "kind": "data",
+        "layout": {
+          "borderAppearance": "all",
+          "borderWidth": 0.2,
+        },
+        "showFooter": false,
+        "showHeader": true,
+        "topology": {
+          "columns": [
+            {
+              "ratio": 1,
+            },
+          ],
+          "rows": [
+            {
+              "cells": [
+                {
+                  "content": {
+                    "text": "Name",
+                  },
+                },
+              ],
+              "height": 8,
+              "role": "header",
+            },
+            {
+              "cells": [
+                {
+                  "binding": {
+                    "fieldPath": "items/name",
+                    "sourceId": "invoice",
+                  },
+                },
+              ],
+              "height": 8,
+              "role": "repeat-template",
+            },
+          ],
+        },
+      },
+      "type": "table-data",
+      "width": 80,
+      "x": 0,
+      "y": 20,
+    },
+    {
+      "binding": {
+        "kind": "data-contract",
+        "mappings": {
+          "value": {
+            "select": {
+              "path": "items/qty",
+            },
+            "sourceId": "invoice",
+          },
+        },
+      },
+      "height": 12,
+      "id": "chart",
+      "props": {
+        "categories": [
+          "A",
+        ],
+        "customChartProp": true,
+        "values": [
+          3,
+        ],
+      },
+      "type": "chart-bar",
+      "width": 40,
+      "x": 0,
+      "y": 44,
+    },
+    {
+      "height": 8,
+      "id": "page-number",
+      "props": {
+        "format": "{current}/{total}",
+      },
+      "repeat": {
+        "scope": "every-output-page",
+      },
+      "type": "page-number",
+      "width": 20,
+      "x": 60,
+      "y": 50,
+    },
+  ],
+  "extensions": {
+    "vendor": {
+      "data": [
+        "opaque",
+      ],
+    },
+  },
+  "groups": [
+    {
+      "id": "group",
+      "memberIds": [
+        "unknown",
+        "chart",
+      ],
+    },
+  ],
+  "guides": {
+    "x": [
+      2,
+    ],
+    "y": [
+      3,
+    ],
+  },
+  "meta": {
+    "name": "G0 canonical",
+  },
+  "page": {
+    "background": undefined,
+    "blankPolicy": undefined,
+    "copies": 2,
+    "extensions": {
+      "vendor": "page",
+    },
+    "font": undefined,
+    "grid": undefined,
+    "height": 60,
+    "layers": undefined,
+    "layout": {
+      "strategy": "absolute",
+    },
+    "mode": "fixed",
+    "offsetX": undefined,
+    "offsetY": undefined,
+    "pageModel": {
+      "kind": "paged-paper",
+      "paper": {
+        "height": 60,
+        "width": 80,
+      },
+    },
+    "pages": 2,
+    "pagination": {
+      "orphanPolicy": undefined,
+      "pageCount": 2,
+      "strategy": "fixed-sheets",
+    },
+    "print": {
+      "horizontalOffset": 1,
+      "orientation": "landscape",
+    },
+    "radius": undefined,
+    "reflow": {
+      "strategy": "measure-only",
+    },
+    "scale": undefined,
+    "width": 80,
+  },
+  "unit": "pt",
+  "version": "1.0.0",
+}
+`;
+
+exports[`g0 persisted document baseline > freezes canonical normalization in px without changing nodes or custom fields 1`] = `
+{
+  "elements": [
+    {
+      "binding": {
+        "fieldPath": "customer/name",
+        "sourceId": "customer",
+      },
+      "break": {
+        "after": "page",
+      },
+      "children": [
+        {
+          "height": 5,
+          "id": "child",
+          "props": {
+            "opaque": true,
+          },
+          "type": "custom/child",
+          "width": 5,
+          "x": 0,
+          "y": 0,
+        },
+      ],
+      "extensions": {
+        "vendor": {
+          "enabled": true,
+        },
+      },
+      "height": 8,
+      "id": "unknown",
+      "placement": {
+        "mode": "fixed",
+      },
+      "print": "each",
+      "props": {
+        "custom": {
+          "nested": [
+            "keep",
+            42,
+            false,
+          ],
+        },
+      },
+      "renderCondition": {
+        "groups": [
+          {
+            "conditions": [
+              {
+                "operator": {
+                  "compare": "exists",
+                },
+                "source": {
+                  "path": "customer/name",
+                },
+              },
+            ],
+          },
+        ],
+        "whenHidden": "reserve",
+        "whenMatched": "show",
+      },
+      "repeat": {
+        "scope": "every-output-page",
+      },
+      "type": "custom/uninstalled",
+      "width": 20,
+      "x": 2,
+      "y": 3,
+    },
+    {
+      "height": 24,
+      "id": "table",
+      "props": {
+        "customTableProp": "keep",
+      },
+      "table": {
+        "kind": "data",
+        "layout": {
+          "borderAppearance": "all",
+          "borderWidth": 0.2,
+        },
+        "showFooter": false,
+        "showHeader": true,
+        "topology": {
+          "columns": [
+            {
+              "ratio": 1,
+            },
+          ],
+          "rows": [
+            {
+              "cells": [
+                {
+                  "content": {
+                    "text": "Name",
+                  },
+                },
+              ],
+              "height": 8,
+              "role": "header",
+            },
+            {
+              "cells": [
+                {
+                  "binding": {
+                    "fieldPath": "items/name",
+                    "sourceId": "invoice",
+                  },
+                },
+              ],
+              "height": 8,
+              "role": "repeat-template",
+            },
+          ],
+        },
+      },
+      "type": "table-data",
+      "width": 80,
+      "x": 0,
+      "y": 20,
+    },
+    {
+      "binding": {
+        "kind": "data-contract",
+        "mappings": {
+          "value": {
+            "select": {
+              "path": "items/qty",
+            },
+            "sourceId": "invoice",
+          },
+        },
+      },
+      "height": 12,
+      "id": "chart",
+      "props": {
+        "categories": [
+          "A",
+        ],
+        "customChartProp": true,
+        "values": [
+          3,
+        ],
+      },
+      "type": "chart-bar",
+      "width": 40,
+      "x": 0,
+      "y": 44,
+    },
+    {
+      "height": 8,
+      "id": "page-number",
+      "props": {
+        "format": "{current}/{total}",
+      },
+      "repeat": {
+        "scope": "every-output-page",
+      },
+      "type": "page-number",
+      "width": 20,
+      "x": 60,
+      "y": 50,
+    },
+  ],
+  "extensions": {
+    "vendor": {
+      "data": [
+        "opaque",
+      ],
+    },
+  },
+  "groups": [
+    {
+      "id": "group",
+      "memberIds": [
+        "unknown",
+        "chart",
+      ],
+    },
+  ],
+  "guides": {
+    "x": [
+      2,
+    ],
+    "y": [
+      3,
+    ],
+  },
+  "meta": {
+    "name": "G0 canonical",
+  },
+  "page": {
+    "background": undefined,
+    "blankPolicy": undefined,
+    "copies": 2,
+    "extensions": {
+      "vendor": "page",
+    },
+    "font": undefined,
+    "grid": undefined,
+    "height": 60,
+    "layers": undefined,
+    "layout": {
+      "strategy": "absolute",
+    },
+    "mode": "fixed",
+    "offsetX": undefined,
+    "offsetY": undefined,
+    "pageModel": {
+      "kind": "paged-paper",
+      "paper": {
+        "height": 60,
+        "width": 80,
+      },
+    },
+    "pages": 2,
+    "pagination": {
+      "orphanPolicy": undefined,
+      "pageCount": 2,
+      "strategy": "fixed-sheets",
+    },
+    "print": {
+      "horizontalOffset": 1,
+      "orientation": "landscape",
+    },
+    "radius": undefined,
+    "reflow": {
+      "strategy": "measure-only",
+    },
+    "scale": undefined,
+    "width": 80,
+  },
+  "unit": "px",
+  "version": "1.0.0",
+}
+`;
