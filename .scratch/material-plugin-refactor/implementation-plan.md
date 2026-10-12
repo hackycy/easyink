@@ -346,7 +346,7 @@ G3 全部退出证据（线性执行前驱）；技术上依赖 G2；票据 08�
 
 ### Scope boundary
 
-允许 packages/viewer、core 的非持久化布局传递、materials/table/data 与相关 text/line/flow-row/page-number/barcode/chart 实现、print/export 直接调用、internal-packages/viewer-runtime 测试，架构 06/24。复用现有算法，不新增按物料类型分支。
+允许 packages/viewer、core 的非持久化布局传递、materials/table/data 与相关 text/line/flow-row/page-number/barcode/chart 实现、print/export 直接调用、internal-packages/viewer-runtime 测试，架构 06/24。复用现有算法，不新增按物料类型分支。另含 lib/EasyInk.Render/host 的最小 HTML 加载传输修复及其聚焦回归测试，以及 internal-packages/render-api-service 的跨平台 render-smoke 执行适配，仅用于完成 G4 R5；不扩展 host 公共协议、安全策略、输出语义或执行 G5 宿主切换。
 
 ### Constraints
 

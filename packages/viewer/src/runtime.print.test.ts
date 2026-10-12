@@ -1,6 +1,6 @@
 import type { DocumentSchema, TableNode } from '@easyink/schema'
 import type { ViewerRuntime } from './runtime'
-import type { ViewerExportContext, ViewerPageMetrics, ViewerPrintContext, ViewerPrintOptions, ViewerPrintPolicy } from './types'
+import type { ViewerExportContext, ViewerPrintContext, ViewerPrintOptions, ViewerPrintPolicy } from './types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolvePrintPolicy } from './index'
 import { buildPrintStyles } from './print-service'
@@ -121,11 +121,6 @@ function getPrintPolicy(viewer: ViewerRuntime, options?: ViewerPrintOptions): Vi
 function getPrintStyles(viewer: ViewerRuntime, options?: ViewerPrintOptions): string {
   const policy = getPrintPolicy(viewer, options)
   return buildPrintStyles(policy)
-}
-
-function setRenderedPages(viewer: ViewerRuntime, pages: ViewerPageMetrics[]): void {
-  const runtime = viewer as unknown as { _renderedPageMetrics: ViewerPageMetrics[] }
-  runtime._renderedPageMetrics = pages
 }
 
 function mockWindowPrint(implementation: () => void = () => {}): ReturnType<typeof vi.fn> {
@@ -299,7 +294,7 @@ describe('viewer runtime print behavior', () => {
     expect(calls[0]!.printPolicy.pageSizeMode).toBe('fixed')
     expect(calls[0]!.printPolicy.sheetSize).toMatchObject({ width: 80, height: 60, unit: 'mm' })
     expect(calls[0]!.renderedPages[0]).toMatchObject({ width: 80, height: 60, unit: 'mm' })
-    expect(calls[0]!.container).toBe(container)
+    expect(calls[0]!.container).toBe(container.firstElementChild)
   })
 
   it('uses print driver default page size mode when caller only passes driverId', async () => {
@@ -341,7 +336,7 @@ describe('viewer runtime print behavior', () => {
         diagnostics.push(event.code)
       },
     })
-    await viewer.print()
+    await expect(viewer.print()).rejects.toThrow('print boom')
 
     expect(container.hasAttribute('data-ei-printing')).toBe(false)
     expect(wrapper.hasAttribute('data-ei-print-ancestor')).toBe(false)
@@ -350,7 +345,7 @@ describe('viewer runtime print behavior', () => {
     expect(diagnostics).toContain('PRINT_ERROR')
   })
 
-  it('propagates isolated browser print failures to call diagnostics and throwOnError', async () => {
+  it('propagates isolated browser print failures to call diagnostics and rejects', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
     const viewer = await createViewer({ container })
@@ -362,7 +357,6 @@ describe('viewer runtime print behavior', () => {
     await viewer.open({ schema: createFixedSchema() })
 
     await expect(viewer.print({
-      throwOnError: true,
       onDiagnostic(event) {
         callbackDiagnostics.push(event.code)
       },
@@ -372,26 +366,8 @@ describe('viewer runtime print behavior', () => {
     expect(container.hasAttribute('data-ei-printing')).toBe(false)
   })
 
-  it('rejects continuous pdf printing when rendered metrics are missing', async () => {
-    const container = document.createElement('div')
-    const diagnostics: string[] = []
-    const viewer = await createViewer({ container })
-    const printSpy = mockWindowPrint()
-
-    await viewer.open({
-      schema: createContinuousSchema(),
-      data: createData(),
-      onDiagnostic(event) {
-        diagnostics.push(event.code)
-      },
-    })
-    setRenderedPages(viewer, [])
-
-    await viewer.print({ pageSizeMode: 'fixed' })
-
-    expect(printSpy).not.toHaveBeenCalled()
-    expect(container.hasAttribute('data-ei-printing')).toBe(false)
-    expect(diagnostics).toContain('PRINT_RENDER_METRICS_MISSING')
+  it('rejects continuous fixed policy without rendered metrics', () => {
+    expect(() => resolvePrintPolicy({ schema: createContinuousSchema(), options: { pageSizeMode: 'fixed' }, renderedPages: [] })).toThrow('requires rendered page metrics')
   })
 
   it('uses browser printing by default even when print drivers are registered', async () => {
@@ -414,7 +390,7 @@ describe('viewer runtime print behavior', () => {
     expect(calls).toHaveLength(0)
   })
 
-  it('throws print driver failures when throwOnError is enabled', async () => {
+  it('rejects print driver failures', async () => {
     const container = document.createElement('div')
     const viewer = await createViewer({ container })
     viewer.registerPrintDriver({
@@ -426,7 +402,7 @@ describe('viewer runtime print behavior', () => {
 
     await viewer.open({ schema: createFixedSchema() })
 
-    await expect(viewer.print({ driverId: 'bad-print-driver', throwOnError: true })).rejects.toThrow('print boom')
+    await expect(viewer.print({ driverId: 'bad-print-driver' })).rejects.toThrow('print boom')
   })
 
   it('replaces print drivers with the same id', async () => {
@@ -485,21 +461,25 @@ describe('viewer runtime export behavior', () => {
       },
     })
 
-    const blob = await viewer.exportDocument({
+    const result = await viewer.exportDocument({
       format: 'pdf',
       onDiagnostic(event) {
         callbackDiagnostics.push(event.code)
       },
     })
 
-    expect(blob).toBeInstanceOf(Blob)
-    expect(captured?.container).toBe(container)
+    expect(result.status).toBe('completed')
+    if (result.status !== 'completed')
+      throw new Error('Expected completed export')
+    expect(result.file).toBeInstanceOf(Blob)
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'EXPORT_WARNING' }))
+    expect(captured?.container).toBe(container.firstElementChild)
     expect(captured?.renderedPages?.[0]).toMatchObject({ width: 80, height: 60, unit: 'mm' })
     expect(diagnostics).toContain('EXPORT_WARNING')
     expect(callbackDiagnostics).toContain('EXPORT_WARNING')
   })
 
-  it('throws exporter failures when throwOnError is enabled', async () => {
+  it('rejects exporter failures', async () => {
     const container = document.createElement('div')
     const viewer = await createViewer({ container })
     viewer.registerExporter({
@@ -512,7 +492,7 @@ describe('viewer runtime export behavior', () => {
 
     await viewer.open({ schema: createFixedSchema() })
 
-    await expect(viewer.exportDocument({ format: 'pdf', throwOnError: true })).rejects.toThrow('export boom')
+    await expect(viewer.exportDocument({ format: 'pdf' })).rejects.toThrow('export boom')
   })
 
   it('replaces exporters with the same id', async () => {

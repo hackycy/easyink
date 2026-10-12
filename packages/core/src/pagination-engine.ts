@@ -2,6 +2,7 @@ import type { DocumentSchema } from '@easyink/schema'
 import type { PageMode } from '@easyink/shared'
 import type { LayoutDiagnostic, LayoutDocument, LayoutFragment, OutputPagePlan } from './layout-plan'
 import type { FragmentPaginator } from './material-viewer'
+import { createFragmentFromNode } from './layout-plan'
 import { resolvePageModel } from './page-model'
 
 export interface PaginationOptions {
@@ -156,6 +157,7 @@ function createAutoSheets(
             fragment: nextFragment,
             availableHeight: Math.max(pageHeight - relativeTop, 0),
             pageContext: { pageIndex: pages.length },
+            createFragment: node => ({ ...createFragmentFromNode(node), sourceNodeId: nextFragment!.sourceNodeId, flow: nextFragment!.flow }),
           })
           diagnostics.push(...split.diagnostics)
           currentFragments.push(split.currentPage)

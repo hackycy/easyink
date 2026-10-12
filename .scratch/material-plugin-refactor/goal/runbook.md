@@ -1,12 +1,12 @@
 # 物料能力装配层重构 Goal Runbook
 
 Schema: `goal-loop/runbook-v2`
-Revision: `194`
+Revision: `331`
 
 ## Contract Baseline
 
 - Manifest: `goal/contract-baseline.json`
-- Manifest SHA-256: `d7a9c47cdf86a5ce34356fc09590d60fd60e6e404321fd3184a227a736b6e95e`
+- Manifest SHA-256: `5fe685510bf0141d28f4f27f1d8f765170ee217a96a23cd9ddb27221d90ac129`
 
 ## State Rules
 
@@ -27,15 +27,15 @@ Revision: `194`
 | G1: 契约与唯一装配内核 | passed | G0 | `implementation-plan.md -> G1: 契约与唯一装配内核` | `goal/history/G1.md` | `G1-E0098` | `G1@G1-E0098` |
 | G2: text 与 image 双宿主完整切片 | passed | G1 | `implementation-plan.md -> G2: text 与 image 双宿主完整切片` | `goal/history/G2.md` | `G2-E0051` | `G2@G2-E0051` |
 | G3: Designer UI 与受控服务迁移 | passed | G2 | `implementation-plan.md -> G3: Designer UI 与受控服务迁移` | `goal/history/G3.md` | `G3-E0016` | `G3@G3-E0016` |
-| G4: Render Session 与输出所有权 | active | G3 | `implementation-plan.md -> G4: Render Session 与输出所有权` | `goal/history/G4.md` | `G4-E0001` | `G3@G3-E0016` |
-| G5: 全部物料与实际宿主切换 | planned | G4 | `implementation-plan.md -> G5: 全部物料与实际宿主切换` | `—` | `—` | `G4 pending` |
+| G4: Render Session 与输出所有权 | passed | G3 | `implementation-plan.md -> G4: Render Session 与输出所有权` | `goal/history/G4.md` | `G4-E0137` | `G4@G4-E0137` |
+| G5: 全部物料与实际宿主切换 | active | G4 | `implementation-plan.md -> G5: 全部物料与实际宿主切换` | `goal/history/G5.md` | `G5-E0001` | `G4@G4-E0137` |
 | G6: 0.1.0 候选制品与手动发布交接 | planned | G5 | `implementation-plan.md -> G6: 0.1.0 候选制品与手动发布交接` | `—` | `—` | `G5 pending` |
 
 ## Current Checkpoint
 
-- Gate: `G4: Render Session 与输出所有权`
-- History: `goal/history/G4.md`
-- History head: `G4-E0001`
+- Gate: `G5: 全部物料与实际宿主切换`
+- History: `goal/history/G5.md`
+- History head: `G5-E0001`
 - Last completed slice: `none`
 - Current slice: `none`
 - Checks: `none`
@@ -44,4 +44,4 @@ Revision: `194`
 - Blocker: `none`
 - Risks: `none`
 - Next action: `select the first slice from the Gate contract`
-- Contract revision: `校正包族 glob，排除依赖目录和不存在的可选路径`
+- Contract revision: `用户已授权最小 Go host HTML 加载修复与 G4 Scope 修订，仅恢复 G4 R5，不执行 G5`

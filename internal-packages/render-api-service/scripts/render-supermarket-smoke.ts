@@ -31,7 +31,8 @@ const outputDir = resolve(smokeRoot, 'output')
 const requestPath = resolve(smokeRoot, 'supermarket-request.json')
 const diagnosticsPath = resolve(smokeRoot, 'supermarket-diagnostics.json')
 const outputPath = resolve(outputDir, 'supermarket-receipt.pdf')
-const hostBinaryPath = resolve(hostRoot, 'easyink-render')
+const nativeWindows = process.platform === 'win32'
+const hostBinaryPath = nativeWindows ? resolve(smokeRoot, 'easyink-render.exe') : resolve(hostRoot, 'easyink-render')
 
 main()
 
@@ -39,8 +40,14 @@ function main(): void {
   try {
     resetSmokeRoot()
     writeSupermarketRequest()
-    buildLinuxHostBinary()
-    renderWithChromium()
+    if (nativeWindows) {
+      buildNativeHostBinary()
+      renderWithNativeChromium()
+    }
+    else {
+      buildLinuxHostBinary()
+      renderWithChromium()
+    }
     assertSmokeResult()
   }
   finally {
@@ -67,6 +74,39 @@ function writeSupermarketRequest(): void {
       includeScreenshot: true,
     },
   }, null, 2)}\n`)
+}
+
+function buildNativeHostBinary(): void {
+  run('go', ['build', '-C', hostRoot, '-trimpath', '-o', hostBinaryPath, './cmd/easyink-render'])
+}
+
+function renderWithNativeChromium(): void {
+  const browserPath = process.env.EASYINK_RENDER_BROWSER_PATH ?? [
+    'C:/Program Files/Google/Chrome/Application/chrome.exe',
+    'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+  ].find(path => existsSync(path))
+  if (!browserPath)
+    throw new Error('Set EASYINK_RENDER_BROWSER_PATH to a Chromium executable for the native Windows smoke check')
+  run(hostBinaryPath, [
+    'render',
+    '--no-daemon',
+    '--disable-sandbox',
+    '--request',
+    requestPath,
+    '--out',
+    outputPath,
+    '--browser-path',
+    browserPath,
+    '--profile-root',
+    resolve(smokeRoot, 'profile'),
+    '--temp-dir',
+    resolve(smokeRoot, 'tmp'),
+    '--log-dir',
+    resolve(smokeRoot, 'logs'),
+    '--diagnostics-out',
+    diagnosticsPath,
+    '--json',
+  ])
 }
 
 function buildLinuxHostBinary(): void {
@@ -155,8 +195,10 @@ function run(command: string, args: string[]): void {
   if (result.stderr) {
     process.stderr.write(result.stderr)
   }
+  if (result.error)
+    throw new Error(`Could not start ${command}: ${result.error.message}`, { cause: result.error })
   if (result.status !== 0) {
-    const summary = parseRenderFailure(result.stdout)
+    const summary = parseRenderFailure(result.stdout ?? '')
     throw new Error(summary
       ? `${command} failed: ${summary.code ?? 'RENDER_FAILED'} ${summary.message ?? ''}`.trim()
       : `${command} failed with exit code ${result.status ?? 'unknown'}`)

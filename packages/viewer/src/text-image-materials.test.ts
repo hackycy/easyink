@@ -23,11 +23,14 @@ describe('complete text and image Viewer consumption', () => {
     try {
       await viewer.open({ schema, data: { customer: { name: 'Ada', logo: 'https://example.test/logo.png' } } })
       expect(container.textContent).toContain('Ada')
-      expect(container.querySelector('[data-element-id="logo"] img')?.getAttribute('src')).toBe('https://example.test/logo.png')
+      expect(container.querySelector('[data-element-id="logo"] [data-resource-placeholder="image"]')).not.toBeNull()
       expect(container.querySelector('[data-element-id="hidden"]')).toBeNull()
       expect(container.textContent).toContain('[Unknown: vendor/uninstalled]')
       const result = await viewer.render()
+      if (result.status !== 'completed')
+        throw new Error('Expected completed render')
       expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'UNKNOWN_MATERIAL', scope: 'material', nodeId: 'unknown' }))
+      expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'IMAGE_LOAD_FAILED', nodeId: 'logo' }))
       expect(JSON.stringify(schema)).toBe(before)
     }
     finally {
@@ -80,8 +83,10 @@ describe('complete text and image Viewer consumption', () => {
       expect(diagnostics).toContainEqual(expect.objectContaining({ code: 'MATERIAL_LOAD_ERROR', nodeId: 'logo' }))
       expect(diagnostics).toContainEqual(expect.objectContaining({ code: 'UNKNOWN_MATERIAL', nodeId: 'unknown' }))
       const result = await viewer.render()
+      if (result.status !== 'completed')
+        throw new Error('Expected completed render')
       expect(attempts).toBe(2)
-      expect(container.querySelector('[data-element-id="logo"] img')).not.toBeNull()
+      expect(container.querySelector('[data-element-id="logo"] [data-resource-placeholder="image"]')).not.toBeNull()
       expect(result.diagnostics.some(diagnostic => diagnostic.code === 'MATERIAL_LOAD_ERROR')).toBe(false)
     }
     finally {

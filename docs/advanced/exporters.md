@@ -182,7 +182,7 @@ await runtime.exportDocument({
 
 ```ts
 viewer.registerExporter(createLabelJsonViewerExporter(runtime))
-await viewer.exportDocument({ format: 'json', throwOnError: true })
+await viewer.exportDocument({ format: 'json' })
 ```
 
 检查结果时重点看这些点：
@@ -191,6 +191,6 @@ await viewer.exportDocument({ format: 'json', throwOnError: true })
 - `validateInput()` 失败时是否阻止导出。
 - 多页导出时进度是否递增。
 - 插件诊断是否映射到 Viewer 的 `onDiagnostic`。
-- `throwOnError: true` 时错误是否能被宿主捕获。
+- Viewer 整体导出错误是否能被宿主捕获，completed/cancelled 结果是否分别处理。
 
 关于导出扩展，目前知道这些就够用了。打印链路可以继续看 [自定义打印驱动开发](/advanced/print-drivers)。

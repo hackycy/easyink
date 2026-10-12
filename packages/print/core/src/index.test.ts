@@ -215,6 +215,6 @@ describe('print core utilities', () => {
     }
     const managed = createManagedPrintViewer({ viewer: 'dom', autoDestroy: false, viewerOptions: { materials: [material] } })
     await managed.printWithDriver({ schema: { ...createFixedSchema(), elements: [material.model.createDefaultNode()] } }, { id: 'cleanup-error', print: async () => {} })
-    expect((await managed.destroy()).errors).toMatchObject([{ phase: 'scope', cause }])
+    expect((await managed.destroy()).errors).toMatchObject([{ phase: 'consumer', cause }])
   })
 })

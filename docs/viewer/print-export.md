@@ -139,11 +139,12 @@ await viewer.print({
   onDiagnostic(event) {
     console.warn(event.code, event.message)
   },
-  throwOnError: true,
 })
 ```
 
-`throwOnError: true` 会让打印驱动错误、打印策略错误或浏览器打印错误继续向外抛出。默认情况下，Viewer 会发诊断并结束这次打印调用。
+打印驱动错误、打印策略错误或浏览器打印错误会发出诊断并拒绝 Promise。完成时返回 `{ status: 'completed', requestId, diagnostics }`；切文档或销毁导致的正常取消返回 `{ status: 'cancelled', requestId, reason }`。浏览器打印完成表示已调用打印渠道，不表示纸张已打印。
+
+打印/导出开始前会跟随当前文档的最新渲染；最新渲染整体失败时停止输出。开始后固定该轮输入、页数和资源，后续刷新或 open 不改变已开始任务。`context.container` 属于固定输出版本，不能当作宿主 mount；跨 document 重新生成页面时须在目标环境使用 Viewer 的资源就绪流程。`context.signal` 在销毁时取消库内工作，已交付的任务不承诺撤回。
 
 ## 导出器注册 {#exporter-registration}
 
@@ -164,22 +165,25 @@ viewer.registerExporter({
 然后调用 `exportDocument()`：
 
 ```ts
-const blob = await viewer.exportDocument({
+const result = await viewer.exportDocument({
   format: 'pdf',
   entry: 'preview',
 })
+if (result.status === 'completed' && result.file) {
+  console.log(result.file, result.diagnostics)
+}
 ```
 
 Viewer 会按 `format` 找到第一个匹配的导出器。如果不传 `format`，会使用当前实例注册的第一个导出器。
 
-没有匹配导出器时，会发出 `NO_EXPORTER` 诊断。传了 `throwOnError: true` 时，同一个错误会继续抛出。
+没有匹配导出器时，会发出 `NO_EXPORTER` 诊断并拒绝 Promise。
 
 ## 导出任务回调 {#export-callbacks}
 
 导出器可以有 `prepare()`，也可以在 `export()` 里上报进度和诊断。
 
 ```ts
-const blob = await viewer.exportDocument({
+const result = await viewer.exportDocument({
   format: 'pdf',
   entry: 'api',
   onPhase(event) {
@@ -191,7 +195,6 @@ const blob = await viewer.exportDocument({
   onDiagnostic(event) {
     console.warn(event.code, event.message)
   },
-  throwOnError: true,
 })
 ```
 
@@ -201,20 +204,20 @@ const blob = await viewer.exportDocument({
 - 调用 `export()` 前：`exporting`
 - 导出成功后：`completed`
 
-如果导出器抛错，Viewer 会发出 `EXPORTER_ERROR`。`throwOnError: true` 时会继续抛出原始错误。
+如果导出器抛错，Viewer 会发出 `EXPORTER_ERROR` 并拒绝 Promise。完成结果含本轮及渠道诊断，文件在可选的 `result.file` 中；正常取消返回 cancelled 状态。
 
 ## 字符串快捷调用 {#string-format}
 
 `exportDocument()` 也可以直接传格式字符串。
 
 ```ts
-const blob = await viewer.exportDocument('pdf')
+const result = await viewer.exportDocument('pdf')
 ```
 
 这等价于：
 
 ```ts
-const blob = await viewer.exportDocument({
+const result = await viewer.exportDocument({
   format: 'pdf',
   entry: 'api',
 })
@@ -318,8 +321,8 @@ viewer.registerExporter({
 现在可以直接调用 Viewer：
 
 ```ts
-const pdfBlob = await viewer.exportDocument({ format: 'pdf', throwOnError: true })
-const pngBlob = await viewer.exportDocument({ format: 'png', throwOnError: true })
+const pdfResult = await viewer.exportDocument({ format: 'pdf' })
+const pngResult = await viewer.exportDocument({ format: 'png' })
 ```
 
 `png` 导出里的 `pageIndex` 从 `0` 开始。如果你的预览界面有“当前页”状态，把它换成当前页索引就行。

@@ -158,7 +158,6 @@ import {
   TABLE_DATA_TYPE,
   tableDataAIMaterialDescriptor,
   tableDataDesignerPropSchemas,
-  tableDataFragmentPaginator,
   tableDataLocaleMessages,
 } from '@easyink/material-table-data'
 import { tableDataModel } from '@easyink/material-table-data/material-model'
@@ -516,7 +515,6 @@ export const builtinViewerMaterialBundle: BuiltinViewerMaterialBundle = {
       extension: {
         render: (node, ctx) => renderTableData(node, ctx),
         measure: (node, ctx) => measureTableData(node, ctx),
-        fragmentPaginator: tableDataFragmentPaginator,
       },
     },
     {

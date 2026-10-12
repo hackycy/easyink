@@ -1,6 +1,6 @@
 import type { PagePlanEntry } from '@easyink/core'
 import type { MaterialNode, PageSchema } from '@easyink/schema'
-import { trustedViewerHtml } from '@easyink/core'
+import { createFragmentFromNode, trustedViewerHtml } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
 import { createViewerMaterialHost } from './material-host'
 import { MaterialRendererRegistry } from './material-registry'
@@ -32,6 +32,8 @@ describe('renderPages', () => {
     }
 
     const registry = new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [{ model: { type: 'custom', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'fixture', type: 'custom', x: 0, y: 0, width: 10, height: 10, rotation: 0, props: {} }) }, renderer: { render: () => ({ html: trustedViewerHtml('<div>custom</div>') }), getRenderSize: () => ({ height: 7 }) } }] }), document)
+    await registry.prepare([node], new Map(), { data: {}, unit: 'mm' }, new AbortController().signal)
+    pages[0].fragments = [{ ...createFragmentFromNode(node), runtimeRef: registry.runtimeRefs.get(node.id) }]
 
     renderPages(pages, registry, {
       container,
@@ -183,12 +185,14 @@ describe('renderPages', () => {
     }
 
     const registry = new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [{ model: { type: 'custom', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'fixture', type: 'custom', x: 0, y: 0, width: 10, height: 10, rotation: 0, props: {} }) }, renderer: { render: () => ({ html: trustedViewerHtml('<div>content</div>') }) } }] }), document)
+    await registry.prepare([node], new Map(), { data: {}, unit: 'mm' }, new AbortController().signal)
 
     renderPages([{
       index: 0,
       width: 80,
       height: 60,
       elements: [node],
+      fragments: [{ ...createFragmentFromNode(node), runtimeRef: registry.runtimeRefs.get(node.id) }],
       yOffset: 0,
     }], registry, {
       container,

@@ -1,5 +1,4 @@
 import type { DocumentSchema, MaterialNode, TableNode } from '@easyink/schema'
-import type { ViewerRuntime } from './runtime'
 import type { ViewerDiagnosticEvent } from './types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyBindingsToProps, projectBindings } from './binding-projector'
@@ -114,6 +113,9 @@ describe('viewer audit risk regressions', () => {
   it('injects loaded fonts into an iframe host document', async () => {
     const iframe = document.createElement('iframe')
     document.body.appendChild(iframe)
+    // Structural target selection only; actual FontFace readiness is checked in Chromium.
+    const load = vi.fn(async () => [{ status: 'loaded' } as FontFace])
+    Object.defineProperty(iframe.contentDocument!, 'fonts', { configurable: true, value: { load } })
     const viewer = await createViewer({
       iframe,
       fontProvider: {
@@ -126,10 +128,18 @@ describe('viewer audit risk regressions', () => {
       },
     })
 
-    await viewer.open({ schema: fixedSchema([textNode('fonted', undefined, { content: 'Fonted', fontFamily: 'IframeFont' })]) })
-
-    expect(iframe.contentDocument!.head.querySelector('style')?.textContent).toContain('IframeFont')
-    expect(document.head.textContent).not.toContain('IframeFont')
+    try {
+      await viewer.open({ schema: fixedSchema([textNode('fonted', undefined, { content: 'Fonted', fontFamily: 'IframeFont' })]) })
+      const rule = iframe.contentDocument!.head.querySelector('[data-easyink-font]')
+      expect(rule?.textContent).toContain('IframeFont')
+      expect(rule?.textContent).toContain('ei-viewer-font-')
+      expect(load.mock.contexts).toEqual([iframe.contentDocument!.fonts])
+      expect(document.head.textContent).not.toContain('IframeFont')
+    }
+    finally {
+      await viewer.destroy()
+    }
+    expect(iframe.contentDocument!.head.querySelector('[data-easyink-font]')).toBeNull()
   })
 
   it('accepts an explicit iframe host adapter', async () => {
@@ -140,7 +150,7 @@ describe('viewer audit risk regressions', () => {
 
     const result = await viewer.open({ schema: fixedSchema([textNode('hosted', undefined, { content: 'Host' })]) })
 
-    expect(result).toBeUndefined()
+    expect(result.status).toBe('completed')
     expect(host.document.querySelector('[data-element-id="hosted"]')).not.toBeNull()
   })
 
@@ -167,8 +177,9 @@ describe('viewer audit risk regressions', () => {
   it('projects bound remote svg urls into the custom svg renderer', async () => {
     const container = document.createElement('div')
     const viewer = await createViewer({ container })
+    const replacements = vi.spyOn(Element.prototype, 'replaceWith')
 
-    await viewer.open({
+    const result = await viewer.open({
       schema: fixedSchema([
         svgNode('logo', { sourceId: 'brand', fieldPath: 'logoSvgUrl' }),
       ]),
@@ -177,10 +188,13 @@ describe('viewer audit risk regressions', () => {
       },
     })
 
-    const image = container.querySelector('[data-element-id="logo"] img')
-
-    expect(image).not.toBeNull()
-    expect(image?.getAttribute('src')).toBe('https://cdn.example.com/logo.svg?version=1&theme=dark')
+    const originalImage = replacements.mock.contexts.find((element): element is Element => element instanceof Element && element.tagName === 'IMG')
+    expect(originalImage?.getAttribute('src')).toBe('https://cdn.example.com/logo.svg?version=1&theme=dark')
+    if (result.status !== 'completed')
+      throw new Error('Expected completed resource fallback')
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'IMAGE_LOAD_FAILED', nodeId: 'logo' }))
+    expect(container.querySelector('[data-element-id="logo"] [data-resource-placeholder="image"]')).not.toBeNull()
+    await viewer.destroy()
   })
 
   it('projects bound svg text into the sanitized custom svg renderer', async () => {
@@ -302,6 +316,8 @@ describe('viewer audit risk regressions', () => {
 
     const result = await viewer.render()
 
+    if (result.status !== 'completed')
+      throw new Error('Expected completed render')
     expect(result.thumbnails).toHaveLength(result.pages.length)
     expect(result.thumbnails[0]!.dataUrl).toMatch(/^data:image\/svg\+xml/)
   })
@@ -316,16 +332,10 @@ describe('viewer audit risk regressions', () => {
           return []
         },
         async loadFont() {
-          return ''
+          throw new Error('font boom')
         },
       },
     })
-    const fontManager = viewer.fontManager as unknown as {
-      ensureFontLoaded: ViewerRuntime['fontManager']['ensureFontLoaded']
-    }
-    fontManager.ensureFontLoaded = async () => {
-      throw new Error('font boom')
-    }
 
     viewer.registerExporter({
       id: 'boom-export',
@@ -349,8 +359,8 @@ describe('viewer audit risk regressions', () => {
       schema: fixedSchema([textNode('fonted', undefined, { content: 'Fonted', fontFamily: 'MissingFont' })]),
       onDiagnostic,
     })
-    await viewer.exportDocument('pdf')
-    await viewer.print({ driverId: 'boom-print' })
+    await expect(viewer.exportDocument('pdf')).rejects.toThrow('prepare boom')
+    await expect(viewer.print({ driverId: 'boom-print' })).rejects.toThrow('print boom')
     await Promise.resolve()
 
     expect(diagnostics.some(d => d.code === 'FONT_LOAD_FAILED')).toBe(true)

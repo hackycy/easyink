@@ -1,4 +1,4 @@
-import type { FragmentPaginator, ViewerMeasureResult, ViewerRenderOutput, ViewerRenderSize } from '@easyink/core'
+import type { FragmentPaginator, LayoutRuntimeRef, ViewerMeasureResult, ViewerRenderOutput, ViewerRenderSize } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { MaterialDeclaration, RendererDeclaration } from './material'
 import type { DeepReadonly, ResourceContext } from './resources'
@@ -6,6 +6,7 @@ import type { DeepReadonly, ResourceContext } from './resources'
 export type { MaterialModel } from './material'
 
 export interface ViewerContext extends ResourceContext {
+  readonly runtimeRef: LayoutRuntimeRef
   readonly document: Document
   readonly data: DeepReadonly<Record<string, unknown>>
   readonly resolvedProps: DeepReadonly<Record<string, unknown>>

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"io"
 	"os"
 	"strings"
@@ -114,6 +115,62 @@ func TestRenderPrintPDFCapturesBrowserDiagnostics(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(result.Diagnostics.FailedRequests, "\n"), "localhost") {
 		t.Fatalf("expected localhost blocked request, got %#v", result.Diagnostics.FailedRequests)
+	}
+}
+
+func TestRenderPrintPDFLoadsLargeHTMLWithOfflineResources(t *testing.T) {
+	browserPath := os.Getenv("EASYINK_RENDER_BROWSER_PATH")
+	if browserPath == "" {
+		t.Skip("EASYINK_RENDER_BROWSER_PATH is not set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	manager, err := browser.New(ctx, browserPath, t.TempDir())
+	if err != nil {
+		t.Fatalf("start browser: %v", err)
+	}
+	defer manager.Shutdown()
+	service := render.NewService(manager)
+
+	result, err := service.RenderPrintPDF(ctx, protocol.PrintPDFRequest{
+		RequestID: "req-large-html",
+		Source: protocol.Source{
+			Type:    "html",
+			BaseURL: "https://easyink.local/resources/",
+			// The captured load marker verifies the default load wait, script execution and image decoding.
+			HTML: `<!doctype html><html><head></head><body onload="document.querySelector('main').textContent = 'Loaded 中文 ' + window.offlineMessage + ' ' + document.querySelector('img').naturalWidth + ' ' + window.isSecureContext + ' ' + typeof crypto.randomUUID; console.error(document.querySelector('main').textContent)">
+				<main>Still loading</main><img src="pixel.svg"><!--` + strings.Repeat("x", 3*1024*1024) + `-->
+				<script src="message.js"></script></body></html>`,
+			Resources: []protocol.Resource{
+				{
+					URL:         "https://easyink.local/resources/pixel.svg",
+					ContentType: "image/svg+xml",
+					Base64:      base64.StdEncoding.EncodeToString([]byte(`<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1" fill="black"/></svg>`)),
+				},
+				{
+					URL:         "https://easyink.local/resources/message.js",
+					ContentType: "application/javascript",
+					Base64:      base64.StdEncoding.EncodeToString([]byte(`window.offlineMessage = "transport"`)),
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("render large HTML: %v", err)
+	}
+	if len(result.Diagnostics.FailedRequests) != 0 {
+		t.Fatalf("unexpected diagnostics: %#v", result.Diagnostics)
+	}
+	logs := result.Diagnostics.ConsoleErrors
+	var loadMarker string
+	if len(logs) != 1 || json.Unmarshal([]byte(logs[0]), &loadMarker) != nil || loadMarker != "Loaded 中文 transport 1 true function" {
+		t.Fatalf("expected secure load event with UTF-8 text and loaded script/image, got %#v", logs)
+	}
+	if result.Diagnostics.FinalURL != "data:<redacted>" {
+		t.Fatalf("final URL = %q", result.Diagnostics.FinalURL)
+	}
+	if !bytes.HasPrefix(result.PDF, []byte("%PDF-")) || result.PageCount != 1 {
+		t.Fatalf("expected single-page PDF, got %d pages", result.PageCount)
 	}
 }
 

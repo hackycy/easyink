@@ -196,13 +196,16 @@ onBeforeUnmount(() => {
 ```ts
 await viewer.print()
 
-const blob = await viewer.exportDocument({
+const result = await viewer.exportDocument({
   format: 'pdf',
   entry: 'preview',
   onProgress(event) {
     console.log(event.current, event.total)
   },
 })
+if (result.status === 'completed') {
+  console.log(result.file, result.diagnostics)
+}
 ```
 
 这里有个细节值得先记住：`print()` 默认走浏览器打印；`exportDocument()` 则要求你先注册对应格式的导出器。关于这两条链路的完整接法，后面分别去看 Viewer 章节就行。

@@ -30,6 +30,7 @@ import (
 const defaultMaxInputBytes int64 = 50 * 1024 * 1024
 const offlineResourceHost = "easyink.local"
 const offlineResourceOrigin = "https://" + offlineResourceHost
+const offlineDocumentURL = offlineResourceOrigin + "/"
 
 type Service struct {
 	browser *browser.Manager
@@ -178,7 +179,13 @@ func (s *Service) renderHTML(ctx context.Context, req protocol.PrintPDFRequest, 
 	chromedp.ListenTarget(renderCtx, tracker.handleEvent)
 
 	loadedHTML := htmlWithBaseURL(htmlWithInjectedHeadStyle(req.Source.HTML, fontCSS), req.Source.BaseURL)
-	dataURL := htmlDataURL(loadedHTML)
+	loadedHTML = htmlWithHeadInsertion(loadedHTML, `<link rel="icon" href="data:,">`)
+	// Serve the document through the existing offline transport, with a secure origin
+	// for the Viewer runtime and without putting the HTML in the navigation URL.
+	offlineResources[offlineDocumentURL] = offlineResource{
+		contentType: "text/html;charset=utf-8",
+		body:        []byte(loadedHTML),
+	}
 	setupActions := []chromedp.Action{
 		network.Enable(),
 		runtime.Enable(),
@@ -186,7 +193,7 @@ func (s *Service) renderHTML(ctx context.Context, req protocol.PrintPDFRequest, 
 			{URLPattern: "*", RequestStage: fetch.RequestStageRequest},
 			{URLPattern: "*", RequestStage: fetch.RequestStageResponse},
 		}),
-		chromedp.Navigate(dataURL),
+		chromedp.Navigate(offlineDocumentURL),
 		chromedp.WaitReady("body", chromedp.ByQuery),
 	}
 	if err := chromedp.Run(renderCtx, setupActions...); err != nil {
@@ -687,10 +694,6 @@ func asciiLower(value string) string {
 	return string(buf)
 }
 
-func htmlDataURL(htmlDoc string) string {
-	return "data:text/html;charset=utf-8;base64," + base64.StdEncoding.EncodeToString([]byte(htmlDoc))
-}
-
 func buildOfflineResources(source protocol.Source, maxInputBytes int64) (map[string]offlineResource, string, error) {
 	resources := map[string]offlineResource{}
 	var totalBytes int64
@@ -776,7 +779,7 @@ func maxInputBytes(options protocol.SecurityOptions) int64 {
 }
 
 func sanitizeFinalURL(value string) string {
-	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), "data:") {
+	if value == offlineDocumentURL || strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), "data:") {
 		return "data:<redacted>"
 	}
 	return value

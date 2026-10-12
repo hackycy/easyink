@@ -179,7 +179,7 @@ await viewer.exportDocument({
 - `NO_EXPORTER`：没有找到匹配导出器。
 - `EXPORTER_ERROR`：导出器执行失败。
 
-这些错误默认会通过诊断暴露。传 `throwOnError: true` 时，对应调用会继续抛出错误。
+这些整体任务错误会通过诊断暴露，并拒绝 Promise。局部问题可在 completed 结果的 diagnostics 中查看；正常取消返回 cancelled 结果，不抛错。
 
 ## Hook 错误 {#hook-errors}
 

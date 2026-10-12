@@ -432,14 +432,18 @@ function updatePhaseToast(progressId: string | number, message: string | undefin
 async function runViewerExport(format: string, filename: string, label: string) {
   const progressId = toast.loading(`${label}中...`)
   try {
-    const blob = await viewer?.exportDocument({
+    const result = await viewer?.exportDocument({
       format,
       entry: 'preview',
-      throwOnError: true,
       onPhase: event => updatePhaseToast(progressId, event.message, `${label}中...`),
       onProgress: progress => updateProgressToast(progressId, progress, label),
       onDiagnostic: showWarningDiagnostic,
     })
+    if (result?.status === 'cancelled') {
+      toast.dismiss(progressId)
+      return
+    }
+    const blob = result?.file
     if (!(blob instanceof Blob))
       throw new Error('导出结果为空')
 
@@ -631,15 +635,16 @@ async function runViewerPrint(driverId: string, pageSizeMode: 'driver' | 'fixed'
   isPrinting.value = true
   const progressId = toast.loading(`${label}中...`)
   try {
-    await viewer?.print({
+    const result = await viewer?.print({
       driverId,
       pageSizeMode,
-      throwOnError: true,
       onPhase: event => updatePhaseToast(progressId, event.message, `${label}中...`),
       onProgress: progress => updateProgressToast(progressId, progress, label),
       onDiagnostic: showWarningDiagnostic,
     })
     toast.dismiss(progressId)
+    if (result?.status === 'cancelled')
+      return
     toast.success(label === '浏览器打印' ? '已打开浏览器打印' : '已发送到打印机')
   }
   catch (err) {

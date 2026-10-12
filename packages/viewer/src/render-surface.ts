@@ -1,8 +1,9 @@
 import type { PageLayerRenderPlan, PageLayerRenderPlanBuckets, PagePlanEntry, TextWatermarkPageLayerPlan, TrustedViewerHtml } from '@easyink/core'
+import type { ResourceContext } from '@easyink/plugin-api'
 import type { MaterialNode, PageBackground, PageSchema } from '@easyink/schema'
 import type { MaterialRendererRegistry, MaterialRenderInput } from './material-registry'
 import type { ViewerDiagnosticEvent, ViewerRenderSize } from './types'
-import { groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, readTrustedViewerHtml, resolvePageLayerPlans, resolvePageLayerStackIndex, trustedViewerHtml } from '@easyink/core'
+import { createFragmentFromNode, groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, readNodeRepeatScope, readTrustedViewerHtml, resolvePageLayerPlans, resolvePageLayerStackIndex, trustedViewerHtml } from '@easyink/core'
 import { escapeHtml, UNIT_FACTOR } from '@easyink/shared'
 import { isErrorSentinel, safeRender } from './diagnostic-middleware'
 
@@ -14,6 +15,8 @@ export interface RenderSurfaceOptions {
   data: Record<string, unknown>
   resolvedPropsMap: Map<string, Record<string, unknown>>
   pageSchema: PageSchema
+  createItemResources?: (node: MaterialNode) => ResourceContext | undefined
+  releaseItemResources?: (resources: ResourceContext) => void
 }
 
 export interface PageDOM {
@@ -58,25 +61,31 @@ export function renderPages(
       unit,
       zoom,
       reportDiagnostic: diagnostic => diagnostics.push({
-        category: diagnostic.code === 'UNKNOWN_MATERIAL' || diagnostic.code === 'MATERIAL_LOAD_ERROR' ? 'viewer' : 'datasource',
+        category: diagnostic.code === 'UNKNOWN_MATERIAL' || diagnostic.code.startsWith('MATERIAL_') ? 'viewer' : 'datasource',
         severity: diagnostic.severity,
         code: diagnostic.code,
         message: diagnostic.message,
         nodeId: diagnostic.nodeId,
-        scope: diagnostic.code === 'UNKNOWN_MATERIAL' || diagnostic.code === 'MATERIAL_LOAD_ERROR' ? 'material' : 'datasource',
+        scope: diagnostic.code === 'UNKNOWN_MATERIAL' || diagnostic.code.startsWith('MATERIAL_') ? 'material' : 'datasource',
         cause: diagnostic.cause,
       }),
     }
 
     // Sort elements by zIndex for proper layering
-    const sorted = [...page.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
+    const sorted = [...(page.fragments ?? page.elements.map(node => createFragmentFromNode(node)))].sort((a, b) => (a.node.zIndex ?? 0) - (b.node.zIndex ?? 0))
 
-    for (const node of sorted) {
+    for (const fragment of sorted) {
+      const node = fragment.node
       if (node.hidden)
         continue
 
-      const resolved = resolvedPropsMap.get(node.id) ?? node.props
+      const baseProps = registry.resolveProps(fragment.runtimeRef, resolvedPropsMap.get(node.id) ?? node.props)
+      const resolved = readNodeRepeatScope(node) === 'every-output-page' || registry.isPageAware(node.type)
+        ? { ...baseProps, __pageNumber: context.pageNumber, __totalPages: context.totalPages }
+        : baseProps
+      context.runtimeRef = fragment.runtimeRef
       context.resolvedProps = resolved
+      context.resources = options.createItemResources?.(node)
 
       // Render through the material registry, wrapped by unified diagnostic middleware.
       const nodeForRender: MaterialNode = { ...node, props: resolved }
@@ -101,7 +110,21 @@ export function renderPages(
         output = safeResult
       }
 
-      const renderSize = registry.getRenderSize(nodeForRender, context)
+      let renderSize: ViewerRenderSize = { width: node.width, height: node.height }
+      if (!isErrorSentinel(safeResult)) {
+        try {
+          renderSize = registry.getRenderSize(nodeForRender, context)
+        }
+        catch (cause) {
+          diagnostics.push({ category: 'viewer', severity: 'warning', code: 'MATERIAL_RENDER_SIZE_ERROR', message: `Material render size failed for ${node.id}`, nodeId: node.id, scope: 'material', cause })
+          output = { html: fallbackHtml }
+          if (context.resources)
+            options.releaseItemResources?.(context.resources)
+        }
+      }
+      else if (context.resources) {
+        options.releaseItemResources?.(context.resources)
+      }
       const elWrapper = createElementWrapper(document, nodeForRender, page, unit, renderSize)
       if (output.element) {
         elWrapper.appendChild(output.element)

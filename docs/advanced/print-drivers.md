@@ -184,7 +184,6 @@ viewer.registerPrintDriver(driver)
 await viewer.print({
   driverId: 'remote-pdf-printer',
   pageSizeMode: 'fixed',
-  throwOnError: true,
   onPhase(event) {
     console.log(event.phase, event.message)
   },
@@ -200,7 +199,6 @@ await viewer.print({
 ```ts
 await viewer.print({
   driverId: 'remote-pdf-printer',
-  throwOnError: true,
   onProgress(event) {
     console.log(event.current, event.total)
   },

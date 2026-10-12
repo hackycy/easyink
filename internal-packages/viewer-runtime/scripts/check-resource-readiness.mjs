@@ -1,0 +1,149 @@
+import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import process from 'node:process'
+import { fileURLToPath } from 'node:url'
+import { createServer } from 'vite'
+
+// Real browser Directed check. No DOM emulator or browser automation dependency.
+const root = fileURLToPath(new URL('../../../', import.meta.url))
+const browserPath = process.env.EASYINK_RENDER_BROWSER_PATH ?? [
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+].find(path => existsSync(path))
+assert(browserPath, 'Set EASYINK_RENDER_BROWSER_PATH to a Chromium executable')
+const profile = await mkdtemp(join(tmpdir(), 'easyink-readiness-'))
+const font = await readFile(join(root, 'playground/public/fonts/站酷快乐体.ttf'))
+const image = await readFile(join(root, 'docs/public/logo.png'))
+const hits = new Map()
+const fixtureTimers = new Set()
+const server = await createServer({
+  configFile: false,
+  root,
+  resolve: { alias: { '@easyink/viewer': join(root, 'packages/viewer/src/index.ts') } },
+  server: { host: '127.0.0.1', port: 0 },
+  plugins: [{
+    name: 'readiness-fixtures',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const url = new URL(req.url, 'http://localhost')
+        if (url.pathname === '/readiness-check') {
+          res.setHeader('Content-Type', 'text/html')
+          res.end('<!doctype html><title>EasyInk resource readiness</title><body></body>')
+          return
+        }
+        if (!url.pathname.startsWith('/readiness-fixture/')) {
+          next()
+          return
+        }
+        const key = url.pathname.split('/').pop()
+        hits.set(key, (hits.get(key) ?? 0) + 1)
+        res.setHeader('Cache-Control', 'no-store')
+        const respond = () => {
+          if (url.searchParams.has('fail')) {
+            res.statusCode = 404
+            res.end('missing resource')
+          }
+          else {
+            res.setHeader('Content-Type', key.endsWith('.ttf') ? 'font/ttf' : 'image/png')
+            res.end(key.endsWith('.ttf') ? font : image)
+          }
+        }
+        const delay = Number(url.searchParams.get('delay') ?? 0)
+        if (delay) {
+          const timer = setTimeout(() => {
+            fixtureTimers.delete(timer)
+            respond()
+          }, delay)
+          fixtureTimers.add(timer)
+        }
+        else {
+          respond()
+        }
+      })
+    },
+  }],
+})
+let browser
+let socket
+try {
+  await server.listen()
+  const origin = server.resolvedUrls.local[0]
+  browser = spawn(browserPath, [
+    '--headless=new',
+    '--disable-gpu',
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--remote-debugging-port=0',
+    `--user-data-dir=${profile}`,
+    'about:blank',
+  ], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] })
+  const debugOrigin = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Browser debugging startup timed out')), 15_000)
+    let output = ''
+    browser.stderr.on('data', (chunk) => {
+      output += chunk.toString()
+      const endpoint = output.match(/DevTools listening on (ws:\/\/\S+)/)?.[1]
+      if (endpoint) {
+        clearTimeout(timer)
+        resolve(endpoint.replace(/^ws:/, 'http:').split('/devtools/')[0])
+      }
+    })
+    browser.once('error', reject)
+    browser.once('exit', code => reject(new Error(`Browser exited early: ${code}`)))
+  })
+  const targets = await fetch(`${debugOrigin}/json/list`).then(res => res.json())
+  socket = new WebSocket(targets.find(target => target.type === 'page').webSocketDebuggerUrl)
+  await new Promise((resolve, reject) => {
+    socket.addEventListener('open', resolve, { once: true })
+    socket.addEventListener('error', reject, { once: true })
+  })
+  let id = 0
+  const pending = new Map()
+  socket.addEventListener('message', ({ data }) => {
+    const message = JSON.parse(data)
+    const operation = pending.get(message.id)
+    if (!operation)
+      return
+    pending.delete(message.id)
+    clearTimeout(operation.timer)
+    message.error ? operation.reject(new Error(JSON.stringify(message.error))) : operation.resolve(message.result)
+  })
+  const call = (method, params = {}) => new Promise((resolve, reject) => {
+    const requestId = ++id
+    const timer = setTimeout(() => {
+      pending.delete(requestId)
+      reject(new Error(`Browser operation timed out: ${method}`))
+    }, 60_000)
+    pending.set(requestId, { resolve, reject, timer })
+    socket.send(JSON.stringify({ id: requestId, method, params }))
+  })
+  await call('Page.navigate', { url: `${origin}readiness-check` })
+  const result = await call('Runtime.evaluate', {
+    expression: `import(${JSON.stringify(`${origin}internal-packages/viewer-runtime/src/resource-readiness.browser.ts`)}).then(module => module.runResourceReadinessChecks())`,
+    awaitPromise: true,
+    returnByValue: true,
+  })
+  assert(!result.exceptionDetails, JSON.stringify(result.exceptionDetails))
+  assert.equal(result.result.value.failed, 0, JSON.stringify(result.result.value))
+  for (const key of ['font-ok.ttf', 'font-failed.ttf', 'font-late.ttf', 'font-destroy.ttf', 'image-iframe.png', 'image-ok.png', 'image-failed.png', 'image-late.png', 'background-failed.png', 'destroy.png', 'superseded.png', 'font-output.ttf', 'font-output-target.ttf', 'image-output.png'])
+    assert(hits.has(key), `Expected an actual browser request for ${key}`)
+  console.log(JSON.stringify({ browser: (await call('Browser.getVersion')).product, ...result.result.value, actualRequests: Object.fromEntries(hits) }, null, 2))
+}
+finally {
+  socket?.close()
+  if (browser && browser.exitCode === null) {
+    const exited = new Promise(resolve => browser.once('exit', resolve))
+    browser.kill()
+    await exited
+  }
+  for (const timer of fixtureTimers)
+    clearTimeout(timer)
+  await server.close()
+  await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+}

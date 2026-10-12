@@ -153,10 +153,13 @@ Viewer 提供打印和导出的运行时入口。
 ```ts
 await viewer.print()
 
-const blob = await viewer.exportDocument({
+const result = await viewer.exportDocument({
   format: 'pdf',
   entry: 'preview',
 })
+if (result.status === 'completed') {
+  console.log(result.file, result.diagnostics)
+}
 ```
 
 这里有两个前提要分清：

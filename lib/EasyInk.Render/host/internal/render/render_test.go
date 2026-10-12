@@ -53,13 +53,6 @@ func TestHTMLWithBaseURLPreservesExistingBase(t *testing.T) {
 	}
 }
 
-func TestHTMLDataURLDeclaresUTF8(t *testing.T) {
-	got := htmlDataURL("<html><body>中文</body></html>")
-	if !strings.HasPrefix(got, "data:text/html;charset=utf-8;base64,") {
-		t.Fatalf("data URL = %q", got)
-	}
-}
-
 func TestHeadInjectionKeepsCharsetMetaFirst(t *testing.T) {
 	input := `<!doctype html><html><head><meta charset="utf-8"><title>中文</title></head><body></body></html>`
 	got := htmlWithBaseURL(htmlWithInjectedHeadStyle(input, "body{font-family:sans-serif;}"), "https://example.com/templates/")
@@ -151,6 +144,9 @@ func TestBuildOfflineResourcesRejectsOversizedBundle(t *testing.T) {
 }
 
 func TestSanitizeFinalURLRedactsDataURL(t *testing.T) {
+	if got := sanitizeFinalURL(offlineDocumentURL); got != "data:<redacted>" {
+		t.Fatalf("sanitized internal document URL = %q", got)
+	}
 	if got := sanitizeFinalURL("data:text/html;base64,PGh0bWw+"); got != "data:<redacted>" {
 		t.Fatalf("sanitized URL = %q", got)
 	}

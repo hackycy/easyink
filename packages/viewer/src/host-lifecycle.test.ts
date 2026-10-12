@@ -94,12 +94,12 @@ describe('public Viewer Host lifecycle', () => {
     const mount = document.createElement('div')
     const viewer = await createViewer({ container: mount, materials: [material] })
     const pending = viewer.open({ schema: normalizeDocumentSchema({ elements: [material.model.createDefaultNode()] }) })
-    // Attach rejection handling before destruction; task cancellation results arrive in the render Gate.
-    const settled = pending.catch(error => error)
     await loaded.promise
     await viewer.destroy()
+    expect(await pending).toMatchObject({ status: 'cancelled', reason: 'destroyed' })
     external.resolve()
-    expect(await settled).toBeInstanceOf(Error)
+    await external.promise
+    await Promise.resolve()
     expect(render).not.toHaveBeenCalled()
     expect(close).toHaveBeenCalledOnce()
     expect(mount.childElementCount).toBe(0)
@@ -111,9 +111,7 @@ describe('public Viewer Host lifecycle', () => {
     const materialCause = new Error('material cleanup')
     const cleaned = vi.fn()
     const mount = document.createElement('div')
-    const host = { ...createCustomViewerHost({ document, mount }), clear: () => {
-      throw surfaceCause
-    } }
+    const host = createCustomViewerHost({ document, mount })
     const material: ViewerMaterial = {
       model: model('resource'),
       renderer: { render: (_node, ctx) => {
@@ -126,10 +124,13 @@ describe('public Viewer Host lifecycle', () => {
     }
     const viewer = await createViewer({ host, materials: [material] })
     await viewer.open({ schema: normalizeDocumentSchema({ elements: [material.model.createDefaultNode()] }) })
+    vi.spyOn(host, 'clear').mockImplementation(() => {
+      throw surfaceCause
+    })
     const result = await viewer.destroy()
     expect(result.errors).toMatchObject([
       { phase: 'consumer', cause: surfaceCause },
-      { phase: 'scope', cause: materialCause },
+      { phase: 'consumer', cause: materialCause },
     ])
     expect(cleaned).toHaveBeenCalledOnce()
   })

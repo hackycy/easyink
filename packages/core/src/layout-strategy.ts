@@ -1,5 +1,5 @@
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
-import type { LayoutDocument, LayoutFragment } from './layout-plan'
+import type { LayoutDocument, LayoutFragment, LayoutRuntimeRef } from './layout-plan'
 import { createFragmentFromNode } from './layout-plan'
 import { resolvePageModel } from './page-model'
 import { runFlowYReflow } from './reflow-engine'
@@ -7,6 +7,7 @@ import { runFlowYReflow } from './reflow-engine'
 export interface RunLayoutPipelineOptions {
   originalSchema?: DocumentSchema
   measured?: Map<string, { width: number, height: number, overflow?: boolean }>
+  runtimeRefs?: ReadonlyMap<string, LayoutRuntimeRef>
 }
 
 export function runLayoutPipeline(
@@ -20,7 +21,10 @@ export function runLayoutPipeline(
     ? runFlowYReflow({ originalElements, measuredElements })
     : { elements: measuredElements, diagnostics: [] }
   const pageModel = resolvePageModel(schema)
-  const fragments = reflowResult.elements.map(node => createFragmentFromNode(node, options.measured?.get(node.id)))
+  const fragments = reflowResult.elements.map(node => ({
+    ...createFragmentFromNode(node, options.measured?.get(node.id)),
+    runtimeRef: options.runtimeRefs?.get(node.id),
+  }))
 
   return {
     width: pageModel.width,

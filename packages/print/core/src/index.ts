@@ -76,6 +76,7 @@ export interface ManagedPrintInput extends ViewerTaskCallbacks {
   schema: DocumentSchema
   data?: Record<string, unknown>
   pageSizeMode?: ViewerPrintPageSizeMode
+  throwOnError?: boolean
 }
 
 export interface ManagedPrintViewer {
@@ -303,19 +304,26 @@ class ManagedPrintViewerRuntime implements ManagedPrintViewer {
       await this.options.setupViewer?.(viewer)
       this.assertCurrent(session)
       viewer.registerPrintDriver(driver)
-      await viewer.open({
+      const rendered = await viewer.open({
         schema: input.schema,
         data: input.data,
         onDiagnostic: input.onDiagnostic,
       })
-      await viewer.print({
-        driverId: driver.id,
-        pageSizeMode: input.pageSizeMode,
-        throwOnError: input.throwOnError ?? true,
-        onPhase: input.onPhase,
-        onProgress: input.onProgress,
-        onDiagnostic: input.onDiagnostic,
-      })
+      if (rendered.status === 'cancelled')
+        return
+      try {
+        await viewer.print({
+          driverId: driver.id,
+          pageSizeMode: input.pageSizeMode,
+          onPhase: input.onPhase,
+          onProgress: input.onProgress,
+          onDiagnostic: input.onDiagnostic,
+        })
+      }
+      catch (cause) {
+        if (input.throwOnError !== false)
+          throw cause
+      }
     }
     finally {
       if (this.options.autoDestroy !== false)
