@@ -1,11 +1,14 @@
+import { Buffer } from 'node:buffer'
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import {
   supermarketDemoData,
   supermarketReceiptTemplate,
 } from '@easyink/samples'
+import { loadRenderApiConfig } from '../src/config'
+import { createRenderApiServer } from '../src/server'
 
 interface RenderCliSummary {
   success: boolean
@@ -34,9 +37,12 @@ const outputPath = resolve(outputDir, 'supermarket-receipt.pdf')
 const nativeWindows = process.platform === 'win32'
 const hostBinaryPath = nativeWindows ? resolve(smokeRoot, 'easyink-render.exe') : resolve(hostRoot, 'easyink-render')
 
-main()
+void main().catch((error) => {
+  console.error(error)
+  process.exitCode = 1
+})
 
-function main(): void {
+async function main(): Promise<void> {
   try {
     resetSmokeRoot()
     writeSupermarketRequest()
@@ -49,9 +55,46 @@ function main(): void {
       renderWithChromium()
     }
     assertSmokeResult()
+    if (nativeWindows)
+      await renderWithActualApi()
   }
   finally {
     rmSync(hostBinaryPath, { force: true })
+  }
+}
+
+async function renderWithActualApi(): Promise<void> {
+  const workDir = resolve(smokeRoot, 'api-work')
+  const api = createRenderApiServer({ config: {
+    ...loadRenderApiConfig({}),
+    binary: hostBinaryPath,
+    workDir,
+    defaultRuntime: { noDaemon: true, disableSandbox: true, browserPath: process.env.EASYINK_RENDER_BROWSER_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe' },
+  } })
+  try {
+    const address = await api.listen(0, '127.0.0.1')
+    const response = await fetch(`http://127.0.0.1:${address.port}/v1/render/pdf`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requestId: 'actual-api-supermarket',
+        source: { type: 'easyink', schema: supermarketReceiptTemplate, data: supermarketDemoData },
+        response: { type: 'pdf' },
+      }),
+    })
+    const bytes = Buffer.from(await response.arrayBuffer())
+    if (!response.ok || bytes.subarray(0, 5).toString() !== '%PDF-' || bytes.length < 1000)
+      throw new Error(`Actual API PDF failed: ${response.status} ${bytes.subarray(0, 200).toString()}`)
+    if (Number(response.headers.get('x-easyink-page-count')) < 1)
+      throw new Error('Actual API did not expose rendered page metrics')
+    const remaining = readdirSync(workDir)
+    if (remaining.length)
+      throw new Error(`API returned before request cleanup: ${remaining.join(', ')}`)
+    writeFileSync(resolve(outputDir, 'api-supermarket.pdf'), bytes)
+    console.log(JSON.stringify({ actualApi: true, pdfBytes: bytes.length, requestDirectoriesAfterResponse: remaining.length }))
+  }
+  finally {
+    await api.close()
   }
 }
 

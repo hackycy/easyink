@@ -16,7 +16,7 @@ Prefer locale keys over hardcoded labels for Designer-facing UI:
 Add material keys in the material package:
 
 - `src/locale.ts`
-- Pass the export as `localeMessages` on the Designer material entry, or include it in the material bundle registration.
+- Attach the export as `locale` on the complete declaration. Shared group messages have one source.
 
 `@easyink/locales` owns Designer common strings only: shared panels, page settings, data source UI, binding format UI, generic diagnostics, and generic history labels.
 
@@ -31,12 +31,12 @@ Property schemas can store label keys directly because `PropertiesPanel.vue` res
 ## i18n Review Checklist
 
 - No new user-visible Chinese-only strings in built-in material registration unless intentionally not localized.
-- New material panel catalog groups use `materials.catalog.<id>` labels registered through bundle locale messages.
+- New material panel catalog groups use `materials.catalog.<id>` labels supplied by the complete declaration locale.
 - Decoration tooltips, material-local toolbar button titles, property titles, reject labels, placeholders, and history labels are localized.
 - Page-aware or fragment-pagination diagnostics that surface to users are stable, translated where they are Designer-facing, and use Viewer diagnostics for runtime-only failures.
 - `PropSchema.group` uses an existing group mapped by `GROUP_LABELS` in `PropertiesPanel.vue`, or the visible custom group text is intentional.
 - History panel can display the command label. Prefer stable `materials.<material>.history.*` keys for material commands.
-- Custom host-owned materials register their locale messages through `registerMaterialBundle()` instead of coupling them to `@easyink/locales`.
+- Custom materials own `locale`; the Host handles stable non-blocking conflict/fallback diagnostics.
 
 ## AI Reminder
 
@@ -44,17 +44,17 @@ Read `references/ai-assistant-materials.md` when AI behavior matters. In short:
 
 - Put `src/ai.ts` next to the material when it should be generated or selected by Assistant.
 - Include `AIMaterialDescriptor.knowledge` when Assistant needs reliable material selection, binding, sizing, or scenario fitness.
-- Register built-in descriptors through Designer `aiDescriptor`; `packages/builtin/src/ai.ts` is derived from the Designer bundle.
-- Register custom material descriptors on the Designer material entry; Assistant gets them from the live store manifest.
+- Declare descriptors as `ai` on complete materials; builtin only selects membership.
+- Assistant receives serialized model/properties/AI from current Host declarations.
 
-Assistant reads canonical material types, binding rules, props, and optional AI descriptors from the live Designer material manifest. If a generated material should be available to Assistant but lacks a Designer `aiDescriptor`, selection and schema generation become weaker even when Designer and Viewer registration are otherwise correct.
+Assistant reads canonical material types, binding rules, props, and optional AI descriptors from the live Designer material manifest. If a generated material should be available to Assistant but lacks a Designer `ai`, selection and schema generation become weaker even when Designer and Viewer registration are otherwise correct.
 
 ## AI Review Smells
 
 - AI descriptor mentions a prop that does not exist or omits required specialized schema rules.
 - Descriptor binding says `single` or `multi` but `knowledge.bindingSpec.mode` says a different data shape.
 - `knowledge.sizing.defaultSize` does not match the factory default size in mm.
-- Custom material tries to update prompt text or a static AI list instead of registering Designer `aiDescriptor`.
+- Custom material tries to update prompt text or a static AI list instead of registering Designer `ai`.
 
 ## Tests to Add or Run
 

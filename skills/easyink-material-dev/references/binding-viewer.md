@@ -103,7 +103,7 @@ Implement `datasourceDrop` when the material owns internal drop zones:
 
 `table-data` uses this pattern to bind fields into cells. It rejects hidden rows and rejects repeat-template fields from a different collection prefix than existing repeat-template cells.
 
-Materials that declare `MaterialDefinition.binding.kind='data-contract'` usually do not need a custom `datasourceDrop` just to bind whole-element data. Designer fills unbound target fields in contract order on canvas drop and exposes a MaterialDataBindingEditor for dropping a field onto a specific target field. The Designer should not reject different collections for data-contract mappings; the resolver owns runtime relation diagnostics.
+Materials that declare `MaterialModel.binding.kind='data-contract'` usually do not need a custom `datasourceDrop` just to bind whole-element data. Designer fills unbound target fields in contract order on canvas drop and exposes a MaterialDataBindingEditor for dropping a field onto a specific target field. The Designer should not reject different collections for data-contract mappings; the resolver owns runtime relation diagnostics.
 
 ## Table-Data Runtime Expansion
 

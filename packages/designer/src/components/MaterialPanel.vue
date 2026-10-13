@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MaterialCatalogEntry, MaterialCatalogGroup } from '../types'
+import type { PaletteGroup, PaletteItem } from '../materials/presentation'
 import { AddMaterialCommand } from '@easyink/core'
 import { computed, inject } from 'vue'
 import { useDesignerStore } from '../composables'
@@ -9,7 +9,7 @@ import { selectOne } from '../interactions/selection-api'
 const store = useDesignerStore()
 const dragDrop = inject(DESIGNER_DRAG_DROP_KEY, null)
 
-const visibleCatalogGroups = computed<MaterialCatalogGroup[]>(() =>
+const visibleCatalogGroups = computed<PaletteGroup[]>(() =>
   store.getCatalogGroups().filter(group => group.items.length > 0),
 )
 
@@ -17,7 +17,7 @@ const hasRegisteredMaterials = computed(() =>
   visibleCatalogGroups.value.length > 0,
 )
 
-function handleAddMaterial(entry: MaterialCatalogEntry) {
+function handleAddMaterial(entry: PaletteItem) {
   if (dragDrop?.consumeClickSuppression())
     return
   const definition = store.getMaterial(entry.materialType)
@@ -32,17 +32,17 @@ function handleAddMaterial(entry: MaterialCatalogEntry) {
   selectOne(store, node.id)
 }
 
-function handlePointerDown(e: PointerEvent, entry: MaterialCatalogEntry) {
+function handlePointerDown(e: PointerEvent, entry: PaletteItem) {
   dragDrop?.startMaterialPointerDrag(e, entry)
 }
 
-function handlePointerUp(entry: MaterialCatalogEntry) {
+function handlePointerUp(entry: PaletteItem) {
   if (dragDrop?.consumeClickSuppression())
     return
   handleAddMaterial(entry)
 }
 
-function handleKeyAdd(e: KeyboardEvent, entry: MaterialCatalogEntry) {
+function handleKeyAdd(e: KeyboardEvent, entry: PaletteItem) {
   if (e.key !== 'Enter' && e.key !== ' ')
     return
   e.preventDefault()

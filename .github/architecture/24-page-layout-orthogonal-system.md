@@ -161,7 +161,7 @@ Designer 属性面板按页面策略注入行为项：
 
 ## 24.6 可分页物料
 
-`MaterialViewerExtension` 支持可选 `fragmentPaginator`：
+`ViewerSessionRenderer` 支持可选 `fragmentPaginator`：
 
 ```ts
 interface FragmentPaginator {

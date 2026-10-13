@@ -1,5 +1,5 @@
 export * from './ai'
-export * from './designer'
+export { createSignaturePadRectForClientPoint, resolveSignatureCanvasLocalPoint, setSignatureCanvasSizeForDesigner, signaturePadStrokeOptionsForUnit } from './designer'
 export { signature } from './designer-material'
 export * from './locale'
 export * from './prop-schemas'

@@ -3,8 +3,8 @@ import type { DataUnionBinding } from '@easyink/datasource'
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { InjectionKey } from 'vue'
+import type { PaletteItem } from '../materials/presentation'
 import type { DesignerStore } from '../store/designer-store'
-import type { MaterialCatalogEntry } from '../types'
 import {
   AddMaterialCommand,
   applyMaterialDataFieldMapping,
@@ -52,10 +52,10 @@ export interface DesignerDragDropContext {
 }
 
 export interface DesignerDragDropController {
-  startMaterialPointerDrag: (event: PointerEvent, entry: MaterialCatalogEntry) => void
+  startMaterialPointerDrag: (event: PointerEvent, entry: PaletteItem) => void
   startDatasourcePointerDrag: (event: PointerEvent, data: DatasourceFieldDragData) => void
   consumeClickSuppression: () => boolean
-  startMaterialDrag: (event: DragEvent, entry: MaterialCatalogEntry) => void
+  startMaterialDrag: (event: DragEvent, entry: PaletteItem) => void
   startDatasourceDrag: (event: DragEvent, data: DatasourceFieldDragData) => void
   updateDragPosition: (event: DragEvent) => void
   endDrag: () => void
@@ -76,13 +76,13 @@ export interface DatasourcePanelDropTarget {
 export const DESIGNER_DRAG_DROP_KEY: InjectionKey<DesignerDragDropController> = Symbol('easyinkDesignerDragDrop')
 
 type DragSession
-  = | { kind: 'material', entry: MaterialCatalogEntry, dragData: string, node: MaterialNode | null }
+  = | { kind: 'material', entry: PaletteItem, dragData: string, node: MaterialNode | null }
     | { kind: 'datasource', data: DatasourceFieldDragData }
 
 type PointerSession
   = | {
     kind: 'material'
-    entry: MaterialCatalogEntry
+    entry: PaletteItem
     node: MaterialNode | null
     pointerId: number
     captureTarget: Element | null
@@ -148,7 +148,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
   let clearClickSuppressionTimer: number | null = null
   const datasourcePanelTargets = new Map<string, DatasourcePanelDropTarget>()
 
-  function startMaterialPointerDrag(event: PointerEvent, entry: MaterialCatalogEntry) {
+  function startMaterialPointerDrag(event: PointerEvent, entry: PaletteItem) {
     if (!canStartPointerDrag(event))
       return
     event.preventDefault()
@@ -194,7 +194,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     return shouldSuppress
   }
 
-  function startMaterialDrag(event: DragEvent, entry: MaterialCatalogEntry) {
+  function startMaterialDrag(event: DragEvent, entry: PaletteItem) {
     if (!event.dataTransfer)
       return
     const dragData = entry.dragData ?? entry.materialType
@@ -625,7 +625,7 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
       const localPoint = geometry.documentToLocal({ x: docX, y: docY }, element)
       if (pointInRect(localPoint, { x: 0, y: 0, width: elementSize.width, height: elementSize.height })) {
         const material = ctx.store.getMaterial(element.type)
-        if (material?.capabilities.bindable === false)
+        if (material?.binding.kind === 'none')
           continue
         return element
       }
@@ -892,11 +892,11 @@ export function useDesignerDragDrop(ctx: DesignerDragDropContext): DesignerDragD
     emptyDragImageEl = null
   }
 
-  function resolveCatalogEntry(dragData: string): MaterialCatalogEntry | undefined {
+  function resolveCatalogEntry(dragData: string): PaletteItem | undefined {
     return ctx.store.getCatalog().find(entry => entry.dragData === dragData || entry.materialType === dragData)
   }
 
-  function createMaterialNodeDraft(entry: MaterialCatalogEntry): MaterialNode | null {
+  function createMaterialNodeDraft(entry: PaletteItem): MaterialNode | null {
     const definition = ctx.store.getMaterial(entry.materialType)
     if (!definition)
       return null

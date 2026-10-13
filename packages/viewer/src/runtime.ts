@@ -26,12 +26,12 @@ import { applyBindingsToProps, projectBindings } from './binding-projector'
 import { resolveConditionalSchema } from './conditional-schema'
 import { applyFontSelections, collectFontFamilies, loadAndInjectFonts } from './font-loader'
 import { createViewerMaterialHost } from './material-host'
-import { MaterialRendererRegistry } from './material-registry'
 import { OutputTask } from './output-task'
 import { PrintPolicyError, resolvePrintPolicy } from './print-policy'
 import { runPrintWithIsolation } from './print-service'
 import { RenderRequest } from './render-request'
 import { RenderResources } from './render-resources'
+import { RenderSessionMaterials } from './render-session-materials'
 import { renderPages } from './render-surface'
 import { waitForCandidateImages } from './resource-readiness'
 import { createThumbnails } from './thumbnail-pipeline'
@@ -214,7 +214,7 @@ export class ViewerRuntime {
     this._latestRender = { request, promise: completion.promise }
     // Outputs observe this promise too; a render without an output still has its public rejection.
     void completion.promise.catch(() => {})
-    const registry = new MaterialRendererRegistry(this._assembly, request.document, {
+    const registry = new RenderSessionMaterials(this._assembly, request.document, {
       acquire: (type) => {
         const owner = this._assembly.host.registry.getMaterial(type)!.owner
         const signal = AbortSignal.any([this._assembly.host.resources(type).signal, request.controller.signal])
@@ -252,7 +252,7 @@ export class ViewerRuntime {
     }
   }
 
-  private async computeRender(request: RenderRequest, registry: MaterialRendererRegistry): Promise<ViewerRenderResult> {
+  private async computeRender(request: RenderRequest, registry: RenderSessionMaterials): Promise<ViewerRenderResult> {
     const schema = request.schema
     const data = request.data
     const diagnostics: ViewerDiagnosticEvent[] = []
@@ -672,7 +672,7 @@ export class ViewerRuntime {
   // Internal pipeline stages
   // ---------------------------------------------------------------------------
 
-  private collectRepeatedPageElements(elements: MaterialNode[], registry: MaterialRendererRegistry): MaterialNode[] {
+  private collectRepeatedPageElements(elements: MaterialNode[], registry: RenderSessionMaterials): MaterialNode[] {
     return elements.filter(el =>
       readNodeRepeatScope(el) === 'every-output-page'
       || registry.isPageAware(el.type),
@@ -686,7 +686,7 @@ export class ViewerRuntime {
    */
   private resolveRepeatedPageElements(
     plan: PagePlan,
-    registry: MaterialRendererRegistry,
+    registry: RenderSessionMaterials,
     repeatedElements: MaterialNode[],
   ): void {
     if (repeatedElements.length === 0)
@@ -706,7 +706,7 @@ export class ViewerRuntime {
     }
   }
 
-  private measureRuntimeElements(resolvedPropsMap: Map<string, Record<string, unknown>>, schema: DocumentSchema, data: Record<string, unknown>, registry: MaterialRendererRegistry): { measurements: Map<string, ViewerMeasureResult>, diagnostics: ViewerDiagnosticEvent[] } {
+  private measureRuntimeElements(resolvedPropsMap: Map<string, Record<string, unknown>>, schema: DocumentSchema, data: Record<string, unknown>, registry: RenderSessionMaterials): { measurements: Map<string, ViewerMeasureResult>, diagnostics: ViewerDiagnosticEvent[] } {
     const diagnostics: ViewerDiagnosticEvent[] = []
     const measurements = new Map<string, ViewerMeasureResult>()
     const measureCtx: ViewerMeasureContext = {
@@ -778,7 +778,7 @@ export class ViewerRuntime {
     }
   }
 
-  private resolveAllBindings(diagnostics: ViewerDiagnosticEvent[], schema: DocumentSchema, data: Record<string, unknown>, registry: MaterialRendererRegistry): Map<string, Record<string, unknown>> {
+  private resolveAllBindings(diagnostics: ViewerDiagnosticEvent[], schema: DocumentSchema, data: Record<string, unknown>, registry: RenderSessionMaterials): Map<string, Record<string, unknown>> {
     const resolvedMap = new Map<string, Record<string, unknown>>()
     traverseNodes(schema, (node) => {
       if (!node.binding) {

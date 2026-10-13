@@ -16,7 +16,7 @@
 - `table`、`chart`、`svg` 都是一级结构系统
 - 属性面板在同一窗口壳层中互斥展示"元素属性"与"页面属性"，支持 PropertyPanelOverlay 动态叠加层
 - 画布中的每个物料必须根据 props 展示近似真实的视觉效果（设计态渲染）
-- 设计态渲染（`MaterialDesignerExtension.renderContent`）与 Viewer 渲染（`MaterialViewerExtension.render / measure / getRenderSize / fragmentPaginator`）是两套独立实现
+- 设计态渲染（`DesignerRenderInstance.renderContent`）与 Viewer 渲染（`ViewerSessionRenderer.render / measure / getRenderSize / fragmentPaginator`）是两套独立实现
 - 页面属性面板区分"规范字段 / benchmark 兼容字段 / 派生 UI 字段"
 - 工作台状态、模板状态、运行时状态明确分层
 - `viewer` 的 `exportDocument()` 走 `ViewerExporter` 注册表，独立 `@easyink/export-runtime` 负责格式插件运行时；第三方导出依赖通过对应插件或导出器按需装载
@@ -50,7 +50,7 @@
 | 20 | [性能策略](./20-performance.md) | 架构层预留、性能目标 |
 | 21 | [安全模型](./21-security.md) | 数据路径安全、富文本安全、渲染安全 |
 | 22 | [编辑行为架构](./22-editing-behavior.md) | EditingSession、类型化 Selection、Geometry 协议、Behavior 中间件、Surfaces 与 Transaction |
-| 23 | [Contribution 机制](./23-contribution.md) | ContributionRegistry、注入方式、响应式 Props、生命周期、命名空间 |
+| 23 | [Designer 独立扩展](./23-contribution.md) | 完整声明、五类 UI、受控 context、Scope 生命周期 |
 | 24 | [页面布局正交体系](./24-page-layout-orthogonal-system.md) | 页面模型、布局策略、分页策略、测量重排引擎四层解耦 |
 | 25 | [AI Assistant 平台](./25-ai-assistant.md) | 物料知识声明、数据流链路、Orchestrator 工作流、ComposerAgent、知识与推理层 |
 | 26 | [条件渲染系统](./26-conditional-rendering.md) | 组内 AND、组间 OR 的条件组、Dialog 编辑协议、集合判断与 Viewer 布局语义 |

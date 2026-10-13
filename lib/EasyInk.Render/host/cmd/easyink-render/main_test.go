@@ -45,6 +45,8 @@ func TestRootHelpCommand(t *testing.T) {
 
 func TestRenderNoDaemonRejectsPDFSource(t *testing.T) {
 	temp := t.TempDir()
+	t.Setenv("APPDATA", temp)
+	t.Setenv("XDG_CONFIG_HOME", temp)
 	requestPath := filepath.Join(temp, "request.json")
 	outPath := filepath.Join(temp, "out.pdf")
 	diagnosticsPath := filepath.Join(temp, "diag.json")
@@ -80,6 +82,8 @@ func TestRenderNoDaemonRejectsPDFSource(t *testing.T) {
 
 func TestRenderRejectsTrailingJSON(t *testing.T) {
 	temp := t.TempDir()
+	t.Setenv("APPDATA", temp)
+	t.Setenv("XDG_CONFIG_HOME", temp)
 	requestPath := filepath.Join(temp, "request.json")
 	outPath := filepath.Join(temp, "out.pdf")
 	request := `{

@@ -3,7 +3,7 @@ import type { MaterialNode, PageSchema } from '@easyink/schema'
 import { createFragmentFromNode, trustedViewerHtml } from '@easyink/core'
 import { describe, expect, it } from 'vitest'
 import { createViewerMaterialHost } from './material-host'
-import { MaterialRendererRegistry } from './material-registry'
+import { RenderSessionMaterials } from './render-session-materials'
 import { renderPages } from './render-surface'
 
 describe('renderPages', () => {
@@ -31,7 +31,7 @@ describe('renderPages', () => {
       height: 60,
     }
 
-    const registry = new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [{ model: { type: 'custom', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'fixture', type: 'custom', x: 0, y: 0, width: 10, height: 10, rotation: 0, props: {} }) }, renderer: { render: () => ({ html: trustedViewerHtml('<div>custom</div>') }), getRenderSize: () => ({ height: 7 }) } }] }), document)
+    const registry = new RenderSessionMaterials(await createViewerMaterialHost({ kind: 'viewer', materials: [{ model: { type: 'custom', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'fixture', type: 'custom', x: 0, y: 0, width: 10, height: 10, rotation: 0, props: {} }) }, renderer: { render: () => ({ html: trustedViewerHtml('<div>custom</div>') }), getRenderSize: () => ({ height: 7 }) } }] }), document)
     await registry.prepare([node], new Map(), { data: {}, unit: 'mm' }, new AbortController().signal)
     pages[0].fragments = [{ ...createFragmentFromNode(node), runtimeRef: registry.runtimeRefs.get(node.id) }]
 
@@ -53,7 +53,7 @@ describe('renderPages', () => {
 
   it('applies page background styles consistently for repeat modes', async () => {
     const container = document.createElement('div')
-    const registry = new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [] }), document)
+    const registry = new RenderSessionMaterials(await createViewerMaterialHost({ kind: 'viewer', materials: [] }), document)
     const pageSchema: PageSchema = {
       mode: 'fixed',
       width: 80,
@@ -94,7 +94,7 @@ describe('renderPages', () => {
 
   it('applies page font to the viewer page root', async () => {
     const container = document.createElement('div')
-    const registry = new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [] }), document)
+    const registry = new RenderSessionMaterials(await createViewerMaterialHost({ kind: 'viewer', materials: [] }), document)
     const pageSchema: PageSchema = {
       mode: 'fixed',
       width: 80,
@@ -125,7 +125,7 @@ describe('renderPages', () => {
 
   it('renders text watermark as a page overlay', async () => {
     const container = document.createElement('div')
-    const registry = new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [] }), document)
+    const registry = new RenderSessionMaterials(await createViewerMaterialHost({ kind: 'viewer', materials: [] }), document)
     const pageSchema: PageSchema = {
       mode: 'fixed',
       width: 80,
@@ -184,7 +184,7 @@ describe('renderPages', () => {
       props: {},
     }
 
-    const registry = new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [{ model: { type: 'custom', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'fixture', type: 'custom', x: 0, y: 0, width: 10, height: 10, rotation: 0, props: {} }) }, renderer: { render: () => ({ html: trustedViewerHtml('<div>content</div>') }) } }] }), document)
+    const registry = new RenderSessionMaterials(await createViewerMaterialHost({ kind: 'viewer', materials: [{ model: { type: 'custom', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'fixture', type: 'custom', x: 0, y: 0, width: 10, height: 10, rotation: 0, props: {} }) }, renderer: { render: () => ({ html: trustedViewerHtml('<div>content</div>') }) } }] }), document)
     await registry.prepare([node], new Map(), { data: {}, unit: 'mm' }, new AbortController().signal)
 
     renderPages([{
@@ -228,7 +228,7 @@ describe('renderPages', () => {
 
   it('skips page watermark when disabled or blank', async () => {
     const container = document.createElement('div')
-    const registry = new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [] }), document)
+    const registry = new RenderSessionMaterials(await createViewerMaterialHost({ kind: 'viewer', materials: [] }), document)
 
     renderPages([{
       index: 0,

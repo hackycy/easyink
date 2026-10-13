@@ -1,17 +1,6 @@
-import type {
-  BehaviorRegistration,
-  DatasourceDropHandler,
-  EditingSessionRef,
-  MaterialControlPolicy,
-  MaterialDesignerExtension,
-  MaterialGeometry,
-  Rect,
-  Selection,
-  SelectionType,
-  SubPropertySchema,
-  TransactionAPI,
-} from '@easyink/core'
-import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
+import type { BehaviorRegistration, DatasourceDropHandler, EditingSessionRef, MaterialControlPolicy, MaterialGeometry, Rect, Selection, SelectionType, SubPropertySchema, TransactionAPI } from '@easyink/core'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { FlowColumnLayoutRect } from './rendering'
@@ -29,7 +18,6 @@ import {
   IconTextAlignRight,
 } from '@easyink/icons/svg-strings'
 import { createPointerGesture, deepClone, materialToolbarButtonStyle, materialToolbarDockStyle, materialToolbarGroupStyle, materialToolbarIconStyle, materialToolbarShellStyle } from '@easyink/shared'
-
 import { computed, defineComponent, h, onUnmounted, ref, watch } from 'vue'
 import {
   computeFlowColumnRects,
@@ -831,7 +819,7 @@ function createColumnDecorationComponent(context: DesignerRendererContext) {
   })
 }
 
-export function createFlowRowExtension(context: DesignerRendererContext): MaterialDesignerExtension {
+export function createFlowRowExtension(context: DesignerRendererContext): DesignerRenderInstance {
   const geometry = createColumnGeometry()
   const selectionType = createColumnSelectionType(context)
 

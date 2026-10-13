@@ -147,6 +147,8 @@ function disposeViewer(): Promise<void> {
   return disposal
 }
 
+defineExpose({ destroy: disposeViewer })
+
 function registerOutputIntegrations(runtime: ViewerRuntime) {
   exportRuntime.registerPlugin(createDomPdfExportPlugin())
   exportRuntime.registerPlugin(createDomImageExportPlugin({ id: 'playground-dom-png-export', format: PNG_FORMAT, type: 'image/png' }))

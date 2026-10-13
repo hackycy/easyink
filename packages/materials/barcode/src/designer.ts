@@ -1,5 +1,5 @@
-import type { MaterialDesignerExtension } from '@easyink/core'
-import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { MaterialNode } from '@easyink/schema'
 import type { BarcodeProps } from './schema'
 import { getBindingRefs } from '@easyink/schema'
@@ -115,7 +115,7 @@ function buildElement(node: MaterialNode, context: DesignerRendererContext, docu
   return frame
 }
 
-export function createBarcodeExtension(context: DesignerRendererContext): MaterialDesignerExtension {
+export function createBarcodeExtension(context: DesignerRendererContext): DesignerRenderInstance {
   return {
     renderContent(nodeSignal, container) {
       function render() {

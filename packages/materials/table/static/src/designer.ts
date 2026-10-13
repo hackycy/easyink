@@ -1,6 +1,7 @@
-import type { DatasourceDropHandler, MaterialDesignerExtension, SelectionType } from '@easyink/core'
+import type { DatasourceDropHandler, SelectionType } from '@easyink/core'
 import type { TableEditingDelegate } from '@easyink/material-table-kernel'
-import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { BindingRef, MaterialNode, TableNode } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
 import type { TableStaticProps } from './schema'
@@ -118,7 +119,7 @@ function createDatasourceDropHandler(context: DesignerRendererContext): Datasour
   }
 }
 
-export function createTableStaticExtension(context: DesignerRendererContext): MaterialDesignerExtension {
+export function createTableStaticExtension(context: DesignerRendererContext): DesignerRenderInstance {
   const delegate = createDelegate(context)
   const tableGeometry = createTableGeometry(delegate)
   const cellSelectionType = createTableCellSelectionType(delegate)

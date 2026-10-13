@@ -1,12 +1,13 @@
 import type { DeepReadonly } from '@easyink/plugin-api'
+import type { DesignerRenderInstance } from '@easyink/plugin-api/designer'
 import type { DesignerMaterial } from '@easyink/plugin-api/ui'
 import type { HostRegistry } from '@easyink/plugin-runtime'
-import type { MaterialCatalogEntry, MaterialCatalogGroup, MaterialDefinition, MaterialDesignerExtension } from '../types'
+import type { MaterialPresentation, PaletteGroup, PaletteItem } from '../materials/presentation'
 import { deepClone } from '@easyink/shared'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
-const LOADING_EXTENSION: MaterialDesignerExtension = {
+const LOADING_EXTENSION: DesignerRenderInstance = {
   renderContent(_nodeSignal, container) {
     container.replaceChildren()
     const el = document.createElement('div')
@@ -65,34 +66,34 @@ function createLoadingIndicator(): SVGSVGElement {
 export class MaterialConsumer {
   constructor(private readonly registry: HostRegistry<DesignerMaterial>) {}
 
-  getMaterial(type: string): MaterialDefinition | undefined {
+  getMaterial(type: string): MaterialPresentation | undefined {
     const material = this.registry.getMaterial(type)?.value
     return material ? this.definition(material) : undefined
   }
 
-  listMaterials(): MaterialDefinition[] {
+  listMaterials(): MaterialPresentation[] {
     return this.registry.materials.map(entry => this.definition(entry.value))
   }
 
-  private definition(material: DeepReadonly<DesignerMaterial>): MaterialDefinition {
+  private definition(material: DeepReadonly<DesignerMaterial>): MaterialPresentation {
     const preset = material.ui?.palette?.[0]
     return {
       type: material.model.type,
       name: preset?.label ?? material.model.type,
       icon: preset?.icon ?? { render: () => null },
-      category: (preset?.group.id ?? 'basic') as MaterialDefinition['category'],
+      category: (preset?.group.id ?? 'basic') as MaterialPresentation['category'],
       capabilities: { ...material.model.capabilities, pageAware: material.model.pageAware },
-      binding: deepClone(material.model.binding) as MaterialDefinition['binding'],
-      condition: deepClone(material.model.condition) as MaterialDefinition['condition'],
+      binding: deepClone(material.model.binding) as MaterialPresentation['binding'],
+      condition: deepClone(material.model.condition) as MaterialPresentation['condition'],
       createDefaultNode: material.model.createDefaultNode,
-      props: deepClone(material.properties ?? []) as MaterialDefinition['props'],
-      aiDescriptor: deepClone(material.ai) as MaterialDefinition['aiDescriptor'],
+      props: deepClone(material.properties ?? []) as MaterialPresentation['props'],
+      aiDescriptor: deepClone(material.ai) as MaterialPresentation['aiDescriptor'],
       sectionFilter: material.sectionFilter,
     }
   }
 
-  getCatalogGroups(): MaterialCatalogGroup[] {
-    const groups = new Map<string, MaterialCatalogGroup>()
+  getCatalogGroups(): PaletteGroup[] {
+    const groups = new Map<string, PaletteGroup>()
     for (const material of this.registry.materials) {
       for (const preset of material.value.ui?.palette ?? []) {
         let group = groups.get(preset.group.id)
@@ -104,7 +105,7 @@ export class MaterialConsumer {
           id: preset.id,
           groupId: group.id,
           label: preset.label,
-          icon: preset.icon as MaterialDefinition['icon'],
+          icon: preset.icon as MaterialPresentation['icon'],
           materialType: material.key,
           order: preset.order,
           dragData: preset.dragData,
@@ -118,7 +119,7 @@ export class MaterialConsumer {
     }))
   }
 
-  getCatalog(): MaterialCatalogEntry[] {
+  getCatalog(): PaletteItem[] {
     return this.getCatalogGroups().flatMap(group => group.items)
   }
 }

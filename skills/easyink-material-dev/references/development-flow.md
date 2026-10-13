@@ -6,14 +6,14 @@ Follow existing packages such as `packages/materials/rect`, `packages/materials/
 
 Typical files:
 
-- `package.json`: package name, workspace deps, optional Vue peer dependency when Designer code imports Vue, and subpath exports for lazy-loaded entries such as `./designer`, `./schema`, `./prop-schemas`, `./locale`, or `./viewer`.
+- `package.json`: package name, workspace deps, optional Vue peer dependency when Designer code imports Vue, and complete root and `/viewer` exports, plus applicable pure helper entries.
 - `tsdown.config.ts`: `entry: ['src/index.ts']` plus any public subpath entries, `dts: true`, `exports: true`, `publint: true`.
 - `src/schema.ts`: type constant, props interface, defaults, capabilities, `createXNode()`.
 - `src/designer.ts`: `createXExtension(context)`.
 - `src/viewer.ts`: render plus optional `measure()`, `getRenderSize()`, or `fragmentPaginator`.
 - `src/prop-schemas.ts`: material-owned property panel additions when needed.
 - `src/ai.ts`: `AIMaterialDescriptor` plus optional `knowledge` for Assistant generation, material selection, binding, sizing, and scenario fit.
-- `src/index.ts`: export public symbols.
+- `src/material-model.ts`: the shared model; `src/designer-material.ts` and `src/viewer-material.ts`: complete host declarations; `src/index.ts`: the Designer material and pure public helpers.
 - `src/*.test.ts`: focused tests for rendering, defaults, deep editing, measure, pagination, and schema behavior.
 
 ## Schema Factory Rules
@@ -89,7 +89,7 @@ Simple materials can set `container.innerHTML`. Complex materials can create Vue
 
 Designer coordinates and design-time page context come through framework-owned surface planning. Material code should use material-local coordinates in geometry and datasource drop protocols, and should not convert output page plans or `renderContextSignal` values back into schema coordinates or persisted props.
 
-For heavyweight Designer renderers, register a synchronous metadata entry and put only the extension factory behind `lazyFactory`. Keep `binding`, `propSchemas`, `localeMessages`, `aiDescriptor`, catalog entries, and `createDefaultNode` in the initial registration so Designer panels and Assistant manifest are complete before the renderer chunk loads. Use a lightweight `factory` placeholder when the registration type requires one; the registry will show its loading extension while `lazyFactory` resolves and remount the canvas after `materialExtensionRevision` changes.
+For heavyweight Designer renderers, put only the renderer implementation behind `loadRenderer`. The complete declaration retains synchronous model, properties, locale, AI and palette. Host tasks prevent late publication after destroy; loading content remounts only after the current generation succeeds.
 
 For font-bearing materials:
 
@@ -143,7 +143,7 @@ The Viewer owns layout, pagination, page overlay cloning, page number context, a
 
 ## Designer Control Policy Rules
 
-`capabilities` are coarse static declarations. Use `MaterialDesignerExtension.resolveControlPolicy()` for node-specific or material-specific Designer controls.
+`capabilities` are coarse static declarations. Use `DesignerRenderInstance.resolveControlPolicy()` for node-specific or material-specific Designer controls.
 
 Use a control policy when:
 
@@ -207,14 +207,10 @@ For a new built-in material:
 1. Create the package under `packages/materials/...`.
 2. Ensure `pnpm-workspace.yaml` already includes the path pattern. SVG subpackages belong under `packages/materials/svg/*`.
 3. Add package dependency to `packages/builtin/package.json`.
-4. Import and register Designer entry in `packages/builtin/src/designer.ts`.
-5. Import and register Viewer entry in `packages/builtin/src/viewer.ts`.
-6. Update the public `@easyink/builtin` entries. `package.json` exposes only the root entry plus `./all`, `./basic`, `./none`, and `./package.json`; do not add or depend on public `./designer`, `./viewer`, or `./bindings` subpaths. Root exports must keep the all-set aliases plus explicit all/basic/none bundle aliases and Viewer registration helpers aligned. `all` must include the new material; `basic` includes it only if it belongs in the reduced set and must import only that reduced dependency set; `none` remains empty.
 7. Leave `condition` omitted unless this material explicitly opts out or narrows hidden effects; do not register the framework default.
-8. If Designer rendering is heavy, register metadata synchronously and use `lazyFactory` for the Designer extension chunk only; keep Viewer registration synchronous.
-9. Pass the material-local AI descriptor as `aiDescriptor` in Designer registration. `packages/builtin/src/ai.ts` is derived from the Designer bundle; do not hand-maintain a second descriptor list.
+8. If Designer rendering is heavy, register metadata synchronously and use `loadRenderer` for the Designer extension chunk only; keep complete Viewer declaration synchronous.
+9. Set material-local `ai` in the complete declaration. The Host manifest derives from selected materials; builtin maintains only membership.
 10. Add `src/locale.ts` in the material package and pass it as `localeMessages` on the Designer material entry. Keep `@easyink/locales` for Designer common strings only.
-11. Add the material to the appropriate `catalogs` group in `packages/builtin/src/designer.ts`. If you add a new group id, register `materials.catalog.<id>` in the bundle locale messages.
 12. Update tests or snapshots affected by built-in type lists, catalog grouping, lazy registration, root/subpath exports, package-size boundaries, condition overrides, or binding format tabs. Include a root-entry check when aliases or registration helpers change so consumers are not forced onto unpublished source subpaths.
 13. Run focused package tests and then broader validation when registration, descriptors, or shared Designer/Viewer behavior changed.
 
@@ -227,14 +223,12 @@ Every material change should be checked through Viewer because both export and p
 - If a material depends on fonts, runtime data, page-aware props, measured height, or fragment pagination, verify those are reflected in Viewer DOM before debugging exporter or printer code.
 - For formal print paths, confirm material dimensions are stable in the schema unit and convert to the print system unit at the driver boundary.
 
-If export/print fails for a custom material, first confirm Viewer registration, render output, page plan shape, and rendered page metrics. Only then inspect exporter or driver bridge logic.
+If export/print fails for a custom material, first confirm complete Viewer declaration, render output, page plan shape, and rendered page metrics. Only then inspect exporter or driver bridge logic.
 
 ## Custom Host Checklist
 
 For a host-owned custom material outside built-ins:
 
-- Register Designer through `setupStore`.
-- Register Viewer through the created Viewer runtime with `viewer.registerMaterial(type, binding, extension)`.
 - Keep the same `type` string in both.
 - Ship the default-node factory, Designer factory, Viewer extension, icons, prop schemas, and any host locale messages together.
 - Verify templates using that `type` cannot reach Viewer without the host registration.
@@ -243,7 +237,7 @@ For a host-owned custom material outside built-ins:
 ## Common Failure Signals
 
 - Designer changes do not repaint: `renderContent()` did not subscribe to `nodeSignal`.
-- Viewer shows `[Unknown: type]`: Viewer registration is missing.
+- Viewer shows `[Unknown: type]`: complete Viewer declaration is missing.
 - Bound values do not change: renderer reads defaults instead of resolved props, or `viewer.open({ data })` data shape does not match `fieldPath`.
 - Page-aware content changes page count: repeated nodes were included in layout/pagination inputs.
 - Page numbers are missing: the material lacks `repeat.scope='every-output-page'`, Viewer `pageAware`, or reads schema-time counts instead of `__pageNumber` / `__totalPages`.
@@ -251,5 +245,5 @@ For a host-owned custom material outside built-ins:
 - Undo groups every pointer move separately: continuous operations need a stable `mergeKey`.
 - Property panel writes to the wrong location: the schema needs custom `read` and `commit`, not a plain props-bag schema.
 - Resize breaks internals: implement a `MaterialResizeAdapter` or control policy.
-- Export or print output differs from preview: the material may rely on design-only DOM, unmeasured runtime size, missing Viewer registration, bad page overlay handling, or non-printable external resources.
+- Export or print output differs from preview: the material may rely on design-only DOM, unmeasured runtime size, missing complete Viewer declaration, bad page overlay handling, or non-printable external resources.
 - Custom print driver size is wrong: driver skipped unit conversion or ignored print policy and rendered page metrics.

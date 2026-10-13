@@ -6,7 +6,6 @@ export default defineConfig({
     'viewer': 'src/viewer-material.ts',
     'index': 'src/index.ts',
     'ai': 'src/ai.ts',
-    'designer': 'src/designer.ts',
     'designer-material': 'src/designer-material.ts',
     'locale': 'src/locale.ts',
     'prop-schemas': 'src/prop-schemas.ts',

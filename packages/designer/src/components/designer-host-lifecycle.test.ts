@@ -20,7 +20,9 @@ function mount(materials: readonly DesignerMaterial[], label = 'label') {
   document.body.appendChild(host)
   const ready = vi.fn()
   const error = vi.fn()
+  let handle: { destroy: () => Promise<unknown> } | undefined
   const app = createApp(defineComponent({ setup: () => () => h(EasyInkDesigner, {
+    ref: (value) => { handle = value as unknown as typeof handle },
     materials,
     schema: { elements: [{ id: 'node', type: 'fixture', x: 0, y: 0, width: 1, height: 1, props: { label } }] },
     onReady: ready,
@@ -36,10 +38,32 @@ function mount(materials: readonly DesignerMaterial[], label = 'label') {
     host.remove()
   }
   unmounts.push(unmount)
-  return { host, ready, error, unmount }
+  return { host, ready, error, unmount, close: () => handle!.destroy() }
 }
 
 describe('normal Designer component Host lifecycle', () => {
+  it('retains a shared close Promise until asynchronous resources have finished cleanup', async () => {
+    const release = Promise.withResolvers<void>()
+    const cleanup = vi.fn(() => release.promise)
+    const mounted = mount([material((ctx) => {
+      ctx.onDispose(cleanup)
+      return { renderContent: () => () => {} }
+    })])
+    await vi.waitFor(() => expect(mounted.ready).toHaveBeenCalledOnce())
+    const close = mounted.close()
+    expect(mounted.close()).toBe(close)
+    mounted.unmount()
+    await vi.waitFor(() => expect(cleanup).toHaveBeenCalledOnce())
+    let closed = false
+    void close.then(() => {
+      closed = true
+    })
+    await nextTick()
+    expect(closed).toBe(false)
+    release.resolve()
+    await close
+    expect(closed).toBe(true)
+  })
   it('owns independent ready Stores and cleans one without disabling the other', async () => {
     const contexts: DesignerRendererContext[] = []
     const cleanup = vi.fn()

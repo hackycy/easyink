@@ -1,7 +1,7 @@
 import type { PageLayerRenderPlan, PageLayerRenderPlanBuckets, PagePlanEntry, TextWatermarkPageLayerPlan, TrustedViewerHtml } from '@easyink/core'
 import type { ResourceContext } from '@easyink/plugin-api'
 import type { MaterialNode, PageBackground, PageSchema } from '@easyink/schema'
-import type { MaterialRendererRegistry, MaterialRenderInput } from './material-registry'
+import type { MaterialRenderInput, RenderSessionMaterials } from './render-session-materials'
 import type { ViewerDiagnosticEvent, ViewerRenderSize } from './types'
 import { createFragmentFromNode, groupPageLayerPlansByPlacement, PAGE_CONTENT_LAYER_STACK_INDEX, readNodeRepeatScope, readTrustedViewerHtml, resolvePageLayerPlans, resolvePageLayerStackIndex, trustedViewerHtml } from '@easyink/core'
 import { escapeHtml, UNIT_FACTOR } from '@easyink/shared'
@@ -32,7 +32,7 @@ export interface PageDOM {
  */
 export function renderPages(
   pages: PagePlanEntry[],
-  registry: MaterialRendererRegistry,
+  registry: RenderSessionMaterials,
   options: RenderSurfaceOptions,
   diagnostics: ViewerDiagnosticEvent[],
 ): PageDOM[] {

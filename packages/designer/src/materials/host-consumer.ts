@@ -1,6 +1,7 @@
-import type { MaterialDesignerExtension } from '@easyink/core'
 import type { ResourceContext } from '@easyink/plugin-api'
-import type { DesignerMaterial, DesignerRenderer } from '@easyink/plugin-api/designer'
+
+import type { DesignerMaterial, DesignerRenderer, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { ConsumerContext, Host, HostConfig, HostMaterial, HostRegistry } from '@easyink/plugin-runtime'
 import type { DesignerRendererOperations } from './renderer-context'
 import { createHost } from '@easyink/plugin-runtime'
@@ -13,8 +14,8 @@ export async function createDesignerMaterialHost<M extends DesignerHostMaterial>
   config: HostConfig<M> & { kind: 'designer' },
   operations: DesignerRendererOperations | ((registry: HostRegistry<M>, consumer: ConsumerContext) => DesignerRendererOperations),
 ) {
-  const instances = new Map<string, MaterialDesignerExtension>()
-  const pending = new Map<string, Promise<MaterialDesignerExtension | undefined>>()
+  const instances = new Map<string, DesignerRenderInstance>()
+  const pending = new Map<string, Promise<DesignerRenderInstance | undefined>>()
   let controlledOperations: DesignerRendererOperations
   const host = await createHost(config, (registry, consumer) => {
     consumer.onDispose(() => {
@@ -38,7 +39,7 @@ export async function createDesignerMaterialHost<M extends DesignerHostMaterial>
     return extension
   }
 
-  function getExtension(type: string): Promise<MaterialDesignerExtension | undefined> {
+  function getExtension(type: string): Promise<DesignerRenderInstance | undefined> {
     assertActive(host)
     const cached = instances.get(type)
     if (cached)
@@ -69,7 +70,7 @@ export async function createDesignerMaterialHost<M extends DesignerHostMaterial>
     return task
   }
 
-  function peekExtension(type: string): MaterialDesignerExtension | undefined {
+  function peekExtension(type: string): DesignerRenderInstance | undefined {
     assertActive(host)
     return instances.get(type)
   }

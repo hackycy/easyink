@@ -1,5 +1,6 @@
-import type { MaterialControlPolicy, MaterialDesignerExtension } from '@easyink/core'
-import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
+import type { MaterialControlPolicy } from '@easyink/core'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { MaterialNode } from '@easyink/schema'
 import { getBindingRefs } from '@easyink/schema'
 import { escapeHtml } from '@easyink/shared'
@@ -77,7 +78,7 @@ function syncAutoHeight(node: MaterialNode, context: DesignerRendererContext): v
   })
 }
 
-export function createTextExtension(context: DesignerRendererContext): MaterialDesignerExtension {
+export function createTextExtension(context: DesignerRendererContext): DesignerRenderInstance {
   return {
     renderContent(nodeSignal, container) {
       function render() {

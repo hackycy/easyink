@@ -24,7 +24,7 @@ interface ComputationResources {
 }
 
 /** Read-only framework consumer; declarations and acquired caches belong to the Host consumer. */
-export class MaterialRendererRegistry {
+export class RenderSessionMaterials {
   private readonly loadFailures = new Map<string, unknown>()
   private readonly session = Symbol('render-session')
   private nextFragment = 0

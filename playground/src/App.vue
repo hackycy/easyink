@@ -11,7 +11,7 @@ import { createLocalStoragePreferenceProvider, EasyInkDesigner } from '@easyink/
 import { enUS, zhCN } from '@easyink/designer/locale'
 import { blankA4Template, flowInvoiceTemplate, invoiceDemoData, sampleDataSources } from '@easyink/samples'
 import { BookOpen, ChevronDown, Database, Eye, Github, Languages, LayoutTemplate, Save } from 'lucide-vue-next'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import DataEditorModal from './components/DataEditor.vue'
 import TemplateGallery from './components/TemplateGallery.vue'
@@ -34,6 +34,17 @@ const showTemplateGallery = ref(false)
 const showPreview = ref(false)
 const previewSchema = ref<DocumentSchema>()
 const showDataEditor = ref(false)
+const designer = ref<InstanceType<typeof EasyInkDesigner>>()
+const preview = ref<InstanceType<typeof PreviewOverlay>>()
+let disposal: Promise<void> | undefined
+function destroy(): Promise<void> {
+  disposal ??= Promise.all([preview.value?.destroy(), designer.value?.destroy()]).then(() => {})
+  return disposal
+}
+defineExpose({ destroy })
+onBeforeUnmount(() => {
+  void destroy()
+})
 
 const customData = ref<Record<string, unknown>>({})
 const customDataSources = ref<DataSourceDescriptor[]>([])
@@ -254,6 +265,7 @@ const contributions = [createAssistantContribution({
 
 <template>
   <EasyInkDesigner
+    ref="designer"
     v-model:schema="schema"
     :data-sources="mergedDataSources"
     :font-provider="playgroundFontProvider"
@@ -329,6 +341,7 @@ const contributions = [createAssistantContribution({
 
   <PreviewOverlay
     v-if="showPreview && previewSchema"
+    ref="preview"
     :schema="previewSchema"
     :data="previewData"
     @close="showPreview = false"

@@ -173,6 +173,17 @@ func (s *Service) renderHTML(ctx context.Context, req protocol.PrintPDFRequest, 
 	}
 	renderCtx, timeoutCancel := context.WithTimeout(pageCtx, time.Duration(timeoutMs)*time.Millisecond)
 	defer timeoutCancel()
+	defer func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(pageCtx, 5*time.Second)
+		defer cleanupCancel()
+		var result any
+		if err := chromedp.Run(cleanupCtx, chromedp.Evaluate(
+			`window.__easyinkDestroy ? window.__easyinkDestroy() : undefined`, &result,
+			func(params *runtime.EvaluateParams) *runtime.EvaluateParams { return params.WithAwaitPromise(true) },
+		)); err != nil {
+			collector.AddConsoleError(fmt.Sprintf("Viewer cleanup failed: %v", err))
+		}
+	}()
 
 	tracker := newPageTracker(renderCtx, req, collector)
 	tracker.offlineResources = offlineResources

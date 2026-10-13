@@ -1,4 +1,4 @@
-import type { BindingFormatDiagnostic, FontProvider, FragmentPaginateInput, FragmentPaginateResult, FragmentPaginator, MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from '@easyink/core'
+import type { BindingFormatDiagnostic, FontProvider, FragmentPaginateInput, FragmentPaginateResult, FragmentPaginator, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from '@easyink/core'
 import type { LocaleTree } from '@easyink/plugin-api/material'
 import type { ViewerMaterial } from '@easyink/plugin-api/viewer'
 import type { DocumentSchema } from '@easyink/schema'
@@ -8,7 +8,7 @@ import type { ViewerHost } from './viewer-host'
 export * from '@easyink/schema'
 
 // Re-export viewer-material contract types from core so host code can import from one place.
-export type { FragmentPaginateInput, FragmentPaginateResult, FragmentPaginator, MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize }
+export type { FragmentPaginateInput, FragmentPaginateResult, FragmentPaginator, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize }
 
 // ---------------------------------------------------------------------------
 // Viewer options & input

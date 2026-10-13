@@ -29,7 +29,7 @@ export interface ElementResizeContext {
  *   (no half-resize entry in undo history).
  *
  * Material-private side effects (e.g. table row height scaling) are delegated
- * to `MaterialDesignerExtension.resize` (MaterialResizeAdapter) — designer code
+ * to `DesignerRenderInstance.resize` (MaterialResizeAdapter) — designer code
  * remains material-agnostic.
  */
 export function useElementResize(ctx: ElementResizeContext) {

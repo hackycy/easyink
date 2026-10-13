@@ -1,5 +1,5 @@
 export * from './ai'
-export * from './designer'
+
 export { chartCustom } from './designer-material'
 export * from './locale'
 export * from './options'

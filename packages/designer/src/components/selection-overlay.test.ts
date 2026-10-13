@@ -1,8 +1,8 @@
+import type { DesignerRenderInstance } from '@easyink/plugin-api/designer'
 /**
  * @vitest-environment happy-dom
  */
 import type { MaterialNode } from '@easyink/schema'
-import type { MaterialDesignerExtension } from '../types'
 import { describe, expect, it } from 'vitest'
 import { createApp, defineComponent, h, nextTick } from 'vue'
 import { provideDesignerStore } from '../composables'
@@ -30,7 +30,7 @@ function createDecorationComponent(layer: string) {
   })
 }
 
-async function mountSelectionOverlay(extension: MaterialDesignerExtension) {
+async function mountSelectionOverlay(extension: DesignerRenderInstance) {
   const node = createNode()
   const store = await DesignerStore.create({
     schema: { elements: [node] },

@@ -33,6 +33,8 @@ const designerMaterials = materials
 
 这段代码已经能让 Designer 跑起来，并注册全部内置设计态物料。`schema` 可以先传空对象，组件内部会在进入 `DesignerStore` 前把它归一化成完整模板。
 
+组件 ref 提供 `destroy()`，返回可等待且重复调用共享的清理 Promise。卸载会触发同一清理流程；需要确认资源已经释放的宿主，在卸载前保留该 Promise 并等待它。
+
 ## 常用输入 {#common-props}
 
 当前组件实现里，你最常碰到的是这些输入：

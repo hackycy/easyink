@@ -1,5 +1,5 @@
 export * from './ai'
-export * from './designer'
+
 export { line } from './designer-material'
 export * from './locale'
 export * from './prop-schemas'

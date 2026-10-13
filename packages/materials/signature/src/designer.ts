@@ -1,13 +1,6 @@
-import type {
-  BehaviorRegistration,
-  MaterialDesignerExtension,
-  MaterialGeometry,
-  Rect,
-  Selection,
-  SelectionDecorationDef,
-  SelectionType,
-} from '@easyink/core'
-import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
+import type { BehaviorRegistration, MaterialGeometry, Rect, Selection, SelectionDecorationDef, SelectionType } from '@easyink/core'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { MaterialNode } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
 import type SignaturePad from 'signature_pad'
@@ -456,7 +449,7 @@ async function loadSignaturePad(): Promise<typeof SignaturePad> {
   return (await import('signature_pad')).default
 }
 
-export function createSignatureExtension(context: DesignerRendererContext): MaterialDesignerExtension {
+export function createSignatureExtension(context: DesignerRendererContext): DesignerRenderInstance {
   return {
     renderContent(nodeSignal, container) {
       let disposed = false

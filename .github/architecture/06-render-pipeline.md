@@ -17,7 +17,7 @@ BindingProjector / FormatResolver
 LayoutPipeline / PaginationEngine
   │
   ▼
-MaterialRendererRegistry
+RenderSessionMaterials
   │
   ├── 页面 DOM / SVG
   ├── 缩略图模型
@@ -40,7 +40,7 @@ MaterialRendererRegistry
 3. `BindingProjector`：按 `BindingRef.fieldPath` 从传入的 `data` 根对象解析值，并处理 `bindIndex` 与显示格式。表格单元格绑定在物料自己的会话准备中解析（见 6.6.1）。
 4. `MeasureAndFlowResolver`：先在绑定和 beforePagePlan 后等待物料可选 prepare，再同步测量动态尺寸，最后按 `page.reflow.strategy` 执行 `flow-y` 等回流策略，把后续 flow 元素按文档顺序重新定位。
 5. `LayoutPipeline / PaginationEngine`：基于回流后的几何结果生成固定页、连续纸或自动分页页计划。对 table-data 等可拆分页物料通过 `FragmentPaginator` 协作（见 [7.5](./07-layout-engine.md)）。
-6. `RenderSurface`：输出页面 DOM/SVG 和缩略图，并把最终 `ViewerPageMetrics` 缓存在 ViewerRuntime 内。`RenderSurface` 只负责页面容器、定位和通用诊断，不允许按 `materialType` 写分支。若某类物料的运行态渲染尺寸不等于 schema 几何尺寸，必须由 `MaterialViewerExtension.getRenderSize()` 通过注册表回传，`RenderSurface` 只消费 registry 返回值。
+6. `RenderSurface`：输出页面 DOM/SVG 和缩略图，并把最终 `ViewerPageMetrics` 缓存在 ViewerRuntime 内。`RenderSurface` 只负责页面容器、定位和通用诊断，不允许按 `materialType` 写分支。若某类物料的运行态渲染尺寸不等于 schema 几何尺寸，必须由 `ViewerSessionRenderer.getRenderSize()` 通过注册表回传，`RenderSurface` 只消费 registry 返回值。
 7. `PrintPolicyResolver`：基于 `page.pageModel / page.mode / pageSizeMode / renderedPages` 解析打印策略。连续纸使用 driver 模式时不强制纸张尺寸；连续纸使用 fixed 模式时必须使用 render 阶段缓存的最终页面尺寸，缺失时发出 `PRINT_RENDER_METRICS_MISSING` 并拒绝打印。
 8. `ExportPluginLoader`：按需装载导出依赖和插件。
 
@@ -89,7 +89,7 @@ EasyInk 存在两套独立的物料渲染能力，不共享实现代码：
 
 | | 设计态渲染 | Viewer 渲染 |
 |---|---|---|
-| 接口 | `MaterialDesignerExtension.renderContent(nodeSignal, container, renderContextSignal?)` | `MaterialViewerExtension.render() / getRenderSize() / measure()` |
+| 接口 | `DesignerRenderInstance.renderContent(nodeSignal, container, renderContextSignal?)` | `ViewerSessionRenderer.render() / getRenderSize() / measure()` |
 | 运行场景 | Designer 画布内 | Viewer 运行时（预览/打印/导出） |
 | 数据 | 无真实数据，绑定显示为字段标签；页码等通过临时设计态上下文预览 | 真实数据绑定 + 格式化 |
 | 性能要求 | 主线程同步渲染，必须轻量 | prepare 可异步；measure/分页/render/getRenderSize 同步，可按需加载重量级实现 |

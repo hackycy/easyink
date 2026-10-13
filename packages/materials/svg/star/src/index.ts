@@ -1,5 +1,5 @@
 export * from './ai'
-export * from './designer'
+
 export { svgStar } from './designer-material'
 export * from './locale'
 export * from './prop-schemas'

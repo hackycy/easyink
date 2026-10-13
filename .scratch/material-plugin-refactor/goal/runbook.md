@@ -1,12 +1,12 @@
 # 物料能力装配层重构 Goal Runbook
 
 Schema: `goal-loop/runbook-v2`
-Revision: `373`
+Revision: `434`
 
 ## Contract Baseline
 
 - Manifest: `goal/contract-baseline.json`
-- Manifest SHA-256: `5fe685510bf0141d28f4f27f1d8f765170ee217a96a23cd9ddb27221d90ac129`
+- Manifest SHA-256: `a5552574f39fdb4f540ef9a01c077624a46761bbbdf14f1542ce54e75035acf6`
 
 ## State Rules
 
@@ -28,20 +28,20 @@ Revision: `373`
 | G2: text 与 image 双宿主完整切片 | passed | G1 | `implementation-plan.md -> G2: text 与 image 双宿主完整切片` | `goal/history/G2.md` | `G2-E0051` | `G2@G2-E0051` |
 | G3: Designer UI 与受控服务迁移 | passed | G2 | `implementation-plan.md -> G3: Designer UI 与受控服务迁移` | `goal/history/G3.md` | `G3-E0016` | `G3@G3-E0016` |
 | G4: Render Session 与输出所有权 | passed | G3 | `implementation-plan.md -> G4: Render Session 与输出所有权` | `goal/history/G4.md` | `G4-E0137` | `G4@G4-E0137` |
-| G5: 全部物料与实际宿主切换 | active | G4 | `implementation-plan.md -> G5: 全部物料与实际宿主切换` | `goal/history/G5.md` | `G5-E0043` | `G4@G4-E0137` |
+| G5: 全部物料与实际宿主切换 | blocked | G4 | `implementation-plan.md -> G5: 全部物料与实际宿主切换` | `goal/history/G5.md` | `G5-E0102` | `G4@G4-E0137` |
 | G6: 0.1.0 候选制品与手动发布交接 | planned | G5 | `implementation-plan.md -> G6: 0.1.0 候选制品与手动发布交接` | `—` | `—` | `G5 pending` |
 
 ## Current Checkpoint
 
 - Gate: `G5: 全部物料与实际宿主切换`
 - History: `goal/history/G5.md`
-- History head: `G5-E0043`
-- Last completed slice: `S2b`
-- Current slice: `S2c`
-- Checks: `D1=pass, R1=pass, R2=pass, R3=pass, R4=pass`
-- Satisfied exits: `none`
+- History head: `G5-E0102`
+- Last completed slice: `none`
+- Current slice: `Directed`
+- Checks: `D1=pass, R1=pass, R2=pass, R3=pass, R4=pass, R5=pass, R6=pass, D2=pass, D4=pass, D3=fail`
+- Satisfied exits: `E1`
 - Manual acceptance: `none`
-- Blocker: `none`
-- Risks: `D1 stale；D2-D4、R5/R6 未完成；旧 core/Designer 装配类型与正式架构/开发说明仍需核销；无 blocker、无 pending manual`
-- Next action: `继续 G5 S2c 实际消费者核对和全库旧公共 API/架构/开发说明收口，然后验证真实浏览器/Go/Android、D2-D4 与 R5/R6`
-- Contract revision: `用户已授权最小 Go host HTML 加载修复与 G4 Scope 修订，仅恢复 G4 R5，不执行 G5`
+- Blocker: `SC2: Go/Android、浏览器或实际宿主环境缺失，完成独立迁移后仍有必需验收无法执行。; G5独立迁移与所有可执行验证已完成。R1-R6/D1/D2/D4最新pass，D3浏览器/Go/API均pass，仅Android缺环境：gradlew --version exit9009，JAVA_HOME/java和ANDROID_HOME/ANDROID_SDK_ROOT/adb/emulator均无，未找到SDK/设备，AAR/sample APK不存在。缺Android真实构建、WebView PDF/图片与await cleanup验收，G5 E2不能满足。`
+- Risks: `不得以缺环境/skip视为通过；G6保持未激活`
+- Next action: `恢复条件：配置可用JDK、匹配当前工程的Gradle/Android SDK35、adb真机或带WebView模拟器；resume后重读context并构建AAR/sample核对runtime资产，运行HTML/Schema PDF与图片及cleanup，补验stale检查和D3再pass-gate`
+- Contract revision: `Include remaining Designer extension developer guidance in G5 evidence`

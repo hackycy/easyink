@@ -1,11 +1,11 @@
-import type { MaterialDesignerExtension } from '@easyink/core'
-import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { ChartScatterProps } from './schema'
 import { createChartDesignerRenderHost, mountECharts } from '@easyink/material-chart-kernel'
 import { getNodeProps } from '@easyink/schema'
 import { createChartScatterPreviewOption } from './options'
 
-export function createChartScatterExtension(_context: DesignerRendererContext): MaterialDesignerExtension {
+export function createChartScatterExtension(_context: DesignerRendererContext): DesignerRenderInstance {
   return {
     renderContent(nodeSignal, container) {
       container.replaceChildren()

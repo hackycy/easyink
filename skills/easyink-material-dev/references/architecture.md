@@ -9,7 +9,7 @@ Designer material catalog
   -> createDefaultNode(partial?, unit?)
   -> schema.elements[]
   -> FontProvider / FontManager preload and injection for referenced page or element fonts
-  -> MaterialDesignerExtension.renderContent()
+  -> DesignerRenderInstance.renderContent()
   -> viewer.open({ schema, data })
   -> collectFontFamilies(schema) and loadAndInjectFonts() into the Viewer host document
   -> conditional schema resolution (default material capability unless explicitly disabled or narrowed)
@@ -18,7 +18,7 @@ Designer material catalog
   -> runLayoutPipeline()
   -> runPagination()
   -> repeated page overlays
-  -> MaterialViewerExtension.render()
+  -> ViewerSessionRenderer.render()
   -> print and export reuse Viewer DOM and metrics
 ```
 
@@ -109,7 +109,7 @@ Repeated/page-aware nodes have one interactive source node in Designer. Addition
 
 The Designer material contract is in `packages/core/src/material-extension.ts`.
 
-Implement `MaterialDesignerExtension` with:
+Implement `DesignerRenderInstance` with:
 
 - `renderContent(nodeSignal, container, renderContextSignal?)`: mount the design-time content, subscribe to node changes, and optionally subscribe to transient Designer render context such as page-aware preview numbers.
 - `datasourceDrop`: optional material-owned drag/drop binding logic.
@@ -148,15 +148,15 @@ Material code should only store and render font family names. It should not call
 
 ## Viewer Contract
 
-The Viewer contract is in `packages/core/src/material-viewer.ts`.
+The Viewer renderer contract is in `packages/plugin-api/src/viewer.ts`; shared rendering calculations remain in core.
 
-Implement `MaterialViewerExtension` with:
+Implement `ViewerSessionRenderer` with:
 
 - `render(node, context)`: return `{ html: trustedViewerHtml(...) }` or `{ element }`.
 - `measure(node, context)`: optional pre-layout sizing for content-driven dimensions.
 - `getRenderSize(node, context)`: optional wrapper size override.
 - `fragmentPaginator`: optional split logic for fragments that can cross `auto-sheets`.
-- `pageAware`: default repeated overlay behavior for materials such as page numbers.
+- Shared `model.pageAware`: repeated overlay behavior for materials such as page numbers.
 
 Viewer runtime stages:
 
@@ -166,46 +166,18 @@ Viewer runtime stages:
 4. Exclude repeated/page-aware nodes from layout inputs.
 5. Run `runLayoutPipeline()` and `runPagination()`.
 6. Copy repeated/page-aware elements into each output page and inject `__pageNumber` / `__totalPages`.
-7. Render DOM through `MaterialRendererRegistry`.
+7. Render DOM through the session's material consumer and selected renderers.
 8. Cache `ViewerPageMetrics` for print/export.
 
-## Registration
+## Complete material assembly
 
-Custom material hosts:
+`plugin-api/material` owns the shared model; `/designer` and `/viewer` own renderers and controlled contexts; `/ui` specializes Vue features. A package-local `material-model.ts` provides type, default factory, binding, capabilities, condition and pageAware once. Both complete host entries reference it.
 
-- Designer: pass the bundle through `runtimeConfig.materials.bundles`, or call `registerMaterialBundle(store, bundle)` inside `EasyInkDesigner` `setupStore`.
-- Viewer: call `viewer.registerMaterial(type, binding, extension)` with the same material type and binding definition that Designer uses.
-- Heavy Designer renderers may use `lazyFactory` on the Designer material entry. Keep material metadata synchronous; only the `MaterialDesignerExtension` factory should live in the lazy chunk.
+The root exports the named Designer material and `/viewer` the named Viewer material. Preserve node factories, model types and pure helpers at applicable entries. Designer returns a `DesignerRenderInstance`; Viewer supplies `ViewerRenderer` or a `createSession` factory returning `ViewerSessionRenderer`. `prepare` may await; other Viewer operations are synchronous. Session runtime references remain out of Schema.
 
-Built-in materials:
+Applications pass complete arrays before creation. Builtin all/basic comes from `collection-source.ts`, none is empty. Each instance has one plugin-runtime Host; UI and render consumers only query its declarations. Store workbench projections and renderer caches are derived state, never another writable capability source.
 
-- Add package imports and entries in `packages/builtin/src/designer.ts`.
-- Add Viewer registration in `packages/builtin/src/viewer.ts`.
-- Do not add default condition capability registrations. Conditional rendering is a framework default for all materials. Only set `condition: false` to opt out, or set a `hiddenEffects` override to narrow `remove/reserve` support.
-- Keep the public `@easyink/builtin` export surface aligned. `package.json` only exposes the root entry plus `./all`, `./basic`, `./none`, and `./package.json`; `src/designer.ts`, `src/viewer.ts`, and `src/bindings.ts` are internal sources, not public subpaths.
-- Root exports should expose the all-set legacy aliases plus explicit all/basic/none bundle aliases and Viewer registration helpers. `@easyink/builtin/all` exposes every built-in material; `@easyink/builtin/basic` must only import the reduced set it registers; `@easyink/builtin/none` must stay empty.
-- Add `aiDescriptor` to the Designer material registration when generation should know it. Assistant consumes the live Designer material manifest; do not add material-specific prompt rules.
-- Add `@easyink/material-x` dependency to `packages/builtin/package.json`.
-
-## Catalog and Capabilities
-
-`DesignerMaterialRegistration` defines:
-
-- `type`: stable Schema identity.
-- `name`: display label or i18n key.
-- `icon`: Vue icon component.
-- `category`: primary material category.
-- `capabilities`: controls binding, rotation, resizing, children, animation, union drop, page-aware, multi-binding, and aspect lock.
-- `condition`: optional condition capability override. Omit it for normal materials; the framework default supports `remove` and `reserve`. Use `false` only to ignore `renderCondition`, or a definition only to narrow `hiddenEffects`.
-- `binding`: material binding definition: `none`, `ordinary`, `custom`, or `data-contract`. Data-contract definitions include the target model contract and make Designer write `node.binding.kind='data-contract'` mappings instead of ordinary whole-element `BindingRef`.
-- `createDefaultNode`: default schema factory.
-- `factory`: synchronous Designer extension factory or a lightweight placeholder when `lazyFactory` is present.
-- `lazyFactory`: optional async Designer factory loader for heavyweight renderers. Do not use it for Viewer registration or material metadata.
-- `propSchemas`: the complete material-owned property schema list for the material. Use `@easyink/prop-schemas` only for shared option arrays and layout behavior helpers.
-- `localeMessages`: material-owned Designer locale messages for catalog labels, property labels, material-local actions, placeholders, history labels, and data-contract labels.
-- `sectionFilter`: hide or show property panel sections.
-
-`catalogs` creates material panel groups. Each group owns a stable `id`, a translatable `label`, optional ordering, and item entries. Register catalog label keys in the same bundle locale messages when the group is custom or when the host may omit the built-in bundle. A built-in material can be fully registered for Designer and Viewer but still be invisible in the material panel if its type is missing from every catalog group; add a regression test when introducing a new built-in material.
+Designer optional fields are `properties`, `sectionFilter`, `ui.palette`, `locale`, and `ai`. Shared palette groups come from `@easyink/shared`. Missing optional features affect only those features; missing core renderer/loader rejects creation. An unknown persisted node stays visible with a diagnostic. See [public author guide](../../../docs/advanced/custom-materials.md) for an executable example.
 
 ## Contribution Boundary
 

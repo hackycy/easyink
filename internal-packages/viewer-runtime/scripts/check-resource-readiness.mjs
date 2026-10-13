@@ -10,6 +10,7 @@ import { createServer } from 'vite'
 
 // Real browser Directed check. No DOM emulator or browser automation dependency.
 const root = fileURLToPath(new URL('../../../', import.meta.url))
+const cutover = process.argv.includes('--cutover')
 const browserPath = process.env.EASYINK_RENDER_BROWSER_PATH ?? [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
@@ -23,9 +24,10 @@ const image = await readFile(join(root, 'docs/public/logo.png'))
 const hits = new Map()
 const fixtureTimers = new Set()
 const server = await createServer({
-  configFile: false,
+  configFile: cutover ? join(root, 'playground/vite.config.ts') : false,
   root,
-  resolve: { alias: { '@easyink/viewer': join(root, 'packages/viewer/src/index.ts') } },
+  resolve: { alias: cutover ? {} : { '@easyink/viewer': join(root, 'packages/viewer/src/index.ts') } },
+
   server: { host: '127.0.0.1', port: 0 },
   plugins: [{
     name: 'readiness-fixtures',
@@ -35,6 +37,23 @@ const server = await createServer({
         if (url.pathname === '/readiness-check') {
           res.setHeader('Content-Type', 'text/html')
           res.end('<!doctype html><title>EasyInk resource readiness</title><body></body>')
+          return
+        }
+        if (url.pathname === '/cutover-runtime') {
+          void (async () => {
+            const runtimeRoot = join(root, 'internal-packages/viewer-runtime/dist/runtime/easyink-viewer')
+            let html = await readFile(join(runtimeRoot, 'index.html'), 'utf8')
+            const css = await readFile(join(runtimeRoot, 'assets/viewer.css'), 'utf8')
+            const js = (await readFile(join(runtimeRoot, 'assets/viewer.js'), 'utf8')).replaceAll('</script', '<\\/script')
+            html = html.replace('<style data-easyink-runtime="viewer-css"></style>', () => `<style>${css}</style>`)
+            html = html.replace('<script data-easyink-runtime="viewer-js"></script>', () => `<script>${js}</script>`)
+            html = html.replace('application/json">{}</script>', `application/json">${JSON.stringify({ schema: { page: { width: 80, height: 40 }, elements: [{ id: 'cutover', type: 'text', x: 1, y: 1, width: 60, height: 15, props: { content: 'Embedded cutover' } }] } })}</script>`)
+            res.setHeader('Content-Type', 'text/html; charset=utf-8')
+            res.end(html)
+          })().catch((error) => {
+            res.statusCode = 500
+            res.end(String(error))
+          })
           return
         }
         if (!url.pathname.startsWith('/readiness-fixture/')) {
@@ -105,8 +124,13 @@ try {
   })
   let id = 0
   const pending = new Map()
+  const errors = []
   socket.addEventListener('message', ({ data }) => {
     const message = JSON.parse(data)
+    if (message.method === 'Runtime.exceptionThrown')
+      errors.push(message.params.exceptionDetails.exception?.description ?? message.params.exceptionDetails.text)
+    if (message.method === 'Runtime.consoleAPICalled' && message.params.type === 'error')
+      errors.push(message.params.args.map(arg => arg.value ?? arg.description).join(' '))
     const operation = pending.get(message.id)
     if (!operation)
       return
@@ -123,16 +147,21 @@ try {
     pending.set(requestId, { resolve, reject, timer })
     socket.send(JSON.stringify({ id: requestId, method, params }))
   })
+  await call('Runtime.enable')
   await call('Page.navigate', { url: `${origin}readiness-check` })
   const result = await call('Runtime.evaluate', {
-    expression: `import(${JSON.stringify(`${origin}internal-packages/viewer-runtime/src/resource-readiness.browser.ts`)}).then(module => module.runResourceReadinessChecks())`,
+    expression: cutover
+      ? `import(${JSON.stringify(`${origin}playground/src/consumer-cutover.browser.ts`)}).then(module => module.runConsumerCutoverChecks())`
+      : `import(${JSON.stringify(`${origin}internal-packages/viewer-runtime/src/resource-readiness.browser.ts`)}).then(module => module.runResourceReadinessChecks())`,
     awaitPromise: true,
     returnByValue: true,
   })
-  assert(!result.exceptionDetails, JSON.stringify(result.exceptionDetails))
+  assert(!result.exceptionDetails, JSON.stringify({ exception: result.exceptionDetails, errors }))
   assert.equal(result.result.value.failed, 0, JSON.stringify(result.result.value))
-  for (const key of ['font-ok.ttf', 'font-failed.ttf', 'font-late.ttf', 'font-destroy.ttf', 'image-iframe.png', 'image-ok.png', 'image-failed.png', 'image-late.png', 'background-failed.png', 'destroy.png', 'superseded.png', 'font-output.ttf', 'font-output-target.ttf', 'image-output.png'])
-    assert(hits.has(key), `Expected an actual browser request for ${key}`)
+  if (!cutover) {
+    for (const key of ['font-ok.ttf', 'font-failed.ttf', 'font-late.ttf', 'font-destroy.ttf', 'image-iframe.png', 'image-ok.png', 'image-failed.png', 'image-late.png', 'background-failed.png', 'destroy.png', 'superseded.png', 'font-output.ttf', 'font-output-target.ttf', 'image-output.png'])
+      assert(hits.has(key), `Expected an actual browser request for ${key}`)
+  }
   console.log(JSON.stringify({ browser: (await call('Browser.getVersion')).product, ...result.result.value, actualRequests: Object.fromEntries(hits) }, null, 2))
 }
 finally {

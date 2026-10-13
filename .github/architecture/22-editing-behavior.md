@@ -1,6 +1,6 @@
 # 22. 编辑行为架构（Editing Behavior Architecture）
 
-> 本章是 EasyInk 编辑交互的**正式协议**，**完全替代** 11 章中 `MaterialDesignerExtension.deepEditing` / `DeepEditingDefinition` / `SubSelectionHandler` / `InternalResizeHandler` / `KeyboardRouteHandler` 这套旧 FSM 协议。
+> 本章是 EasyInk 编辑交互的**正式协议**，**完全替代** 11 章中 `DesignerRenderInstance.deepEditing` / `DeepEditingDefinition` / `SubSelectionHandler` / `InternalResizeHandler` / `KeyboardRouteHandler` 这套旧 FSM 协议。
 >
 > 适用范围：所有需要"在物料内部继续编辑"的复杂物料——表格（table-static / table-data / cell-free）、图表（chart 内图例/坐标轴/系列编辑）、SVG 路径/锚点编辑，以及未来扩展的表单、看板等。
 
@@ -371,7 +371,7 @@ interface BehaviorRegistration {
 ```typescript
 import { selectionMiddleware, undoBoundaryMiddleware } from '@easyink/core/behaviors'
 
-const tableExt: MaterialDesignerExtension = {
+const tableExt: DesignerRenderInstance = {
   // ...
   behaviors: [
     selectionMiddleware(),
@@ -411,7 +411,7 @@ const tableExt: MaterialDesignerExtension = {
 
 ### 22.5.5 与其它扩展协议的关系
 
-`MaterialDesignerExtension` 上还有两个与"编辑期"相关、但**不**走 behavior 中间件总线的扩展点；它们的设计动机与本章一致——把物料特化逻辑收敛到物料包内、保持 `@easyink/core` 与 PropertiesPanel 的中立：
+`DesignerRenderInstance` 上还有两个与"编辑期"相关、但**不**走 behavior 中间件总线的扩展点；它们的设计动机与本章一致——把物料特化逻辑收敛到物料包内、保持 `@easyink/core` 与 PropertiesPanel 的中立：
 
 - **`resize?: MaterialResizeAdapter`**（详见 [11.6.1](./11-element-system.md#1161-resize-协议)）：覆盖 element resize handle 期间的物料私有数据同步（如表格行高），并通过 `MaterialResizeSideEffect` 与 `ResizeMaterialCommand` 一起进入 history。
 - **`PropSchema.read / commit`**（详见 [11.4.1](./11-element-system.md#1141-propschemaread--commit-钩子)）：覆盖属性面板的取值与提交。`commit` 接收的 `PropCommitContext` 提供 `flushPendingEdits / activeEditingSession / exitEditingSession`，所以例如"隐藏表头时退出当前 cell 编辑会话"这类副作用由物料自己声明，不再让 PropertiesPanel 硬编码 `if (isTableNode) ...`。
@@ -553,7 +553,7 @@ packages/core/src/material-extension.ts
           InternalResizeHandler / KeyboardRouteHandler / PhaseContainers
   - 新增：MaterialGeometry / SelectionType<T> / BehaviorRegistration /
           SelectionDecorationDef / SubPropertySchema
-  - 修改 MaterialDesignerExtension：
+  - 修改 DesignerRenderInstance：
       removed: deepEditing
       added:   geometry, selectionTypes, behaviors, decorations
 ```
@@ -581,7 +581,7 @@ packages/core/src/material-extension.ts
 ### 22.8.3 文档变更
 
 - 11 章 §11.4「深度编辑工具栏」与 §11.5「深度编辑元素的通用交互模型」整段删除，替换为指向本章的引用
-- 11 章 `MaterialDesignerExtension` 接口示例同步更新
+- 11 章 `DesignerRenderInstance` 接口示例同步更新
 - 12 章 Command 系统增加 `PatchCommand` 段落
 - 10 章工作台无变化（编辑会话不影响窗口/工具组带）
 

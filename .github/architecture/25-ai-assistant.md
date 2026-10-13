@@ -10,7 +10,7 @@
 ┌─────────────────────────────────────────────────────────────┐
 │  Designer (Vue)                                             │
 │  ┌───────────────────┐  ┌─────────────────────────────────┐ │
-│  │ MaterialRegistry  │  │ ContributionRegistry            │ │
+│  │ Host material view  │  │ Host extension view            │ │
 │  │ (物料 + knowledge)│  │ (assistant contribution)        │ │
 │  └────────┬──────────┘  └──────────────┬──────────────────┘ │
 │           │                            │                    │
@@ -59,7 +59,7 @@ packages/assistant/
   capabilities/       # Schema 验证、diff、patch、preview
   adapters/           # 外部数据源适配器
   store/              # 任务、版本、草稿存储
-  designer-bridge/    # Designer Contribution 桥接
+  designer-bridge/    # Designer 独立扩展桥接
   ui/                 # Vue 任务面板 UI
 ```
 
@@ -77,7 +77,7 @@ designer ← designer-bridge ← orchestrator
          tool-registry ─────────┘
 ```
 
-Designer 不依赖任何 assistant 包。assistant-designer-bridge 单向注入 Designer 的 Contribution 数组。
+Designer 不依赖任何 assistant 包。assistant-designer-bridge 单向注入 Designer 的 extensions 数组。
 
 官方插件包不由 `designer-bridge` 默认注册。宿主需要显式传入 `createAssistantContribution({ plugins })`，以便按产品场景选择启用哪些官方或第三方插件。
 
@@ -149,16 +149,16 @@ AI 输出必须遵守：
 
 ### 25.3.3 第三方物料接入
 
-第三方物料只需在 `aiDescriptor` 中添加 `knowledge` 字段，注册后 AI 自动感知：
+第三方完整物料在 Designer 声明的 `ai` 字段提供含 knowledge 的 descriptor。应用选择该完整物料后，Assistant manifest 自动包含它，不需要另外注册 AI。
 
 ```ts
-registerMaterialBundle(store, {
-  materials: [{
-    type: 'my-widget',
-    aiDescriptor: myWidgetAIMaterialDescriptor,  // 含 knowledge
-    ...
-  }],
-})
+import type { DesignerMaterial } from '@easyink/plugin-api/ui'
+
+const widget: DesignerMaterial = {
+  model: widgetModel,
+  renderer: widgetRenderer,
+  ai: widgetAIMaterialDescriptor,
+}
 ```
 
 ## 25.4 数据流：物料 → Agent
@@ -511,16 +511,16 @@ Agent 工具注册表：
 
 ## 25.8 Designer Bridge
 
-通过 Contribution 机制接入 Designer（详见 [23-contribution](./23-contribution.md)）。
+通过独立 DesignerExtension 声明接入 Designer（详见 [23-contribution](./23-contribution.md)）。
 
-`createAssistantContribution()` 注册：
+`createAssistantContribution()` 声明：
 
 - 命令：`assistant.open`、`assistant.close`、`assistant.applyResult`、`assistant.applyPatch`、`assistant.rollback` 等
 - 工具栏按钮：AI 助手开关
 - 面板：异步加载的 AssistantPanel
 - 可选插件：`plugins?: AssistantPlugin[]`，透传给 Assistant UI 的插件中心
 
-关键设计：`materialManifest` 通过 getter 实现响应式传递。用户注册新物料后，面板下次读取时自动获得最新完整 manifest（含 knowledge）；Orchestrator 再在每个任务内通过 Material Router 裁剪出本次生成需要的 selected manifest。
+关键设计：`materialManifest` 通过 getter 实现响应式传递。面板读取当前 Host 所选物料的完整 manifest（含 knowledge），切换物料集合销毁重建 Host；Orchestrator 再在每个任务内通过 Material Router 裁剪出本次生成需要的 selected manifest。
 
 ## 25.9 技术选型
 
@@ -536,7 +536,7 @@ Agent 工具注册表：
 ## 25.10 与周边架构的关系
 
 - `@easyink/schema-tools`：继续保留，被 orchestrator 和 capabilities 消费
-- Contribution 机制：继续使用，是 assistant 接入 Designer 的唯一通道
-- Assistant 插件系统：仅增强 Assistant 任务上下文，不替代 Designer Contribution、物料注册或导出插件体系
+- DesignerExtension：Assistant 接入 Designer 的唯一装配通道
+- Assistant 插件系统：仅增强 Assistant 任务上下文，不替代 DesignerExtension、完整物料装配或导出插件体系
 
 如果你要从产品接入角度开始，先看 [Designer Assistant 教程](../../docs/designer/assistant.md)；如果你要改协议、改 Orchestrator 或改插件注入规则，再回到本架构文档对齐边界。

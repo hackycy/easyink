@@ -1,6 +1,6 @@
 export * from './ai'
 export * from './data-contract'
-export * from './designer'
+
 export { chartLine } from './designer-material'
 export * from './locale'
 export * from './options'

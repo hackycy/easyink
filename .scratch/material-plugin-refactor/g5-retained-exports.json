@@ -1,0 +1,150 @@
+{
+  "packages": [
+    {
+      "package": "@easyink/material-barcode",
+      "expected": 18,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-chart-bar",
+      "expected": 17,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-chart-custom",
+      "expected": 15,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-chart-gauge",
+      "expected": 18,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-chart-kernel",
+      "expected": 25,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-chart-line",
+      "expected": 17,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-chart-pie",
+      "expected": 20,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-chart-radar",
+      "expected": 17,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-chart-scatter",
+      "expected": 17,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-ellipse",
+      "expected": 10,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-flow-row",
+      "expected": 31,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-image",
+      "expected": 10,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-line",
+      "expected": 12,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-page-number",
+      "expected": 9,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-progress",
+      "expected": 14,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-qrcode",
+      "expected": 13,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-rating",
+      "expected": 16,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-rect",
+      "expected": 10,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-ring-progress",
+      "expected": 13,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-signature",
+      "expected": 19,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-svg-custom",
+      "expected": 13,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-svg-heart",
+      "expected": 9,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-svg-star",
+      "expected": 10,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-table-data",
+      "expected": 18,
+      "missing": [
+        "tableDataFragmentPaginator"
+      ]
+    },
+    {
+      "package": "@easyink/material-table-kernel",
+      "expected": 60,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-table-static",
+      "expected": 9,
+      "missing": []
+    },
+    {
+      "package": "@easyink/material-text",
+      "expected": 18,
+      "missing": []
+    }
+  ],
+  "retained": 457,
+  "sessionReplacement": "tableDataFragmentPaginator -> createTableDataSession(resources).fragmentPaginator",
+  "retainedChartFull": [
+    "echarts",
+    "EChartsOption",
+    "createChartDesignerRenderHost",
+    "mountFullECharts",
+    "renderFullEChartsSvg"
+  ]
+}

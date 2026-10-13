@@ -1,5 +1,6 @@
-import type { BehaviorRegistration, EditingSessionRef, MaterialDesignerExtension, MaterialGeometry, Rect, Selection, SelectionType, SubPropertySchema, TransactionAPI } from '@easyink/core'
-import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
+import type { BehaviorRegistration, EditingSessionRef, MaterialGeometry, Rect, Selection, SelectionType, SubPropertySchema, TransactionAPI } from '@easyink/core'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { MaterialNode } from '@easyink/schema'
 import type { SvgStarControlSelection, SvgStarProps } from './schema'
 import { undoBoundaryMiddleware } from '@easyink/core'
@@ -7,7 +8,6 @@ import { getNodeProps } from '@easyink/schema'
 import { createPointerGesture } from '@easyink/shared'
 import { computed, defineComponent, h, onUnmounted } from 'vue'
 import { buildStarSvgMarkup, getStarControlRect, getStarEditGuide, resolveStarControl, updateStarControlFromLocalPoint } from './rendering'
-
 import { SVG_STAR_DEFAULTS } from './schema'
 
 const STAR_CONTROL_SELECTION_TYPE = 'svg-star.control'
@@ -297,7 +297,7 @@ function createStarDecorationComponent(context: DesignerRendererContext) {
   })
 }
 
-export function createSvgStarExtension(context: DesignerRendererContext): MaterialDesignerExtension {
+export function createSvgStarExtension(context: DesignerRendererContext): DesignerRenderInstance {
   return {
     renderContent(nodeSignal, container) {
       function render() {

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { resolveConditionalSchema } from './conditional-schema'
 import { createViewer } from './index'
 import { createViewerMaterialHost } from './material-host'
-import { MaterialRendererRegistry } from './material-registry'
+import { RenderSessionMaterials } from './render-session-materials'
 
 function schema(elements: MaterialNode[], page: Partial<DocumentSchema['page']> = {}): DocumentSchema {
   return { version: '1.0.0', unit: 'mm', page: { mode: 'fixed', width: 100, height: 100, ...page }, guides: { x: [], y: [] }, elements }
@@ -25,7 +25,7 @@ function node(id: string, path: string, whenHidden: 'remove' | 'reserve' = 'remo
 
 describe('resolveConditionalSchema', () => {
   it('partitions include, remove, and reserve without mutating input', async () => {
-    const registry = new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [{ model: { type: 'conditional', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'fixture', type: 'conditional', x: 0, y: 0, width: 10, height: 10, rotation: 0, props: {} }), condition: { scope: 'node', hiddenEffects: ['remove', 'reserve'] } }, renderer: { render: vi.fn(() => ({})) } }] }), document)
+    const registry = new RenderSessionMaterials(await createViewerMaterialHost({ kind: 'viewer', materials: [{ model: { type: 'conditional', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'fixture', type: 'conditional', x: 0, y: 0, width: 10, height: 10, rotation: 0, props: {} }), condition: { scope: 'node', hiddenEffects: ['remove', 'reserve'] } }, renderer: { render: vi.fn(() => ({})) } }] }), document)
     const original = schema([node('include', 'show'), node('remove', 'gone'), node('reserve', 'space', 'reserve')])
     const result = resolveConditionalSchema(original, { show: true }, registry)
     expect(result.schema.elements.map(item => item.id)).toEqual(['include', 'reserve'])
@@ -124,25 +124,25 @@ describe('resolveConditionalSchema', () => {
 
   it('uses default condition capability when no material override is declared', async () => {
     const original = schema([node('plain', 'missing')])
-    const result = resolveConditionalSchema(original, {}, new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [] }), document))
+    const result = resolveConditionalSchema(original, {}, new RenderSessionMaterials(await createViewerMaterialHost({ kind: 'viewer', materials: [] }), document))
     expect(result.schema.elements).toEqual([])
     expect(result.states.get('plain')).toBe('remove')
   })
 
   it('ignores conditions when a material explicitly disables the capability', async () => {
-    const registry = new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [{ model: { type: 'conditional', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'fixture', type: 'conditional', x: 0, y: 0, width: 10, height: 10, rotation: 0, props: {} }), condition: false }, renderer: { render: () => ({}) } }] }), document)
+    const registry = new RenderSessionMaterials(await createViewerMaterialHost({ kind: 'viewer', materials: [{ model: { type: 'conditional', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'fixture', type: 'conditional', x: 0, y: 0, width: 10, height: 10, rotation: 0, props: {} }), condition: false }, renderer: { render: () => ({}) } }] }), document)
     const original = schema([node('plain', 'missing')])
     expect(resolveConditionalSchema(original, {}, registry).schema).toBe(original)
   })
 
   it('keeps static hidden priority even when reserve is not a declared condition effect', async () => {
-    const registry = new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [{ model: { type: 'conditional', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'fixture', type: 'conditional', x: 0, y: 0, width: 10, height: 10, rotation: 0, props: {} }), condition: { scope: 'node', hiddenEffects: ['remove'] } }, renderer: { render: () => ({}) } }] }), document)
+    const registry = new RenderSessionMaterials(await createViewerMaterialHost({ kind: 'viewer', materials: [{ model: { type: 'conditional', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'fixture', type: 'conditional', x: 0, y: 0, width: 10, height: 10, rotation: 0, props: {} }), condition: { scope: 'node', hiddenEffects: ['remove'] } }, renderer: { render: () => ({}) } }] }), document)
     const hidden = { ...node('hidden', 'show'), hidden: true }
     expect(resolveConditionalSchema(schema([hidden]), { show: true }, registry).states.get('hidden')).toBe('reserve')
   })
 
   it('deduplicates diagnostics by node, code, group, and condition', async () => {
-    const registry = new MaterialRendererRegistry(await createViewerMaterialHost({ kind: 'viewer', materials: [{ model: { type: 'conditional', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'fixture', type: 'conditional', x: 0, y: 0, width: 10, height: 10, rotation: 0, props: {} }), condition: { scope: 'node', hiddenEffects: ['remove'] } }, renderer: { render: () => ({}) } }] }), document)
+    const registry = new RenderSessionMaterials(await createViewerMaterialHost({ kind: 'viewer', materials: [{ model: { type: 'conditional', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'fixture', type: 'conditional', x: 0, y: 0, width: 10, height: 10, rotation: 0, props: {} }), condition: { scope: 'node', hiddenEffects: ['remove'] } }, renderer: { render: () => ({}) } }] }), document)
     const repeatedMissing = {
       ...node('n', 'missing'),
       renderCondition: {

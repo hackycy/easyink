@@ -1,14 +1,16 @@
 import type { EphemeralPanelDef, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, PropertyPanelOverlay } from '@easyink/core'
 import type { DeepReadonly } from '@easyink/plugin-api'
-import type { DesignerCommand, DesignerContext, MaterialPropertiesContext } from '@easyink/plugin-api/designer'
+import type { DesignerCommand, DesignerContext, DesignerRenderInstance, MaterialPropertiesContext } from '@easyink/plugin-api/designer'
+
 import type { LocaleTree } from '@easyink/plugin-api/material'
 import type { DesignerExtension, DesignerMaterial } from '@easyink/plugin-api/ui'
 import type { CapabilityPoint, CleanupError, ConsumerContext, ContributionOwner, DisposeResult, HostRegistry } from '@easyink/plugin-runtime'
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
 import type { PaperPreset } from '@easyink/shared'
+import type { MaterialPresentation, PaletteGroup, PaletteItem } from '../materials/presentation'
 import type { DesignerRendererOperations } from '../materials/renderer-context'
 import type { DesignerRuntimeConfig } from '../runtime-config'
-import type { DesignerInteractionProvider, MaterialCatalogEntry, MaterialCatalogGroup, MaterialDefinition, MaterialDesignerExtension, PreferenceProvider, SnapLine, StatusBarState } from '../types'
+import type { DesignerInteractionProvider, PreferenceProvider, SnapLine, StatusBarState } from '../types'
 import { CommandManager, SelectionModel } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
 import { builtinLocales, zhCN } from '@easyink/locales'
@@ -411,19 +413,19 @@ export class DesignerStore {
 
   // ─── Material registry ────────────────────────────────────────
 
-  getMaterial(type: string): MaterialDefinition | undefined {
+  getMaterial(type: string): MaterialPresentation | undefined {
     return this._materialConsumer.getMaterial(type)
   }
 
-  listMaterials(): MaterialDefinition[] {
+  listMaterials(): MaterialPresentation[] {
     return this._materialConsumer.listMaterials()
   }
 
-  getCatalog(): MaterialCatalogEntry[] {
+  getCatalog(): PaletteItem[] {
     return this._materialConsumer.getCatalog()
   }
 
-  getCatalogGroups(): MaterialCatalogGroup[] {
+  getCatalogGroups(): PaletteGroup[] {
     return this._materialConsumer.getCatalogGroups()
   }
 
@@ -448,7 +450,7 @@ export class DesignerStore {
   // ─── Extension Factory Registry ─────────────────────────────────
 
   /** Get or lazily instantiate an extension from its factory. */
-  getDesignerExtension(type: string): MaterialDesignerExtension | undefined {
+  getDesignerExtension(type: string): DesignerRenderInstance | undefined {
     this.assertActive()
     const cached = this._assembly.peekExtension(type)
     if (cached)

@@ -332,12 +332,12 @@ interface PropertyPanelOverlay {
 
 物料通过 `ctx.requestPropertyPanel(overlay)` 推送叠加层，`null` 清除。
 
-`PropertyPanelOverlay.binding` 只用于普通 `BindingRef` 编辑，例如表格 cell 的 `binding` / `staticBinding`。声明了 `MaterialDefinition.binding.kind='data-contract'` 的物料使用专用 MaterialDataBindingEditor，读写 `DataContractBinding.mappings`。
+`PropertyPanelOverlay.binding` 只用于普通 `BindingRef` 编辑，例如表格 cell 的 `binding` / `staticBinding`。声明了 `MaterialModel.binding.kind='data-contract'` 的物料使用专用 MaterialDataBindingEditor，读写 `DataContractBinding.mappings`。
 
 **渲染模型**（从上到下）：
 
 1. **Geometry** -- 位置/尺寸，始终显示
-2. **基础层** -- `MaterialDefinition.props` 驱动，始终显示；内置物料的基础字段由 `@easyink/prop-schemas` 提供，注册时再合并物料包自身的 `propSchemas`
+2. **基础层** -- `DesignerMaterial.properties` 驱动，始终显示；内置物料的基础字段由 `@easyink/prop-schemas` 提供，完整声明组合物料包自身的 `properties`
 3. **叠加层** -- `PropertyPanelOverlay.schemas` 驱动，仅 deep editing 推送时显示
 4. **BindingSection** -- 按规则显隐（见下）
 5. **可见性/锁定** -- 始终显示
@@ -356,7 +356,7 @@ interface PropertyPanelOverlay {
 
 **sectionFilter 声明**：
 
-`MaterialDefinition` 可选声明 `sectionFilter` 控制面板 section 显隐：
+`DesignerMaterial` 可选声明 `sectionFilter` 控制面板 section 显隐：
 
 ```typescript
 sectionFilter?: (sectionId: PanelSectionId, context: SectionFilterContext) => boolean
@@ -375,7 +375,7 @@ setPropertyOverlay(overlay: PropertyPanelOverlay | null): void
 get propertyOverlay(): PropertyPanelOverlay | null
 ```
 
-`MaterialExtensionContext.requestPropertyPanel(overlay)` 内部调用 `store.setPropertyOverlay(overlay)`。
+`DesignerRendererContext.requestPropertyPanel(overlay)` 内部调用 `store.setPropertyOverlay(overlay)`。
 
 **约束**：当前仅支持单叠加层、仅 deep editing 上下文、仅单选、自定义编辑器限 Vue 组件。
 
@@ -688,7 +688,7 @@ EasyInk 存在两套独立的物料渲染能力：
 ```
 ┌─────────────────────────────────────────────────────┐
 │ Designer 画布                                        │
-│  MaterialDesignerExtension.renderContent(nodeSignal, container, renderContextSignal?) │
+│  DesignerRenderInstance.renderContent(nodeSignal, container, renderContextSignal?) │
 │  - 轻量、快速、不依赖运行时数据流                      │
 │  - 绑定值显示为字段标签 {#字段名}                      │
 │  - 页码/重复预览等仅注入临时设计态上下文，不写入 Schema │
@@ -698,7 +698,7 @@ EasyInk 存在两套独立的物料渲染能力：
 
 ┌─────────────────────────────────────────────────────┐
 │ Viewer 预览                                          │
-│  MaterialViewerExtension.render()                    │
+│  ViewerSessionRenderer.render()                    │
 │  - 完整运行时管线：数据加载 → 绑定 → 分页 → 渲染        │
 │  - 替换为真实数据                                     │
 │  - 引入第三方库（图表、条码等）                         │
@@ -737,7 +737,7 @@ CanvasWorkspace 遍历 elements
 - 条码/二维码：显示示意图 + `{#字段标签}`
 - 表格数据区：每个绑定单元格显示 `{#字段标签}`
 
-绑定标签由 `MaterialExtensionContext.getBindingLabel()` 统一提供，格式为 `bindingRef.fieldLabel || bindingRef.fieldPath`。
+绑定标签由 `DesignerRendererContext.getBindingLabel()` 统一提供，格式为 `bindingRef.fieldLabel || bindingRef.fieldPath`。
 
 对页码、页眉、页脚、水印这类 page-aware 物料，Designer 还可通过 `renderContextSignal` 提供输出页序号、页码和总页数等临时上下文，用于“设计态直看真实页码”的预览，但这些值仍不进入 Schema，也不参与命令历史。
 

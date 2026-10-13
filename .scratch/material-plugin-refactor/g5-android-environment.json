@@ -1,0 +1,11 @@
+{
+  "java": null,
+  "javaHome": null,
+  "androidHome": null,
+  "androidSdkRoot": null,
+  "adb": null,
+  "emulator": null,
+  "knownSdkDirectories": null,
+  "aarExists": false,
+  "sampleApkExists": false
+}

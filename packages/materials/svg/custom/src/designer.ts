@@ -1,5 +1,5 @@
-import type { MaterialDesignerExtension } from '@easyink/core'
-import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { MaterialNode } from '@easyink/schema'
 import type { SvgCustomProps } from './schema'
 import { getBindingRefs, getNodeProps } from '@easyink/schema'
@@ -44,7 +44,7 @@ function buildDesignerHtml(node: MaterialNode, context: DesignerRendererContext)
   return buildSvgCustomMarkup(props)
 }
 
-export function createSvgCustomExtension(context: DesignerRendererContext): MaterialDesignerExtension {
+export function createSvgCustomExtension(context: DesignerRendererContext): DesignerRenderInstance {
   return {
     renderContent(nodeSignal, container) {
       function render() {

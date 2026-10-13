@@ -2,58 +2,19 @@
 
 EasyInk 的物料体系覆盖”内容元素”和”结构元素”两类对象。`table / chart / svg` 是一级类别。
 
-## 完整物料入口（G2）
+## 完整物料入口
 
-text/image 的根入口导出 Designer 完整物料 `text`/`image`，`/viewer` 导出同名 Viewer 完整物料。两端复用物料包内的唯一 `MaterialModel`：type、binding、condition、capabilities、默认节点工厂属于模型；renderer、properties、palette、locale、AI 属于对应声明。应用在创建前传入完整数组，不补装目录或 AI 插件。
+全部 25 种物料的根入口提供 Designer 完整声明，`/viewer` 提供同名 Viewer 完整声明。应用选择 `@easyink/builtin/all`、`basic`、`none` 或自行组合数组，在创建前传入 `materials`。builtin 的 `collection-source.ts` 只维护一份成员和顺序，构建生成两端静态集合；all 25、basic 17，none 不引用任何具体物料。
 
-节点工厂、默认值、模型类型和纯渲染 helper 保留原根入口，Viewer 从 `/viewer` 使用同一实现。text 的测量和可见溢出尺寸仍由 renderer 提供；替换 renderer 不改变共享 binding/condition。未知节点在两端保留并显示诊断，缺核心 renderer/loader 在创建时拒绝，已声明 loader 的运行失败只使该物料局部不可用。
-
-下文旧注册形状用于尚待后续 Gate 清理的基线描述；G2 只验证 text/image 完整切片与集合生成，不表示全部物料迁移完成。可运行用法见 [text/image 完整组合](../../docs/advanced/material-composition.md)。
-
-## 11.1 物料定义
-
-每个物料都由四部分组成：
-
-- Schema 定义
-- Designer 交互定义
-- Viewer 渲染定义
-- 目录注册定义
+共享 `MaterialModel` 是 type、默认节点、binding、capabilities、condition 和 pageAware 的唯一来源。Designer renderer 和 Viewer renderer 复用它，替换绘制实现不会改变模型语义。Schema、单位、codec 和节点工厂语义保持；节点工厂、默认值、模型类型和纯 render/measure/helper 从适用入口继续导出。
 
 ```typescript
-interface MaterialDefinition {
-  type: string
-  name: string
-  icon: string
-  category: MaterialCategory
-  capabilities: MaterialCapabilities
-  binding: MaterialBindingDefinition
-  props: PropSchema[]
-  createDefaultNode(input?: Partial<MaterialNode>): MaterialNode
-}
-
-interface MaterialCatalogEntry {
-  id: string
-  group: MaterialGroup
-  label: string
-  icon: string
-  materialType: string
-  useTokens?: string[]
-  priority?: 'quick' | 'grouped'
-}
-
-interface MaterialCapabilities {
-  bindable?: boolean
-  rotatable?: boolean
-  resizable?: boolean
-  supportsChildren?: boolean
-  supportsAnimation?: boolean
-  supportsUnionDrop?: boolean
-  pageAware?: boolean
-  multiBinding?: boolean
-  /** 拖拽 element 级 resize handle 时保持宽高比。 */
-  keepAspectRatio?: boolean
-}
+import type { DesignerMaterial, DesignerRenderer, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+import type { MaterialModel } from '@easyink/plugin-api/material'
+import type { ViewerMaterial, ViewerSessionRenderer } from '@easyink/plugin-api/viewer'
 ```
+
+Designer 完整声明使用 `properties`、`sectionFilter`、`ui.palette`、`locale` 和 `ai`。目录分组来源为 `@easyink/shared` 的 `paletteGroups`，框架从最终声明投影工作台目录，不维护第二注册表。没有 palette、properties 或 AI 只影响对应可选功能；迁移已有物料须保留其现有功能。
 
 `capabilities.rotatable` 的语义是“设计器是否允许用户主动编辑元素级旋转”。设计器所有旋转入口必须共享同一个判断源：属性面板 rotation 输入、顶部工具栏旋转按钮、画布 rotate handle、拖拽旋转 composable。缺省值按可旋转处理，只有显式 `rotatable=false` 才禁用。
 
@@ -61,9 +22,7 @@ interface MaterialCapabilities {
 
 物料包拥有自己的 props 类型，例如 `TextProps`、`TableDataProps`。通用注册表仍以 `MaterialNode` 接收节点；物料内部读取 props 时使用 `getNodeProps<TProps>(node)` 或返回 `MaterialNode<TProps>` 的工厂函数。`props` 是 schema 的开放扩展点，不在通用 PropertiesPanel / Viewer / codec 中硬编码具体物料 props 类型。
 
-Designer 注册物料时使用 `DesignerMaterialRegistration`。其中 `factory` 是同步兜底工厂；`lazyFactory?: LazyMaterialExtensionFactory` 是设计器侧异步加载入口，用于 ECharts 全量包、复杂编辑器等重型设计态渲染器。注册时必须同步提供 `type/name/icon/category/capabilities/binding/createDefaultNode/propSchemas/localeMessages/aiDescriptor` 等元数据，以保证物料面板、属性面板、绑定面板和 AI manifest 不依赖懒加载 chunk。只有 `MaterialDesignerExtension` 本体可以延迟加载。
-
-Viewer 注册保持同步：`viewer.registerMaterial(type, binding, extension)` 必须在渲染前完成。Viewer 面向预览、打印和导出稳定性，不把内置物料的渲染器拆成 Designer 同款懒加载路径。
+Designer 的 `renderer` 接收受控 `DesignerRendererContext` 并同步返回 `DesignerRenderInstance`；重型代码通过 `loadRenderer` 按需获取。模型、属性、palette、locale 和 AI 在创建时已可查询。Viewer 完整声明提供 `renderer` 或受管 `loadRenderer`；会话实现通过 `createSession` 和可选 `prepare` 管理计算资源，render/measure/paginate 保持同步。
 
 ## 11.2 目录层级
 
@@ -150,7 +109,7 @@ Viewer 注册保持同步：`viewer.registerMaterial(type, binding, extension)` 
 结论：
 
 - `chart / svg` 在架构上不是一个物料，而是目录型系统
-- v1 不必把所有子物料全部做完，但物料注册体系必须一开始就能容纳它们
+- v1 不必把所有子物料全部做完，但完整物料声明体系必须一开始就能容纳它们
 
 ## 11.3 一等公民物料
 
@@ -182,11 +141,11 @@ Viewer 注册保持同步：`viewer.registerMaterial(type, binding, extension)` 
 
 它面向内置图表类型无法覆盖的复杂 ECharts 场景，需要：
 
-- 使用普通绑定而不是 `DataContractBinding`：注册 `binding.kind='ordinary'`、`primaryProp='option'`、`formatEditor: { tabs: ['custom'], defaultTab: 'custom' }`。
+- 使用普通绑定而不是 `DataContractBinding`：在共享模型声明 `binding.kind='ordinary'`、`primaryProp='option'`、`formatEditor: { tabs: ['custom'], defaultTab: 'custom' }`。
 - 支持运行时数据源直接返回完整 ECharts option。绑定结果可为对象，也可为 JSON 字符串；Viewer 在普通绑定投影后从 `context.resolvedProps.option` 读取。
 - 支持设计器属性面板直接编辑 `props.optionCode`。这段代码是可信模板代码，只保存源码字符串，不把函数对象写入 Schema。
 - 支持 `return { ... }`、对象表达式、返回函数或声明 `function option(ctx) { ... }` 等写法。执行上下文提供运行时 `data`、绑定 option、节点、尺寸、单位和完整 `echarts` 包。
-- 默认设计态渲染器必须通过 `lazyFactory` 加载，避免把完整 ECharts 包拉进 Designer 初始路径；物料元数据、属性 schema、locale 和 AI descriptor 仍同步注册。
+- 默认设计态渲染器必须通过 `loadRenderer` 加载，避免把完整 ECharts 包拉进 Designer 初始路径；物料元数据、属性 schema、locale 和 AI 声明仍在创建时同步可用。
 - Viewer 端直接使用 `@easyink/material-chart-kernel/full` 渲染完整 ECharts SVG，优先保证输出路径稳定，不为内置 Viewer 做懒加载。
 
 ### `table-data`
@@ -215,7 +174,7 @@ table-static:  rotatable=false, resizable=true, bindable=true, multiBinding=true
 table-data:    rotatable=false, resizable=true, bindable=true, multiBinding=true
 ```
 
-深度编辑能力通过 [22 章 编辑行为架构](./22-editing-behavior.md) 协议声明（`MaterialDesignerExtension.geometry / selectionTypes / behaviors / decorations`），不再通过 capability 标志，也不再使用旧 `deepEditing` FSM 协议。
+深度编辑能力通过 [22 章 编辑行为架构](./22-editing-behavior.md) 协议声明（`DesignerRenderInstance.geometry / selectionTypes / behaviors / decorations`），不再通过 capability 标志，也不再使用旧 `deepEditing` FSM 协议。
 
 ### 表格 DatasourceDropHandler 实现
 
@@ -289,7 +248,7 @@ table-data 的 Designer Extension 在 repeat-template 行下方额外渲染 2 �
 
 属性系统通过 `PropSchema` 驱动，但不能只停留在一个抽象接口。至少核心物料要有明确属性矩阵。
 
-内置基础属性矩阵由 `@easyink/prop-schemas` 维护，避免把 text / image / table 等属性字段维护混在 `@easyink/designer` 工作台实现里。Designer 注册物料时读取基础 Schema，并与物料包通过 `DesignerMaterialRegistration.propSchemas` 提供的追加项合并：
+内置基础属性矩阵由 `@easyink/prop-schemas` 维护，避免把 text / image / table 等属性字段维护混在 `@easyink/designer` 工作台实现里。物料的 Designer 完整声明组合属性列表，工作台读取 `DesignerMaterial.properties`：
 
 ```typescript
 const props = [
@@ -303,7 +262,7 @@ const props = [
 - `@easyink/prop-schemas` 只依赖 `@easyink/core` 的 `PropSchema` 类型，不依赖 designer。
 - 直接落在 `node.props` 上的内置基础字段放在 `@easyink/prop-schemas`。
 - 物料私有结构、非 `node.props` 字段或带副作用的字段放在物料包自己的 `propSchemas` 中，例如 `table-data` 的 `showHeader / showFooter`。
-- PropertiesPanel 只消费最终合并后的 `MaterialDefinition.props`，不得按物料类型硬编码字段。
+- PropertiesPanel 只消费最终合并后的 `DesignerMaterial.properties`，不得按物料类型硬编码字段。
 
 ```typescript
 interface PropSchema {
@@ -455,28 +414,14 @@ PropertiesPanel 既不需要 `import { UpdateTableVisibilityCommand }`，也不�
 
 ## 11.6 Designer 扩展面
 
-物料通过工厂函数注册 extension，Designer 提供上下文能力，物料自行渲染和管理深度编辑。
+完整物料的 renderer 由 Host 消费，Designer 提供受控上下文能力，物料自行渲染和管理深度编辑。
 
 ```typescript
-/** 物料通过工厂函数注册 extension */
-type MaterialExtensionFactory = (context: MaterialExtensionContext) => MaterialDesignerExtension
+type DesignerRenderer = (context: DesignerRendererContext) => DesignerRenderInstance
 
-interface MaterialExtensionContext {
-  /** 查询能力：读取 schema、获取选中状态 */
-  getSchema(): DocumentSchema
-  getNode(id: string): MaterialNode | undefined
-  getSelection(): SelectionSnapshot
-  /** 指令能力：提交 command、请求属性面板切换 */
-  commitCommand(command: Command): void
-  /** 命令式推送临时面板（EphemeralPanel，详见 22 章 §22.6.4 escape hatch）。
-   *  90% 场景由 selectionType.getPropertySchema 自动派生，不需要调用此方法。
-   *  仅用于与 selection 无关的瞬时面板（异步加载、AI 建议等）。传 null 清除。 */
-  requestPropertyPanel(overlay: PropertyPanelOverlay | null): void
-  emit(event: string, payload: unknown): void
-  on(event: string, handler: (...args: unknown[]) => void): () => void
-}
-
-interface MaterialDesignerExtension {
+// context 的查询返回只读快照，编辑经 tx/command，signal/onDispose 管理资源；不提供 Store。
+// 实际契约见 @easyink/plugin-api/designer。
+interface DesignerRenderInstance {
   /** 设计态内容渲染：设计器提供定位好的内容 DOM 容器，物料自行渲染。
    *  nodeSignal 提供框架无关的响应式订阅：调用 nodeSignal.subscribe(callback) 监听节点变化，
    *  调用 nodeSignal.get() 获取当前值。物料在首次调用时完成 DOM 挂载，后续通过 subscribe 增量更新。
@@ -622,7 +567,7 @@ CanvasWorkspace 遍历 elements
   → 为每个元素创建定位好的内容 DOM 容器
   → 创建 NodeSignal：包装 Vue computed 为 { get(), subscribe() }
   → 按需创建 MaterialDesignerRenderContextSignal：提供页码等临时上下文
-  → 查找 MaterialDesignerExtension.renderContent
+  → 查找 DesignerRenderInstance.renderContent
   → 有：调用 cleanup = renderContent(nodeSignal, container, renderContextSignal)，物料自行渲染到容器内
   → 无：在容器内显示类型名占位
   → 叠加选区边框、拖拽手柄、绑定角标等交互层
@@ -655,7 +600,7 @@ CanvasWorkspace 遍历 elements
 这样：
 - `ResizeMaterialCommand` 不再包含任何 `rowHeights / isTableNode` 这类物料相关字段；
 - 物料的私有副作用与命令一一对应，撤销/重做天然正确；
-- 新增可缩放物料只需在自己的 `MaterialDesignerExtension.resize` 上实现协议，无需修改 Designer。
+- 新增可缩放物料只需在自己的 `DesignerRenderInstance.resize` 上实现协议，无需修改 Designer。
 
 参考实现：`@easyink/material-table-kernel` 暴露 `createTableResizeAdapter({ getHiddenRowMask })`，被 `material-table-data` 与 `material-table-static` 复用。
 
@@ -664,7 +609,7 @@ CanvasWorkspace 遍历 elements
 每个物料包可提供 Viewer 渲染扩展：
 
 ```typescript
-interface ViewerRenderContext {
+interface ViewerContext {
   readonly document: Document
   data: Record<string, unknown>
   resolvedProps: Record<string, unknown>
@@ -673,10 +618,10 @@ interface ViewerRenderContext {
   zoom: number
 }
 
-interface MaterialViewerExtension {
-  render(node: MaterialNode, context: ViewerRenderContext): ViewerRenderOutput
-  measure?(node: MaterialNode, context: ViewerMeasureContext): ViewerMeasureResult
-  getRenderSize?(node: MaterialNode, context: ViewerRenderContext): Partial<ViewerRenderSize>
+interface ViewerSessionRenderer {
+  render(node: MaterialNode, context: ViewerContext): ViewerRenderOutput
+  measure?(node: MaterialNode, context: ViewerContext): ViewerMeasureResult
+  getRenderSize?(node: MaterialNode, context: ViewerContext): Partial<ViewerRenderSize>
 }
 ```
 
@@ -686,7 +631,7 @@ interface MaterialViewerExtension {
 - `context.document` 是当前 Viewer host 的文档；物料返回 DOM/SVG 节点时必须使用它创建节点，不能依赖全局 `document`，以兼容 iframe 和 custom host。
 - `measure()` 负责参与运行时测量和回流，典型场景是 table-data 这类动态高度物料。
 - `getRenderSize()` 负责声明最终渲染容器尺寸，适用于“运行态视觉尺寸不等于 schema 几何尺寸”的物料；例如线条物料可把 legacy `lineWidth` 或最小可见厚度提升为实际渲染高度。
-- `viewer` 的 `RenderSurface` 不允许根据 `node.type` 推断这些差异，必须统一通过 `MaterialRendererRegistry -> MaterialViewerExtension` 获取。
+- `viewer` 的 `RenderSurface` 不允许根据 `node.type` 推断这些差异，必须统一通过 `RenderSessionMaterials -> ViewerSessionRenderer` 获取。
 
 对目录型物料的要求：
 

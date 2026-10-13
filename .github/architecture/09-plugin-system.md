@@ -20,11 +20,11 @@ registry 由 runtime 唯一写入，对外只提供深只读声明和不可变�
 
 内核行为测试位于 `packages/plugin-runtime/src/{assembly,locale,lifecycle}.test.ts`。Designer 的 `materials/host-consumer.ts` 与 Viewer 的 `material-host.ts` 已提供内部消费切片：声明只读自 runtime，缓存只保存已取得的实现及 pending task；按需 lazy 不在创建时加载，销毁禁止迟到发布。Designer 的 `materials/renderer-context.ts` 以固定操作构建受控上下文，查询为冻结快照，编辑经过 tx，资源失效后拒绝持有回调。`materials/store-operations.ts` 已逐项接线真实编辑、文档、数据源与交互操作；初始化时从内核取得最终物料和 locale 视图，不能读取旧 registry 或尚未交付的 Host。
 
-公开 ViewerRuntime 已切到独立 Host：createViewer 返回 Promise，消费创建前选定的完整物料；产品层显式传入 builtin/all/viewer，底层省略或空数组为 none；创建后没有 registerMaterial 或可写 materialRegistry。destroy 返回同一 Promise，包含清理错误；必要 surface 初始化失败整体回滚。table/chart kernel 的纯子入口使默认 Viewer 的实际 JS 与声明图无 Vue。Render Session 消费尚待后续 Gate。
+公开 ViewerRuntime 已切到独立 Host：createViewer 返回 Promise，消费创建前选定的完整物料；产品层显式传入 builtin/all/viewer，底层省略或空数组为 none；创建后没有 registerMaterial 或可写 materialRegistry。destroy 返回同一 Promise，包含清理错误；必要 surface 初始化失败整体回滚。table/chart kernel 的纯子入口使默认 Viewer 的实际 JS 与声明图无 Vue。每轮 Render Session 固定输入并独占运行引用，只有最新候选可提交；输出容器由预览和已开始输出任务共同持有。
 
 DesignerStore.create 返回 Promise，完整声明经唯一 Host 校验后才创建核心 Store 并初始化 eager factories；必需 factory 失败等待回滚，lazy 首次消费才加载。原物料写 Map、registerMaterial/registerDesignerFactory/registerLocaleMessages 与 bundle 登记 facade 已删除，工作台只投影最终物料/目录声明。UI/命令 context 按 owner Scope 缓存，仅包含 DesignerContext 权限；typed command 查内核登记并使用命令 owner 的 context。销毁同步失效，返回同一清理 Promise，字体和 lazy 的迟到结果不能更新缓存或活动诊断。
 
-Vue 组件内部等待 Store 创建，通过 ready/error 和 loading/error slots 反馈启动；卸载后迟到 Store 自行销毁。实际工作台保留编辑/persistence/autosave，扩展 toolbar/overlay 只读消费内核声明，overlay 使用每实例 DOM 根，框架最后传入受控 context。旧 Contribution registry、activate、setupStore 与完整 Store 注入已删除。25 个物料根入口自带完整 Designer 声明，builtin all/basic Designer 子入口只聚合所选声明；playground 显式选择 all，Assistant 使用受控文档/选区/数据源操作与 typed commands，运行状态按 Host context 隔离。独立 UI 短挂载 Scope、全部 UI 行为和 Render Session 的完整验收仍属后续 Gate；当前 G1 的 D1/D3 证据闭合以 runbook 为准。下文旧业务说明不作为新内核的兼容入口。
+Vue 组件内部等待 Store 创建，通过 ready/error 和 loading/error slots 反馈启动；卸载后迟到 Store 自行销毁。实际工作台保留编辑/persistence/autosave，扩展 toolbar/overlay 只读消费内核声明，overlay 使用每实例 DOM 根，框架最后传入受控 context。旧 Contribution registry、activate、setupStore 与完整 Store 注入已删除。25 个物料根入口自带完整 Designer 声明，builtin all/basic Designer 子入口只聚合所选声明；playground 显式选择 all，Assistant 使用受控文档/选区/数据源操作与 typed commands，运行状态按 Host context 隔离。五类 UI 以短挂载 Scope 消费声明；Session、UI 与物料功能有对应行为检查，实际平台链路另行验收。
 
 ## 9.1 当前边界
 
@@ -126,4 +126,4 @@ interface PrintDriver {
 
 ## 9.5 发布与后续验收边界
 
-公共契约可供完整物料、renderer、独立 UI 和命令作者消费。当前是工作区实现状态；物料完整行为、短范围 UI 生命周期和 Render Session 验收继续由后续 Gate 推进，旧集合业务输出的删除也在后续切换范围中。全部完成后由用户按仓库流程手动发布 0.1.0；不发布本次重构的 0.0.x 中间版本。
+公共契约可供完整物料、renderer、独立 UI 和命令作者消费。当前是工作区实现状态；实际消费者和平台制品验收按 effort 合同执行。全部完成后由用户按仓库流程手动发布 0.1.0；不发布本次重构的 0.0.x 中间版本。

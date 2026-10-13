@@ -1,6 +1,5 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { BindingFormatDiagnostic } from './binding-format'
-import type { MaterialConditionCapability } from './condition'
 import type { LayoutDiagnostic, LayoutFragment, LayoutRuntimeRef } from './layout-plan'
 
 export type TrustedViewerHtmlSource = 'material-internal' | 'sanitized-rich-text'
@@ -87,14 +86,4 @@ export interface FragmentPaginator {
   paginateFragment: (input: FragmentPaginateInput) => FragmentPaginateResult
   /** Remaining splittable content, excluding repeated decorations. */
   getRemainingContent?: (fragment: LayoutFragment) => number
-}
-
-export interface MaterialViewerExtension {
-  render: (node: MaterialNode, context: ViewerRenderContext) => ViewerRenderOutput
-  measure?: (node: MaterialNode, context: ViewerMeasureContext) => ViewerMeasureResult
-  getRenderSize?: (node: MaterialNode, context: ViewerRenderContext) => Partial<ViewerRenderSize>
-  fragmentPaginator?: FragmentPaginator
-  /** When true, the element is replicated to every page by the pageAware post-processing step. */
-  pageAware?: boolean
-  condition?: MaterialConditionCapability
 }

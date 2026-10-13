@@ -1,6 +1,6 @@
 export * from './ai'
 export * from './datasource'
-export * from './designer'
+export { canResizeTableDataRow } from './designer'
 export { tableData } from './designer-material'
 export * from './layout'
 export * from './locale'

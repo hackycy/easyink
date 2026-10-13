@@ -1,6 +1,7 @@
-import type { DatasourceDropHandler, MaterialControlPolicy, MaterialDesignerExtension, SelectionType } from '@easyink/core'
+import type { DatasourceDropHandler, MaterialControlPolicy, SelectionType } from '@easyink/core'
 import type { TableEditingDelegate } from '@easyink/material-table-kernel'
-import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { BindingRef, MaterialNode, TableDataSchema, TableNode, TableRowSchema } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
 import type { TableDataProps } from './schema'
@@ -337,7 +338,7 @@ function getRowCollectionPrefixes(row: TableRowSchema): string[] {
   return [...prefixes]
 }
 
-export function createTableDataExtension(context: DesignerRendererContext): MaterialDesignerExtension {
+export function createTableDataExtension(context: DesignerRendererContext): DesignerRenderInstance {
   const delegate = createDelegate(context)
   const tableGeometry = createTableGeometry(delegate)
   const cellSelectionType = createTableCellSelectionType(delegate)

@@ -1,3 +1,4 @@
+import type { DesignerRenderInstance } from '@easyink/plugin-api/designer'
 /**
  * @vitest-environment happy-dom
  *
@@ -24,18 +25,17 @@
  * than mocking, which would re-introduce the divergence the audit warned
  * against.
  */
-import type { MaterialDesignerExtension } from '@easyink/core'
 import { describe, expect, it, vi } from 'vitest'
 import { DesignerStore } from '../store/designer-store'
 import { useCanvasInteractionController } from './canvas-interaction-controller'
 
-function plainExtension(): MaterialDesignerExtension {
+function plainExtension(): DesignerRenderInstance {
   return {
     renderContent: () => () => {},
   }
 }
 
-function geometryExtension(): MaterialDesignerExtension {
+function geometryExtension(): DesignerRenderInstance {
   return {
     renderContent: () => () => {},
     geometry: {

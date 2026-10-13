@@ -7,6 +7,8 @@ import { onBeforeUnmount, shallowRef } from 'vue'
 import { DesignerStore as Store } from '../store/designer-store'
 import DesignerWorkbench from './DesignerWorkbench.vue'
 
+type DisposeResult = Awaited<ReturnType<DesignerStore['destroy']>>
+
 const props = defineProps<EasyInkDesignerProps>()
 const emit = defineEmits<{
   'update:schema': [schema: DocumentSchema]
@@ -30,7 +32,22 @@ const options: DesignerCreateOptions = {
   interactionProvider: props.interactionProvider,
   runtimeConfig: props.runtimeConfig,
 }
-void Store.create(options).then(async (created) => {
+const creation = Store.create(options)
+let disposal: Promise<DisposeResult | undefined> | undefined
+function destroy(): Promise<DisposeResult | undefined> {
+  if (disposal)
+    return disposal
+  active = false
+  const current = store.value
+  const cleanup = current?.destroy()
+  disposal = (async () => {
+    const created = current ?? await creation.catch(() => undefined)
+    return cleanup ?? created?.destroy()
+  })()
+  return disposal
+}
+defineExpose({ destroy })
+void creation.then(async (created) => {
   if (!active) {
     await created.destroy()
     return
@@ -46,9 +63,7 @@ void Store.create(options).then(async (created) => {
   }
 })
 onBeforeUnmount(() => {
-  active = false
-  if (store.value)
-    void store.value.destroy()
+  void destroy()
 })
 </script>
 

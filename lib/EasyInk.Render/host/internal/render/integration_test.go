@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -75,6 +76,38 @@ func TestRenderPrintPDFHTMLAndEasyInkWithBrowser(t *testing.T) {
 				t.Fatalf("diagnostics requestId = %q", result.Diagnostics.RequestID)
 			}
 		})
+	}
+}
+
+func TestRenderAwaitsRuntimeCleanupWithBrowser(t *testing.T) {
+	browserPath := os.Getenv("EASYINK_RENDER_BROWSER_PATH")
+	if browserPath == "" {
+		t.Fatal("EASYINK_RENDER_BROWSER_PATH is required for runtime cleanup acceptance")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	manager, err := browser.New(ctx, browserPath, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Shutdown()
+	result, err := render.NewService(manager).RenderPrintPDF(ctx, protocol.PrintPDFRequest{
+		RequestID: "runtime-cleanup",
+		Source: protocol.Source{Type: "html", HTML: `<!doctype html><html><body>Cleanup output<script>
+		window.__easyinkDestroy = () => new Promise(resolve => setTimeout(() => {
+		  console.error('cleanup-completed-marker'); resolve();
+		}, 150));
+		</script></body></html>`},
+		Wait: protocol.WaitOptions{Until: "load", TimeoutMs: 10000},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasPrefix(result.PDF, []byte("%PDF-")) {
+		t.Fatal("missing actual PDF output")
+	}
+	if !strings.Contains(strings.Join(result.Diagnostics.ConsoleErrors, "\n"), "cleanup-completed-marker") {
+		t.Fatalf("host returned before runtime cleanup settled: %+v", result.Diagnostics)
 	}
 }
 
@@ -230,12 +263,17 @@ func TestRenderPrintPDFPreservesCJKTextWithoutMetaCharset(t *testing.T) {
 	}
 	defer manager.Shutdown()
 	service := render.NewService(manager)
+	font, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "playground", "public", "fonts", "站酷快乐体.ttf"))
+	if err != nil {
+		t.Fatalf("read CJK fixture font: %v", err)
+	}
 
 	result, err := service.RenderPrintPDF(ctx, protocol.PrintPDFRequest{
 		RequestID: "req-cjk-html-no-meta",
 		Source: protocol.Source{
-			Type: "html",
-			HTML: `<!doctype html><html><head><title>中文打印测试</title><style>body{font-family:sans-serif;font-size:22px}</style></head><body><main class="easyink-ready">中文打印测试：商品名称 墨水 数量 价格 合计 ¥123.45</main></body></html>`,
+			Type:  "html",
+			HTML:  `<!doctype html><html><head><title>中文打印测试</title><style>body{font-family:FixtureCJK;font-size:22px}</style></head><body><main class="easyink-ready">中文打印测试：商品名称 墨水 数量 价格 合计 ¥123.45</main></body></html>`,
+			Fonts: []protocol.FontResource{{Family: "FixtureCJK", URL: "https://easyink.local/fonts/cjk.ttf", ContentType: "font/ttf", Base64: base64.StdEncoding.EncodeToString(font)}},
 		},
 		PDF: protocol.PDFOptions{
 			PaperWidthMm:  80,

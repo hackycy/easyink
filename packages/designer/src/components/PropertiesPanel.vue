@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { PropCommitContext, SubPropertySchema } from '@easyink/core'
+import type { PanelSectionId } from '@easyink/plugin-api/designer'
 import type { MaterialUI } from '@easyink/plugin-api/ui'
 import type { BindingRef, DataContractBinding, DocumentSchema, MaterialNode, PageSchema } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { Component } from 'vue'
 import type { PagePropertyContext, PagePropertyDescriptor, PagePropertyGroup } from '../page-properties'
-import type { DesignerResolvedAsset, PanelSectionId, PropSchema } from '../types'
+import type { DesignerResolvedAsset, PropSchema } from '../types'
 import { ClearBindingCommand, getByPath, resolveMaterialConditionCapability, setByPath, UpdateBindingFormatCommand, UpdateDocumentCommand, UpdateGeometryCommand, UpdateMaterialBindingCommand, UpdateMaterialMetaCommand, UpdateMaterialPropsCommand, UpdatePageCommand, UpdateRenderConditionCommand } from '@easyink/core'
 import { createLayoutBehaviorPropSchemas, groupPropSchemas } from '@easyink/prop-schemas'
 import { getBindingRefs } from '@easyink/schema'
@@ -173,12 +174,12 @@ const hideBindingSection = computed(() => {
   // Sub-property explicitly hides binding
   if (hasSubBinding.value && subPropertySchema.value?.binding === null)
     return true
-  // Material has no bindable capability and no sub-property binding
+  // Material disables binding and has no sub-property binding
   if (!hasSubBinding.value && selectedElement.value) {
     if (selectedMaterialDataContract.value)
       return true
     const def = store.getMaterial(selectedElement.value.type)
-    if (def?.capabilities.bindable === false)
+    if (def?.binding.kind === 'none')
       return true
   }
   return false

@@ -199,6 +199,11 @@ func (m *Manager) NewPage(parent context.Context) (context.Context, context.Canc
 		case <-done:
 		}
 	}()
+	// Keep the target alive for diagnostics and cleanup after a render deadline.
+	if err := chromedp.Run(pageCtx); err != nil {
+		cancel()
+		return nil, nil, err
+	}
 	return pageCtx, cancel, nil
 }
 

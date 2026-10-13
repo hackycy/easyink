@@ -12,7 +12,6 @@
   "exports": {
     ".": "./dist/index.mjs",
     "./ai": "./dist/ai.mjs",
-    "./designer": "./dist/designer.mjs",
     "./designer-material": "./dist/designer-material.mjs",
     "./locale": "./dist/locale.mjs",
     "./material-model": "./dist/material-model.mjs",

@@ -1,4 +1,4 @@
-import type { Command, MaterialDesignerExtension, NodeSignal, PropertyPanelOverlay, PropSchema, SelectionSnapshot, TransactionAPI } from '@easyink/core'
+import type { BehaviorRegistration, Command, DatasourceDropHandler, MaterialControlPolicy, MaterialControlPolicyContext, MaterialDesignerRenderContextSignal, MaterialGeometry, MaterialResizeAdapter, NodeSignal, PropertyPanelOverlay, PropSchema, SelectionDecorationDef, SelectionSnapshot, SelectionType, TransactionAPI } from '@easyink/core'
 import type { DataSourceDescriptor } from '@easyink/datasource'
 import type { BindingRef, DocumentSchema, DocumentSchemaInput, MaterialNode } from '@easyink/schema'
 import type { LocaleDeclaration, MaterialDeclaration, RendererDeclaration } from './material'
@@ -100,7 +100,63 @@ export interface DesignerRendererContext extends DesignerContext {
   readonly emit: (event: string, payload: unknown) => void
 }
 
-export type DesignerRenderer = (context: DesignerRendererContext) => MaterialDesignerExtension
+/**
+ * Mounted Designer renderer and its editing behaviors.
+ */
+export interface DesignerRenderInstance {
+  /**
+   * Mount content into the provided DOM container using the reactive NodeSignal.
+   * Returns a cleanup function called when the element is removed from the canvas.
+   */
+  renderContent: (
+    nodeSignal: NodeSignal,
+    container: HTMLElement,
+    renderContextSignal?: MaterialDesignerRenderContextSignal,
+  ) => () => void
+  /**
+   * Datasource drag-and-drop handler. Materials implement this to take over
+   * dragOver detection and drop binding instead of the default BindFieldCommand.
+   * When absent, the designer falls back to default behavior (whole element as drop zone).
+   */
+  datasourceDrop?: DatasourceDropHandler
+
+  // ─── Editing Behavior Protocol (Chapter 22) ─────────────────────
+
+  // Entry trigger is unified to dblclick. The previous `enterTrigger` field
+  // (with a 'click' value for tables) was removed because the resulting
+  // "pointerdown enters editing" path stole the first gesture from canvas
+  // selection/drag, breaking parity with non-table materials and producing
+  // the bug class called out in audit/202605011431.md item 1.
+
+  /** Geometry protocol: material declares hit-test, layout, and selection-to-rect mapping. */
+  geometry?: MaterialGeometry
+  /** Selection types this material supports (e.g. 'table.cell'). */
+  selectionTypes?: SelectionType<unknown>[]
+  /** Behavior middleware chain (Koa-style). */
+  behaviors?: BehaviorRegistration[]
+  /** Selection decoration definitions (framework auto-renders). */
+  decorations?: SelectionDecorationDef[]
+
+  // ─── Resize Side-Effect Protocol ────────────────────────────────
+
+  /**
+   * Resize adapter: lets a material participate in element resize operations.
+   * The framework drives the geometry; the adapter mutates material-private
+   * data (e.g. table row heights) in lockstep, and produces an undo-safe
+   * side-effect that bundles into ResizeMaterialCommand.
+   */
+  resize?: MaterialResizeAdapter
+
+  /**
+   * Dynamic design-time control policy. Materials use this to declare that
+   * some outer geometry controls, resize handles, or property fields are
+   * unavailable for the current node state (for example runtime-measured
+   * repeat rows whose height is content-owned).
+   */
+  resolveControlPolicy?: (node: MaterialNode, context: MaterialControlPolicyContext) => MaterialControlPolicy
+}
+
+export type DesignerRenderer = (context: DesignerRendererContext) => DesignerRenderInstance
 export type PanelSectionId = 'geometry' | 'props' | 'overlay' | 'binding' | 'condition' | 'visibility'
 
 /** Vue-bearing features are supplied only by the /ui specialization. */
