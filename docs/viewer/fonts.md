@@ -43,9 +43,11 @@ const fontProvider: FontProvider = {
 
 ```ts
 import { createViewer } from '@easyink/viewer'
+import { materials } from '@easyink/builtin/all/viewer'
 
-const viewer = createViewer({
+const viewer = await createViewer({
   iframe: iframeElement,
+  materials,
   fontProvider,
 })
 ```
@@ -77,13 +79,15 @@ await viewer.open({
 字体样式会注入到当前 Host 的文档。
 
 ```ts
-const iframeViewer = createViewer({
+const iframeViewer = await createViewer({
   iframe: iframeElement,
+  materials,
   fontProvider,
 })
 
-const domViewer = createViewer({
+const domViewer = await createViewer({
   container: containerElement,
+  materials,
   fontProvider,
 })
 ```

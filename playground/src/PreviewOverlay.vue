@@ -51,7 +51,10 @@ const iframeRef = ref<HTMLIFrameElement>()
 let viewerHost: ViewerHost | undefined
 let viewerViewport: HTMLElement | undefined
 let viewer: ViewerRuntime | undefined
+let creation: Promise<ViewerRuntime | undefined> | undefined
 let disposed = false
+let disposal: Promise<void> | undefined
+let closeEmitted = false
 const exportRuntime = createExportRuntime({ entry: 'preview' })
 
 const zoom = ref(100)
@@ -72,13 +75,33 @@ const isPrinting = ref(false)
 // Auto-connect is handled inside each persisted singleton hook.
 
 onMounted(async () => {
-  if (!iframeRef.value)
+  const iframe = iframeRef.value
+  if (!iframe || disposed)
     return
 
-  await waitForIframeDocument(iframeRef.value)
+  creation = createPreviewViewer(iframe)
+  const runtime = await creation
+  if (!runtime || disposed)
+    return
+
+  viewer = runtime
+  registerOutputIntegrations(runtime)
+  const result = await runtime.open({
+    schema: props.schema,
+    data: props.data,
+  })
+
+  if (disposed || result.status === 'cancelled')
+    return
+  updatePageCount()
+  document.addEventListener('keydown', handleKeyDown)
+})
+
+async function createPreviewViewer(iframe: HTMLIFrameElement): Promise<ViewerRuntime | undefined> {
+  await waitForIframeDocument(iframe)
   if (disposed)
     return
-  const iframeHost = createIframeViewerHost(iframeRef.value)
+  const iframeHost = createIframeViewerHost(iframe)
   const viewerMount = setupIframeSurface(iframeHost)
   viewerViewport = iframeHost.mount
   viewerHost = createCustomViewerHost({
@@ -88,34 +111,41 @@ onMounted(async () => {
     print: iframeHost.print,
   })
 
-  const runtime = await createViewer({ host: viewerHost, fontProvider: playgroundFontProvider, materials: playgroundViewerMaterials })
-  if (disposed) {
-    await runtime.destroy()
-    return
-  }
-  viewer = runtime
-  registerOutputIntegrations(runtime)
-  await runtime.open({
-    schema: props.schema,
-    data: props.data,
-  })
-
-  if (disposed)
-    return
-  updatePageCount()
-  document.addEventListener('keydown', handleKeyDown)
-})
+  return createViewer({ host: viewerHost, fontProvider: playgroundFontProvider, materials: playgroundViewerMaterials })
+}
 
 onBeforeUnmount(() => {
+  void disposeViewer()
+})
+
+async function closePreview(): Promise<void> {
+  await disposeViewer()
+  if (!closeEmitted) {
+    closeEmitted = true
+    emit('close')
+  }
+}
+
+function disposeViewer(): Promise<void> {
+  if (disposal)
+    return disposal
+
   disposed = true
   document.removeEventListener('keydown', handleKeyDown)
   viewerViewport?.removeEventListener('wheel', handleWheel)
   viewerViewport?.removeEventListener('scroll', handleScroll)
-  void viewer?.destroy()
+  const current = viewer
   viewer = undefined
   viewerHost = undefined
   viewerViewport = undefined
-})
+  const cleanup = current?.destroy()
+  disposal = (async () => {
+    // Creation failures have already completed rollback and are reported by onMounted.
+    const runtime = current ?? await creation?.catch(() => undefined)
+    await (cleanup ?? runtime?.destroy())
+  })()
+  return disposal
+}
 
 function registerOutputIntegrations(runtime: ViewerRuntime) {
   exportRuntime.registerPlugin(createDomPdfExportPlugin())
@@ -307,7 +337,7 @@ function updatePageCount() {
 
 function handleKeyDown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
-    emit('close')
+    void closePreview()
   }
 }
 
@@ -874,7 +904,7 @@ async function handleExport() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button variant="outline" size="icon-sm" @click="emit('close')">
+        <Button variant="outline" size="icon-sm" aria-label="关闭预览" @click="void closePreview()">
           <IconClose :size="16" />
         </Button>
       </div>

@@ -31,7 +31,7 @@ pnpm add @easyink/designer @easyink/viewer @easyink/builtin
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue'
-import { builtinDesignerMaterialBundle } from '@easyink/builtin/all'
+import { materials } from '@easyink/builtin/all/designer'
 import { EasyInkDesigner, createLocalStoragePreferenceProvider } from '@easyink/designer'
 import { zhCN } from '@easyink/designer/locale'
 import '@easyink/designer/index.css'
@@ -48,19 +48,15 @@ const schema = ref({
 })
 
 const preferenceProvider = createLocalStoragePreferenceProvider()
-const runtimeConfig = {
-  materials: {
-    bundles: [builtinDesignerMaterialBundle],
-  },
-}
+const designerMaterials = materials
 </script>
 
 <template>
   <EasyInkDesigner
     v-model:schema="schema"
     :locale="zhCN"
+    :materials="designerMaterials"
     :preference-provider="preferenceProvider"
-    :runtime-config="runtimeConfig"
   />
 </template>
 ```
@@ -99,6 +95,7 @@ const dataSources: DataSourceDescriptor[] = [
 ```vue
 <EasyInkDesigner
   v-model:schema="schema"
+  :materials="designerMaterials"
   :data-sources="dataSources"
   :locale="zhCN"
   :preference-provider="preferenceProvider"
@@ -130,6 +127,7 @@ const autoSave = {
 ```vue
 <EasyInkDesigner
   v-model:schema="schema"
+  :materials="designerMaterials"
   :data-sources="dataSources"
   :locale="zhCN"
   :preference-provider="preferenceProvider"
@@ -150,7 +148,7 @@ Viewer 是命令式运行时。你创建实例，调用 `open({ schema, data })`
 ```vue
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+import { materials } from '@easyink/builtin/all/viewer'
 import { createViewer } from '@easyink/viewer'
 
 const props = defineProps<{
@@ -159,25 +157,39 @@ const props = defineProps<{
 }>()
 
 const iframeRef = ref<HTMLIFrameElement | null>(null)
-let viewer: ReturnType<typeof createViewer> | undefined
+let viewer: Awaited<ReturnType<typeof createViewer>> | undefined
+let creation: ReturnType<typeof createViewer> | undefined
+let closing: Promise<void> | undefined
+let disposed = false
 
 onMounted(async () => {
   if (!iframeRef.value)
     return
 
-  viewer = createViewer({ iframe: iframeRef.value })
-  registerBuiltinViewerMaterials((type, binding, extension) => {
-    viewer?.registerMaterial(type, binding, extension)
-  })
+  creation = createViewer({ iframe: iframeRef.value, materials })
+  const created = await creation
+  if (disposed)
+    return
+  viewer = created
   await viewer.open({
     schema: props.schema as never,
     data: props.data,
   })
 })
 
-onBeforeUnmount(() => {
-  viewer?.destroy()
-})
+function close(): Promise<void> {
+  if (closing)
+    return closing
+  disposed = true
+  closing = (async () => {
+    const created = viewer ?? await creation?.catch(() => undefined)
+    await created?.destroy()
+  })()
+  return closing
+}
+
+onBeforeUnmount(() => { void close() })
+defineExpose({ close })
 </script>
 
 <template>
@@ -186,6 +198,8 @@ onBeforeUnmount(() => {
 ```
 
 上面这段代码演示了 Viewer 最重要的输入契约：它只接收 `schema` 和运行时 `data`。Designer 里的 `dataSources` 不会传进来。
+
+父组件关闭预览时先 `await previewRef.close()`，再移除预览组件。`close()` 保留同一个 Promise，并包含尚未完成的 Viewer 创建；`onBeforeUnmount` 也复用这条清理路径。
 
 ## 打印与导出
 
@@ -216,7 +230,7 @@ if (result.status === 'completed') {
 
 - 用 `EasyInkDesigner` 编辑模板。
 - 用 `dataSources` 给模板提供设计时字段树。
-- 用 `createViewer().open({ schema, data })` 预览同一份模板。
+- 先 `await createViewer({ materials })`，再调用 `open({ schema, data })` 预览同一份模板。
 
 关于 EasyInk，目前先掌握这些就够用了。继续往下读时，建议按这个顺序走：
 

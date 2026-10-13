@@ -32,15 +32,16 @@ Browser Host 会把页面渲染进当前文档里的一个容器。
 
 ```ts
 import { createBrowserViewerHost, createViewer } from '@easyink/viewer'
+import { materials } from '@easyink/builtin/all/viewer'
 
 const host = createBrowserViewerHost(containerElement)
-const viewer = createViewer({ host })
+const viewer = await createViewer({ host, materials })
 ```
 
 也可以用快捷写法：
 
 ```ts
-const viewer = createViewer({ container: containerElement })
+const viewer = await createViewer({ container: containerElement, materials })
 ```
 
 这两段代码等价。`createBrowserViewerHost()` 会使用 `container.ownerDocument` 作为 Host 文档，并把 `container` 作为挂载点。
@@ -55,13 +56,13 @@ Iframe Host 会把页面渲染进 iframe 文档。
 import { createIframeViewerHost, createViewer } from '@easyink/viewer'
 
 const host = createIframeViewerHost(iframeElement)
-const viewer = createViewer({ host })
+const viewer = await createViewer({ host, materials })
 ```
 
 同样也有快捷写法：
 
 ```ts
-const viewer = createViewer({ iframe: iframeElement })
+const viewer = await createViewer({ iframe: iframeElement, materials })
 ```
 
 当前实现会读取 `iframe.contentDocument`。如果取不到文档，会抛出 `Viewer iframe document is not available`。
@@ -84,7 +85,7 @@ const host = createCustomViewerHost({
   },
 })
 
-const viewer = createViewer({ host })
+const viewer = await createViewer({ host, materials })
 ```
 
 `print` 是可选的。没有传 `print` 时，Custom Host 会使用默认实现：如果 `window.print` 存在，就调用它；否则打印时会抛出错误。
@@ -96,9 +97,9 @@ const viewer = createViewer({ host })
 可以按目标来选：
 
 ```ts
-const previewViewer = createViewer({ iframe: iframeElement })
-const inlineViewer = createViewer({ container: containerElement })
-const ownedViewer = createViewer({ host: customHost })
+const previewViewer = await createViewer({ iframe: iframeElement, materials })
+const inlineViewer = await createViewer({ container: containerElement, materials })
+const ownedViewer = await createViewer({ host: customHost, materials })
 ```
 
 三种方式都能渲染同一份 Schema。差异在于样式隔离、挂载点归属和打印入口。

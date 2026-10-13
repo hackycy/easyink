@@ -1,7 +1,7 @@
 # 物料能力装配层重构 Goal Runbook
 
 Schema: `goal-loop/runbook-v2`
-Revision: `331`
+Revision: `373`
 
 ## Contract Baseline
 
@@ -28,20 +28,20 @@ Revision: `331`
 | G2: text 与 image 双宿主完整切片 | passed | G1 | `implementation-plan.md -> G2: text 与 image 双宿主完整切片` | `goal/history/G2.md` | `G2-E0051` | `G2@G2-E0051` |
 | G3: Designer UI 与受控服务迁移 | passed | G2 | `implementation-plan.md -> G3: Designer UI 与受控服务迁移` | `goal/history/G3.md` | `G3-E0016` | `G3@G3-E0016` |
 | G4: Render Session 与输出所有权 | passed | G3 | `implementation-plan.md -> G4: Render Session 与输出所有权` | `goal/history/G4.md` | `G4-E0137` | `G4@G4-E0137` |
-| G5: 全部物料与实际宿主切换 | active | G4 | `implementation-plan.md -> G5: 全部物料与实际宿主切换` | `goal/history/G5.md` | `G5-E0001` | `G4@G4-E0137` |
+| G5: 全部物料与实际宿主切换 | active | G4 | `implementation-plan.md -> G5: 全部物料与实际宿主切换` | `goal/history/G5.md` | `G5-E0043` | `G4@G4-E0137` |
 | G6: 0.1.0 候选制品与手动发布交接 | planned | G5 | `implementation-plan.md -> G6: 0.1.0 候选制品与手动发布交接` | `—` | `—` | `G5 pending` |
 
 ## Current Checkpoint
 
 - Gate: `G5: 全部物料与实际宿主切换`
 - History: `goal/history/G5.md`
-- History head: `G5-E0001`
-- Last completed slice: `none`
-- Current slice: `none`
-- Checks: `none`
+- History head: `G5-E0043`
+- Last completed slice: `S2b`
+- Current slice: `S2c`
+- Checks: `D1=pass, R1=pass, R2=pass, R3=pass, R4=pass`
 - Satisfied exits: `none`
 - Manual acceptance: `none`
 - Blocker: `none`
-- Risks: `none`
-- Next action: `select the first slice from the Gate contract`
+- Risks: `D1 stale；D2-D4、R5/R6 未完成；旧 core/Designer 装配类型与正式架构/开发说明仍需核销；无 blocker、无 pending manual`
+- Next action: `继续 G5 S2c 实际消费者核对和全库旧公共 API/架构/开发说明收口，然后验证真实浏览器/Go/Android、D2-D4 与 R5/R6`
 - Contract revision: `用户已授权最小 Go host HTML 加载修复与 G4 Scope 修订，仅恢复 G4 R5，不执行 G5`

@@ -59,15 +59,12 @@ export interface PrintDriverBaseOptions<TClient, TRequestOptions> {
  */
 export type ManagedPrintViewerKind = 'iframe' | 'dom'
 
-export type ManagedPrintViewerSetup = (viewer: ViewerRuntime) => void | Promise<void>
-
 export interface ManagedPrintViewerOptions {
   viewer?: ManagedPrintViewerKind
   autoDestroy?: boolean
   container?: HTMLElement
   iframe?: HTMLIFrameElement
   document?: Document
-  setupViewer?: ManagedPrintViewerSetup
   /** Complete material declarations are selected before Host creation. */
   viewerOptions?: Omit<ViewerOptions, 'host' | 'container' | 'iframe'>
 }
@@ -301,7 +298,6 @@ class ManagedPrintViewerRuntime implements ManagedPrintViewer {
     const session = this.ensureSession()
     try {
       const viewer = await session.creation!
-      await this.options.setupViewer?.(viewer)
       this.assertCurrent(session)
       viewer.registerPrintDriver(driver)
       const rendered = await viewer.open({
@@ -342,7 +338,11 @@ class ManagedPrintViewerRuntime implements ManagedPrintViewer {
     const cleanup = session.viewer?.destroy()
     session.ownedElement?.remove()
     session.ownedElement = undefined
-    session.disposal = cleanup ?? Promise.resolve({ errors: [] })
+    session.disposal = cleanup ?? (async () => {
+      // A rejected creation has already rolled back its Host resources.
+      const viewer = await session.creation?.catch(() => undefined)
+      return viewer?.destroy() ?? { errors: [] }
+    })()
     return session.disposal
   }
 
@@ -351,8 +351,10 @@ class ManagedPrintViewerRuntime implements ManagedPrintViewer {
       return this.session
     const session: ManagedViewerSession = { disposed: false }
     this.session = session
-    session.creation = this.createSessionViewer(session).catch(async (error) => {
-      await this.disposeSession(session)
+    session.creation = this.createSessionViewer(session).catch((error) => {
+      session.disposed = true
+      session.ownedElement?.remove()
+      session.ownedElement = undefined
       throw error
     })
     return session
@@ -371,10 +373,6 @@ class ManagedPrintViewerRuntime implements ManagedPrintViewer {
 
     this.assertCurrent(session)
     const viewer = await createViewer({ ...this.options.viewerOptions, host })
-    if (session.disposed) {
-      await viewer.destroy()
-      this.assertCurrent(session)
-    }
     session.viewer = viewer
     return viewer
   }

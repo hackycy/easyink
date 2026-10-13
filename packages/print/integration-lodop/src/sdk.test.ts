@@ -1,6 +1,15 @@
-import type { DocumentSchema } from '@easyink/viewer'
+import type { DocumentSchema, ViewerOptions } from '@easyink/viewer'
 import { describe, expect, it, vi } from 'vitest'
 import { createLodopPrinter } from './sdk'
+
+const material: NonNullable<ViewerOptions['materials']>[number] = {
+  model: { type: 'selected', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'selected', type: 'selected', x: 0, y: 0, width: 10, height: 10, props: {} }) },
+  renderer: { render: (_node, context) => {
+    const element = context.document.createElement('span')
+    element.textContent = 'Configured material'
+    return { element }
+  } },
+}
 
 function createFixedSchema(): DocumentSchema {
   return {
@@ -21,24 +30,23 @@ describe('lodop printer', () => {
     const client = {
       printerName: 'Printer A',
       useDefaultPrinter: vi.fn(async () => 'Printer A'),
-      printPages: vi.fn(async () => {}),
+      printPages: vi.fn(async (_pages: HTMLElement[]) => {}),
     }
-    const setupViewer = vi.fn()
     const printer = createLodopPrinter({
       client: client as never,
       viewer: 'dom',
-      setupViewer,
+      viewerOptions: { materials: [material] },
       copies: () => 2,
       forcePageSize: () => true,
     })
 
     await printer.print({
-      schema: createFixedSchema(),
+      schema: { ...createFixedSchema(), elements: [material.model.createDefaultNode()] },
       data: {},
     })
 
-    expect(setupViewer).toHaveBeenCalledTimes(1)
     expect(client.printPages).toHaveBeenCalledTimes(1)
+    expect(client.printPages.mock.calls[0]?.[0][0].textContent).toContain('Configured material')
     expect(client.printPages).toHaveBeenCalledWith(expect.any(Array), expect.objectContaining({
       copies: 2,
       forcePageSize: true,

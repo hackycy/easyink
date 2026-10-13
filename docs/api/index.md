@@ -19,16 +19,26 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 | `provideDesignerStore` | Function | Vue provide 注入 store |
 | `useDesignerStore` | Function | Vue inject 获取 store |
 | `useWorkbenchPersistence` | Function | 工作台偏好持久化 composable |
-| `registerMaterialBundle` | Function | 注册物料包 |
-| `ContributionRegistry` | Class | 贡献注册表 |
 | `DesignerInteractionService` | Class | 设计器用户交互桥接服务 |
 | `TemplateHistoryManager` | Class | 模板历史管理 |
 | `createLocalStoragePreferenceProvider` | Function | localStorage 偏好持久化 |
 | `createDefaultWorkbenchState` | Function | 创建默认工作台状态 |
 | `createDefaultSaveBranchMenu` | Function | 创建默认保存分支菜单状态 |
-| `tableSectionFilter` | Function | 表格属性面板过滤器 |
 
-类型导出：`DocumentSchema`, `DocumentSchemaInput`, `MaterialNode`, `DataSourceDescriptor`, `Contribution`, `ContributionContext`, `Command`, `PanelDescriptor`, `ToolbarActionDescriptor`, `DesignerConfirmRequest`, `DesignerConfirmSeverity`, `DesignerInteractionProvider`, `DesignerMaterialBundle`, `DesignerMaterialRegistration`, `DesignerCatalogGroupRegistration`, `DesignerCatalogRegistration`, `MaterialCatalogGroup`, `MaterialCatalogEntry`, `MaterialCapabilities`, `MaterialExtensionFactory`, `LazyMaterialExtensionFactory`, `MaterialBindingDefinition`, `TemplateAutoSaveOptions`, `PreferenceProvider`, `PersistableWorkbenchState`, `LocaleMessages`, `FontDescriptor`, `FontProvider`
+类型导出：`DocumentSchema`, `DocumentSchemaInput`, `MaterialNode`, `DataSourceDescriptor`, `DesignerCreateOptions`, `EasyInkDesignerProps`, `DesignerRuntimeConfig`, `DesignerConfirmRequest`, `DesignerConfirmSeverity`, `DesignerInteractionProvider`, `TemplateAutoSaveOptions`, `PreferenceProvider`, `PersistableWorkbenchState`, `LocaleMessages`, `FontDescriptor`, `FontProvider`
+
+## @easyink/plugin-api
+
+完整物料和独立宿主扩展的公共契约：
+
+| 入口 | 常用类型 |
+| --- | --- |
+| `/material` | `MaterialModel`, `MaterialDeclaration`, `ResourceContext`, `LocaleDeclaration` |
+| `/designer` | `DesignerContext`, `DesignerRendererContext`, `DesignerCommand`, `PropSchema` |
+| `/ui` | `DesignerMaterial`, `DesignerExtension`, `MaterialPropertiesContext`, `PalettePreset` |
+| `/viewer` | `ViewerMaterial`, `ViewerContext`, `ViewerRenderer`, `ViewerSessionRenderer` |
+
+`/viewer` 是不含 Vue UI 的入口。物料在创建时完整选择，框架提供 context 和可等待的资源清理。
 
 ## @easyink/core
 
@@ -43,7 +53,7 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 
 字体相关类型导出：`FontDescriptor`, `FontProvider`, `FontSource`, `FontLoadRequest`, `FontLoadStatus`, `FontLoadState`, `FontLoadSuccess`, `FontLoadFailure`, `FontBatchLoadOptions`, `FontBatchLoadResult`, `FontPreloadResult`
 
-物料扩展类型导出：`MaterialDesignerExtension`, `MaterialExtensionFactory`, `LazyMaterialExtensionFactory`, `MaterialBindingDefinition`, `MaterialViewerExtension`, `ViewerRenderContext`, `ViewerMeasureContext`, `PropSchema`
+物料扩展类型分别从 `@easyink/plugin-api/ui` 和 `@easyink/plugin-api/viewer` 导出；应用通过完整 `DesignerMaterial` / `ViewerMaterial` 声明选择宿主能力。
 
 ## @easyink/viewer
 
@@ -53,7 +63,6 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 |------|------|------|
 | `createViewer` | Function | 创建 ViewerRuntime |
 | `ViewerRuntime` | Class | 核心运行时 |
-| `MaterialRendererRegistry` | Class | 物料渲染注册表 |
 | `renderPages` | Function | 渲染页面 DOM |
 | `createThumbnails` | Function | 生成缩略图 |
 | `collectFontFamilies` | Function | 收集字体引用 |
@@ -66,11 +75,11 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 | `createIframeViewerHost` | Function | Iframe Host |
 | `createCustomViewerHost` | Function | Custom Host |
 
-类型导出：`ViewerHost`, `ViewerOptions`, `ViewerOpenInput`, `ViewerRenderResult`, `ViewerDiagnosticEvent`, `PrintDriver`, `ViewerPrintOptions`, `ViewerPrintPolicy`, `ViewerPrintContext`, `ViewerExporter`, `ViewerExportContext`, `ViewerExportOptions`, `ViewerTaskCallbacks`, `ViewerTaskPhaseEvent`, `ViewerTaskProgressEvent`, `MaterialViewerExtension`, `ViewerRenderContext`, `ViewerMeasureContext`, `FontDescriptor`, `FontProvider`
+类型导出：`ViewerHost`, `ViewerOptions`, `ViewerOpenInput`, `ViewerRenderResult`, `ViewerDiagnosticEvent`, `PrintDriver`, `ViewerPrintOptions`, `ViewerPrintPolicy`, `ViewerPrintContext`, `ViewerExporter`, `ViewerExportContext`, `ViewerExportOptions`, `ViewerTaskCallbacks`, `ViewerTaskPhaseEvent`, `ViewerTaskProgressEvent`, `ViewerRenderContext`, `ViewerMeasureContext`, `FontDescriptor`, `FontProvider`
 
 ## @easyink/builtin
 
-官方内置物料集合。推荐从子路径选择集合：`@easyink/builtin/all`、`@easyink/builtin/basic`、`@easyink/builtin/none`；根入口 `@easyink/builtin` 兼容默认导出全部内置物料，并额外提供 all/basic/none 的显式别名。
+官方内置物料集合。根入口与 `/all`、`/basic` 导出 Designer `materials` 集合；Viewer 在创建时从 `/all/viewer` 或 `/basic/viewer` 选择对应集合；`/none` 是两端都可用的空集合。
 
 公开入口只有：
 
@@ -79,21 +88,18 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 - `@easyink/builtin/basic`
 - `@easyink/builtin/none`
 - `@easyink/builtin/package.json`
+- `@easyink/builtin/all/designer`
+- `@easyink/builtin/basic/designer`
+- `@easyink/builtin/all/viewer`
+- `@easyink/builtin/basic/viewer`
 
-`@easyink/builtin/designer`、`@easyink/builtin/viewer`、`@easyink/builtin/bindings` 不是公开入口。
+每个集合只导出 `materials`，使用方式是创建宿主时传入该完整物料数组。
 
 | 导出 | 类型 | 说明 |
 |------|------|------|
-| `builtinDesignerMaterialBundle` | Object | 可传给 `runtimeConfig.materials.bundles` 的设计态物料包；根入口等同 all 集合 |
-| `builtinDesignerMaterials` | Array | 当前入口包含的设计态物料列表 |
-| `builtinViewerMaterialBundle` | Object | 当前入口包含的 Viewer 渲染物料包 |
-| `builtinViewerMaterials` | Array | 当前入口包含的 Viewer 渲染物料列表 |
-| `registerBuiltinViewerMaterials` | Function | 将当前入口的 Viewer 渲染物料注册到 `ViewerRuntime` |
-| `builtinAllDesignerMaterialBundle` / `builtinBasicDesignerMaterialBundle` / `builtinNoneDesignerMaterialBundle` | Object | 仅根入口导出：显式选择 all/basic/none 设计态物料包 |
-| `builtinAllViewerMaterialBundle` / `builtinBasicViewerMaterialBundle` / `builtinNoneViewerMaterialBundle` | Object | 仅根入口导出：显式选择 all/basic/none Viewer 物料包 |
-| `registerAllBuiltinViewerMaterials` / `registerBasicBuiltinViewerMaterials` / `registerNoneBuiltinViewerMaterials` | Function | 仅根入口导出：注册指定内置物料集合的 Viewer 渲染器 |
-
-类型导出：`BuiltinMaterialSet`, `BuiltinDesignerMaterialBundle`, `BuiltinDesignerMaterialRegistration`, `BuiltinDesignerCatalogGroupRegistration`, `BuiltinDesignerCatalogRegistration`, `BuiltinViewerMaterialBundle`, `BuiltinViewerMaterialRegistration`, `BuiltinViewerRegistrar`, `BuiltinLocaleMessages`
+| `materials` | `readonly DesignerMaterial[]` | 根、`/all`、`/basic` 和 `/all/designer`、`/basic/designer` 提供 Designer 集合 |
+| `materials` | `readonly ViewerMaterial[]` | `/all/viewer` 和 `/basic/viewer` 提供 Viewer 集合 |
+| `materials` | `readonly never[]` | `/none` 空集合，可传给任一宿主 |
 
 ## @easyink/schema
 
@@ -207,7 +213,7 @@ DOM-to-image 导出插件。
 | `createManagedPrintViewer` | Function | 创建托管 Viewer 打印面 |
 | `resolvePrintDriverValue` | Function | 解析静态值或函数式打印配置 |
 
-类型导出：`PrintDriverRequestContext`, `PrintDriverBaseOptions`, `ManagedPrintViewerSetup`, `ManagedPrintViewerOptions`, `ManagedPrintViewer`, `ManagedPrintInput`, `PrinterDeviceLike`, `PrintJobLike`, `ViewerPdfPageSize`, `ViewerPdfPageInput`
+类型导出：`PrintDriverRequestContext`, `PrintDriverBaseOptions`, `ManagedPrintViewerOptions`, `ManagedPrintViewer`, `ManagedPrintInput`, `PrinterDeviceLike`, `PrintJobLike`, `ViewerPdfPageSize`, `ViewerPdfPageInput`
 
 ## @easyink/print-integration-easyink-printer
 

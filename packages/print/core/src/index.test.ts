@@ -1,4 +1,5 @@
-import type { DocumentSchema, ViewerOptions } from '@easyink/viewer'
+import type { DocumentSchema, ViewerOptions, ViewerPrintContext } from '@easyink/viewer'
+import { ViewerRuntime } from '@easyink/viewer'
 import { describe, expect, it, vi } from 'vitest'
 import { createManagedPrintViewer, EasyInkPrintError, getViewerPages, resolvePrintLandscape, resolvePrintOffset, resolvePrintSize, resolveViewerPdfPages, toMillimeters } from './index'
 
@@ -108,31 +109,32 @@ describe('print core utilities', () => {
     expect(document.body.childElementCount).toBe(before)
   })
 
-  it('runs setupViewer before opening the managed viewer', async () => {
-    let setupCompleted = false
-    const print = vi.fn(async () => {
-      expect(setupCompleted).toBe(true)
-    })
-    const setupViewer = vi.fn(async (viewer) => {
-      expect(viewer.schema).toBeUndefined()
-      await Promise.resolve()
-      setupCompleted = true
+  it('renders materials selected in the creation options before printing', async () => {
+    const material: NonNullable<ViewerOptions['materials']>[number] = {
+      model: { type: 'selected', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'selected', type: 'selected', x: 0, y: 0, width: 1, height: 1, props: {} }) },
+      renderer: { render: (_node, ctx) => {
+        const element = ctx.document.createElement('span')
+        element.textContent = 'Selected material'
+        return { element }
+      } },
+    }
+    const print = vi.fn(async (context: ViewerPrintContext) => {
+      expect(context.container?.textContent).toContain('Selected material')
     })
     const managed = createManagedPrintViewer({
       viewer: 'dom',
-      setupViewer,
+      viewerOptions: { materials: [material] },
     })
 
     await managed.printWithDriver({
-      schema: createFixedSchema(),
+      schema: { ...createFixedSchema(), elements: [material.model.createDefaultNode()] },
       data: {},
     }, {
-      id: 'managed-setup-test',
+      id: 'managed-selected-test',
       defaults: { pageSizeMode: 'fixed' },
       print,
     })
 
-    expect(setupViewer).toHaveBeenCalledTimes(1)
     expect(print).toHaveBeenCalledTimes(1)
   })
 
@@ -147,10 +149,10 @@ describe('print core utilities', () => {
     expect(document.body.childElementCount).toBe(before)
   })
 
-  it('releases a failed setup and awaits resource cleanup', async () => {
+  it('releases a failed print and awaits resource cleanup', async () => {
     const release = Promise.withResolvers<void>()
     const cleanupStarted = Promise.withResolvers<void>()
-    const cause = new Error('setup failed')
+    const cause = new Error('print failed')
     const material: NonNullable<ViewerOptions['materials']>[number] = {
       model: { type: 'cleanup', binding: { kind: 'none' as const }, createDefaultNode: () => ({ id: 'cleanup', type: 'cleanup', x: 0, y: 0, width: 1, height: 1, props: {} }) },
       loadRenderer: async (ctx) => {
@@ -161,12 +163,12 @@ describe('print core utilities', () => {
         return { render: () => ({}) }
       },
     }
-    const managed = createManagedPrintViewer({ viewer: 'dom', viewerOptions: { materials: [material] }, setupViewer: async (viewer) => {
-      await viewer.open({ schema: { ...createFixedSchema(), elements: [material.model.createDefaultNode()] } })
-      throw cause
-    } })
+    const managed = createManagedPrintViewer({ viewer: 'dom', viewerOptions: { materials: [material] } })
     const before = document.body.childElementCount
-    const rejected = managed.printWithDriver({ schema: createFixedSchema() }, { id: 'setup', print: async () => {} }).catch(error => error)
+    const rejected = managed.printWithDriver(
+      { schema: { ...createFixedSchema(), elements: [material.model.createDefaultNode()] } },
+      { id: 'failed', print: async () => { throw cause } },
+    ).catch(error => error)
     await cleanupStarted.promise
     const disposal = managed.destroy()
     expect(managed.destroy()).toBe(disposal)
@@ -176,26 +178,35 @@ describe('print core utilities', () => {
     expect(await rejected).toBe(cause)
   })
 
-  it('invalidates an awaited setup and leaves a later print session intact', async () => {
-    const started = Promise.withResolvers<void>()
-    const release = Promise.withResolvers<void>()
-    const setupViewer = vi.fn(async () => {
-      if (setupViewer.mock.calls.length === 1) {
-        started.resolve()
-        await release.promise
-      }
+  it('awaits creation cleanup and leaves a later print session intact', async () => {
+    const cleanupStarted = Promise.withResolvers<void>()
+    const releaseCleanup = Promise.withResolvers<void>()
+    const destroy = ViewerRuntime.prototype.destroy
+    const cleanup = vi.spyOn(ViewerRuntime.prototype, 'destroy').mockImplementation(function (this: ViewerRuntime) {
+      const result = destroy.call(this)
+      cleanupStarted.resolve()
+      return Promise.all([result, releaseCleanup.promise]).then(([result]) => result)
     })
-    const managed = createManagedPrintViewer({ viewer: 'dom', viewerOptions: { materials: [] }, autoDestroy: false, setupViewer })
+    const managed = createManagedPrintViewer({ viewer: 'dom', viewerOptions: { materials: [] }, autoDestroy: false })
     const print = vi.fn(async () => {})
     const input = { schema: createFixedSchema() }
     const driver = { id: 'pending', print }
     const before = document.body.childElementCount
     const pending = managed.printWithDriver(input, driver).catch(error => error)
-    await started.promise
-    await managed.destroy()
-    await managed.printWithDriver(input, driver)
-    release.resolve()
+    const disposal = managed.destroy()
+    let settled = false
+    void disposal.then(() => {
+      settled = true
+    })
+    expect(managed.destroy()).toBe(disposal)
+    await cleanupStarted.promise
+    expect(settled).toBe(false)
+    releaseCleanup.resolve()
+    await disposal
+    cleanup.mockRestore()
     expect(await pending).toMatchObject({ code: 'PRINT_VIEWER_DISPOSED' })
+    expect(document.body.childElementCount).toBe(before)
+    await managed.printWithDriver(input, driver)
     expect(print).toHaveBeenCalledOnce()
     expect(document.body.childElementCount).toBe(before + 1)
     await managed.destroy()

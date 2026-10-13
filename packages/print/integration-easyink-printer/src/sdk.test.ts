@@ -1,14 +1,23 @@
-import type { DocumentSchema } from '@easyink/viewer'
+import type { DocumentSchema, ViewerOptions } from '@easyink/viewer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEasyInkPrinter } from './sdk'
 
 const { renderPagesToPdfBlob } = vi.hoisted(() => ({
-  renderPagesToPdfBlob: vi.fn(async () => new Blob(['pdf'])),
+  renderPagesToPdfBlob: vi.fn(async (_input: { pages: HTMLElement[] }) => new Blob(['pdf'])),
 }))
 
 vi.mock('@easyink/export-plugin-dom-pdf', () => ({
   renderPagesToPdfBlob,
 }))
+
+const material: NonNullable<ViewerOptions['materials']>[number] = {
+  model: { type: 'selected', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'selected', type: 'selected', x: 0, y: 0, width: 10, height: 10, props: {} }) },
+  renderer: { render: (_node, context) => {
+    const element = context.document.createElement('span')
+    element.textContent = 'Configured material'
+    return { element }
+  } },
+}
 
 function createFixedSchema(): DocumentSchema {
   return {
@@ -34,11 +43,10 @@ describe('easy ink printer', () => {
       printPdf: vi.fn(async () => 'job-12345678'),
       waitForJob: vi.fn(async () => ({ jobId: 'job-12345678', status: 'completed' })),
     }
-    const setupViewer = vi.fn()
     const printer = createEasyInkPrinter({
       client: client as never,
       viewer: 'dom',
-      setupViewer,
+      viewerOptions: { materials: [material] },
       defaults: {
         printerName: 'Printer A',
         copies: 3,
@@ -47,12 +55,12 @@ describe('easy ink printer', () => {
     })
 
     await printer.print({
-      schema: createFixedSchema(),
+      schema: { ...createFixedSchema(), elements: [material.model.createDefaultNode()] },
       data: {},
     })
 
-    expect(setupViewer).toHaveBeenCalledTimes(1)
     expect(renderPagesToPdfBlob).toHaveBeenCalledTimes(1)
+    expect(renderPagesToPdfBlob.mock.calls[0]?.[0].pages[0].textContent).toContain('Configured material')
     expect(client.printPdf).toHaveBeenCalledWith(expect.any(Blob), expect.objectContaining({
       copies: 3,
       forcePageSize: true,

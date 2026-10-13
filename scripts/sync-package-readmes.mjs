@@ -172,6 +172,7 @@ function buildReadme({ packageName, description, repositoryUrl }) {
     '',
     description.trim(),
     '',
+    ...buildUsage(packageName),
     '## Documentation',
     '',
     `- [Docs](${documentationUrl})`,
@@ -181,6 +182,34 @@ function buildReadme({ packageName, description, repositoryUrl }) {
     `[MIT](${repositoryUrl}/blob/main/LICENSE) © 2025-present hackycy`,
     '',
   ].join('\n')
+}
+
+function buildUsage(packageName) {
+  if (packageName !== '@easyink/builtin')
+    return []
+
+  return [
+    '## Usage',
+    '',
+    'Choose a complete material set by host and subpath:',
+    '',
+    '```ts',
+    'import { materials as designerMaterials } from \'@easyink/builtin/all/designer\'',
+    'import { materials as viewerMaterials } from \'@easyink/builtin/all/viewer\'',
+    'import { DesignerStore } from \'@easyink/designer\'',
+    'import { createViewer } from \'@easyink/viewer\'',
+    '',
+    'const designer = await DesignerStore.create({ materials: designerMaterials })',
+    'const viewer = await createViewer({ container, materials: viewerMaterials })',
+    '',
+    'await Promise.all([designer.destroy(), viewer.destroy()])',
+    '```',
+    '',
+    'Available subpaths: `@easyink/builtin/all/designer`, `@easyink/builtin/basic/designer`, `@easyink/builtin/all/viewer`, `@easyink/builtin/basic/viewer`, and `@easyink/builtin/none`.',
+    '',
+    'Every public entry exports only `materials`. Choose the array while creating the host; there is no post-creation registration API.',
+    '',
+  ]
 }
 
 function resolveRepositoryUrl(rootPackageJson) {

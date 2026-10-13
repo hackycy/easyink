@@ -4,7 +4,7 @@ description: 在 Designer 中接入 EasyInk Assistant：注册助手面板、部
 
 # AI模板生成 {#assistant}
 
-Assistant 是官方的 Designer 模板生成助手。你把一个 Contribution 接进 Designer，再把前端连到 `assistant-orchestrator` 服务，用户就可以在设计器里描述要生成的票据、标签或表单，并在确认后应用到当前模板。
+Assistant 是官方的 Designer 模板生成助手。你通过 `extensions` 把独立 Designer 扩展接进 Designer，再把前端连到 `assistant-orchestrator` 服务，用户就可以在设计器里描述要生成的票据、标签或表单，并在确认后应用到当前模板。
 
 ## 安装包 {#install-packages}
 
@@ -44,7 +44,7 @@ const contributions = [assistant]
     v-model:schema="schema"
     :locale="zhCN"
     :preference-provider="preferenceProvider"
-    :contributions="contributions"
+    :extensions="contributions"
   />
 </template>
 ```
@@ -483,7 +483,7 @@ Assistant 不会在生成完成后自动改模板。用户需要先查看生成�
 先确认 `contributions` 真的传给了 Designer：
 
 ```vue
-<EasyInkDesigner :contributions="contributions" />
+<EasyInkDesigner :extensions="contributions" />
 ```
 
 如果你把 `contributions` 写在 `computed` 里，也要保证里面的 `createAssistantContribution()` 没有在每次渲染时重新创建。

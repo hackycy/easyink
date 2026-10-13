@@ -34,7 +34,7 @@ describe('chart radar options', () => {
     const option = createChartRadarRuntimeOption(CHART_RADAR_DEFAULTS)
     const series = option.series as Array<{ data: Array<{ value: number[] }> }>
 
-    expect(series[0]?.data[0]?.value).toEqual([])
+    expect(series[0]?.data).toEqual([])
   })
 
   it('maps radar display settings', () => {
