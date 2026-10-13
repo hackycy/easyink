@@ -349,7 +349,7 @@ def command_bootstrap(args: argparse.Namespace) -> None:
             rows.append(v.LedgerRow(gate.label, "planned", f"G{gate.number - 1}", f"implementation-plan.md -> {gate.label}", "—", "—", f"G{gate.number - 1} pending"))
     checkpoint = {"Gate": first.label, "History": "goal/history/G0.md", "History head": "G0-E0001", "Last completed slice": "none", "Current slice": "none", "Checks": "none", "Satisfied exits": "none", "Manual acceptance": "none", "Blocker": "none", "Risks": "none", "Next action": "select the first slice from the Gate contract", "Contract revision": "initial"}
     prompt = current_prompt(effort)
-    writes = {effort / "goal" / "contract-baseline.json": manifest, effort / "goal" / "runbook.md": render_runbook(plan_title(plan_path.read_text(encoding="utf-8")), 0, v.sha256_bytes(manifest), rows, checkpoint).encode(), effort / "goal" / "prompt.md": prompt, effort / "goal" / "history" / "G0.md": history.encode()}
+    writes = {effort / "goal" / "contract-baseline.json": manifest, effort / "goal" / "runbook.md": render_runbook(plan_title(plan_path.read_text(encoding="utf-8")), 0, v.content_sha256_bytes(manifest), rows, checkpoint).encode(), effort / "goal" / "prompt.md": prompt, effort / "goal" / "history" / "G0.md": history.encode()}
     # Pin the executable pair with the prompt; normal execution needs no skill installation.
     for source in (Path(__file__).resolve(), Path(v.__file__).resolve()):
         writes[effort / "goal" / source.name] = source.read_bytes()
@@ -558,13 +558,13 @@ def command_revise_contract(args: argparse.Namespace) -> None:
     if errors:
         die("candidate plan is invalid: " + "; ".join(errors))
     if not args.preview_digest and args.expected_revision is None:
-        digest = v.sha256_bytes(candidate.encode())
+        digest = v.content_sha256_bytes(candidate.encode())
         print(json.dumps({"mode": args.mode, "digest": digest, "gates": [gate.label for gate in plan.gates]}, ensure_ascii=False, indent=2))
         return
     if args.expected_revision is None:
         die("commit requires --expected-revision")
     state = control(effort, args.expected_revision, allow_drift=True)
-    if args.preview_digest and args.preview_digest != v.sha256_bytes(candidate.encode()):
+    if args.preview_digest and args.preview_digest != v.content_sha256_bytes(candidate.encode()):
         die("preview digest does not match candidate plan")
     if args.mode not in {"equivalent", "revalidate"}:
         die("revise-contract mode must be equivalent or revalidate")
@@ -578,7 +578,7 @@ def command_revise_contract(args: argparse.Namespace) -> None:
     plan_rel = v.repo_relative(plan_path, repo_root)
     for entry in manifest_data["files"]:
         if entry["path"] == plan_rel:
-            entry["sha256"] = v.sha256_bytes(candidate.encode())
+            entry["sha256"] = v.content_sha256_bytes(candidate.encode())
     manifest = (json.dumps(manifest_data, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode()
     rows: list[v.LedgerRow] = state["rows"]  # type: ignore[assignment]
     if args.mode == "revalidate":
@@ -591,11 +591,11 @@ def command_revise_contract(args: argparse.Namespace) -> None:
         history = history_header(gate) + "\n" + render_event(f"G{first}-E0001", "initialized", {"At": today(), "Type": "initialized", "Slice": "none", "Result": "Gate reactivated after contract revision.", "Risk": "none", "Next": "review revised contract"})
         checkpoint = {"Gate": gate.label, "History": f"goal/history/{gate.id}.md", "History head": f"{gate.id}-E0001", "Last completed slice": "none", "Current slice": "none", "Checks": "none", "Satisfied exits": "none", "Manual acceptance": "none", "Blocker": "none", "Risks": "none", "Next action": "review revised contract", "Contract revision": args.reason}
         extra = {effort / "implementation-plan.md": candidate.encode(), effort / "goal" / "contract-baseline.json": manifest, effort / "goal" / "history" / f"G{first}.md": history.encode()}
-        revised_state = {**state, "rows": rows, "plan": plan, "index": first, "gate": gate, "manifest_hash": v.sha256_bytes(manifest), "history_path": effort / rows[first].history, "history_text": history}
+        revised_state = {**state, "rows": rows, "plan": plan, "index": first, "gate": gate, "manifest_hash": v.content_sha256_bytes(manifest), "history_path": effort / rows[first].history, "history_text": history}
         write_state(revised_state, history, checkpoint, operation="revise-contract", extra=extra)
     else:
         extra = {effort / "implementation-plan.md": candidate.encode(), effort / "goal" / "contract-baseline.json": manifest}
-        state["manifest_hash"] = v.sha256_bytes(manifest)
+        state["manifest_hash"] = v.content_sha256_bytes(manifest)
         write_state(state, state["history_text"], {**state["checkpoint"], "Contract revision": args.reason}, operation="revise-contract", extra=extra)  # type: ignore[arg-type]
 
 

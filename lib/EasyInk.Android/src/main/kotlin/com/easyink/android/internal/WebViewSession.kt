@@ -39,6 +39,15 @@ internal class WebViewSession(
         return MainThread.run {
             val view = createWebView()
             webView = view
+            // Fix the initial viewport before navigation. Resizing a zero-width WebView
+            // after load can change its page zoom independently of devicePixelRatio.
+            val widthPx = prepared.pages.maxOfOrNull { mmToPx(it.widthMm) } ?: 1
+            val heightPx = prepared.pages.sumOf { mmToPx(it.heightMm) }.coerceAtLeast(1)
+            view.measure(
+                android.view.View.MeasureSpec.makeMeasureSpec(widthPx, android.view.View.MeasureSpec.EXACTLY),
+                android.view.View.MeasureSpec.makeMeasureSpec(heightPx, android.view.View.MeasureSpec.EXACTLY),
+            )
+            view.layout(0, 0, widthPx, heightPx)
             view.loadUrl(url)
             view
         }.let { view ->
@@ -416,7 +425,7 @@ internal class WebViewSession(
     }
 
     private fun mmToPx(value: Double): Int {
-        return (value / 25.4 * 96.0).toInt().coerceAtLeast(1)
+        return ceil(value / 25.4 * 96.0 * context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
     }
 
     companion object {

@@ -22,19 +22,19 @@
     },
     {
       "path": ".scratch/material-plugin-refactor/issues/05-host-lifecycle.md",
-      "sha256": "569c631085e6ae404e364468a8a9084303003771484c9d980be64a1d7a643013"
+      "sha256": "9966162bc582e7e775d7339cf7c9142f5250b68fd615b0525a3b59c867203ab8"
     },
     {
       "path": ".scratch/material-plugin-refactor/issues/06-material-contributions.md",
-      "sha256": "ce812118f8d9efde0b8a8ebba9a4abdb09300b859e3acb7953180a7fac7d13cf"
+      "sha256": "fef9c61b250bea515af574a9c13156f19f4c30cdcb83bf57d9dbe31f3e227ad6"
     },
     {
       "path": ".scratch/material-plugin-refactor/issues/07-ui-slots.md",
-      "sha256": "eda1e18b8ba134eb858d1f635266f04c55e6e97f21b7b0eee09b7deb2a766955"
+      "sha256": "fe1dc09f0875471073cfd5be64cff026527c487e65e185b8eee5c9362c7e60d7"
     },
     {
       "path": ".scratch/material-plugin-refactor/issues/08-render-session.md",
-      "sha256": "51a91e149c4cf7393968d9232a7410127f4c795c705f5f124b36fe3ac31fdf99"
+      "sha256": "75b478fc5b0bab7f6f201088a12ea5f8ce7a6ed0ad4298d9bb3c6c3e8f5f687e"
     },
     {
       "path": ".scratch/material-plugin-refactor/issues/09-compatibility-cutover.md",
@@ -58,7 +58,7 @@
     },
     {
       "path": "CLAUDE.md",
-      "sha256": "c923db1d840d2c404e31aa06c0432a9a3d6b87e027390871106143dd6d9668fd"
+      "sha256": "671a0b24d323eb4be4af462b8898f329a1bbc4c3db7e4528867e776ec3c43133"
     },
     {
       "path": "GLOSSARY.md",

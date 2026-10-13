@@ -1,12 +1,12 @@
 # 物料能力装配层重构 Goal Runbook
 
 Schema: `goal-loop/runbook-v2`
-Revision: `434`
+Revision: `464`
 
 ## Contract Baseline
 
 - Manifest: `goal/contract-baseline.json`
-- Manifest SHA-256: `a5552574f39fdb4f540ef9a01c077624a46761bbbdf14f1542ce54e75035acf6`
+- Manifest SHA-256: `542095ade1e4bb0e461daa0a4b157f92e5ddbb9b9bc27e2ba0e23f363468072b`
 
 ## State Rules
 
@@ -28,20 +28,20 @@ Revision: `434`
 | G2: text 与 image 双宿主完整切片 | passed | G1 | `implementation-plan.md -> G2: text 与 image 双宿主完整切片` | `goal/history/G2.md` | `G2-E0051` | `G2@G2-E0051` |
 | G3: Designer UI 与受控服务迁移 | passed | G2 | `implementation-plan.md -> G3: Designer UI 与受控服务迁移` | `goal/history/G3.md` | `G3-E0016` | `G3@G3-E0016` |
 | G4: Render Session 与输出所有权 | passed | G3 | `implementation-plan.md -> G4: Render Session 与输出所有权` | `goal/history/G4.md` | `G4-E0137` | `G4@G4-E0137` |
-| G5: 全部物料与实际宿主切换 | blocked | G4 | `implementation-plan.md -> G5: 全部物料与实际宿主切换` | `goal/history/G5.md` | `G5-E0102` | `G4@G4-E0137` |
-| G6: 0.1.0 候选制品与手动发布交接 | planned | G5 | `implementation-plan.md -> G6: 0.1.0 候选制品与手动发布交接` | `—` | `—` | `G5 pending` |
+| G5: 全部物料与实际宿主切换 | passed | G4 | `implementation-plan.md -> G5: 全部物料与实际宿主切换` | `goal/history/G5.md` | `G5-E0130` | `G5@G5-E0130` |
+| G6: 0.1.0 候选制品与手动发布交接 | active | G5 | `implementation-plan.md -> G6: 0.1.0 候选制品与手动发布交接` | `goal/history/G6.md` | `G6-E0001` | `G5@G5-E0130` |
 
 ## Current Checkpoint
 
-- Gate: `G5: 全部物料与实际宿主切换`
-- History: `goal/history/G5.md`
-- History head: `G5-E0102`
+- Gate: `G6: 0.1.0 候选制品与手动发布交接`
+- History: `goal/history/G6.md`
+- History head: `G6-E0001`
 - Last completed slice: `none`
-- Current slice: `Directed`
-- Checks: `D1=pass, R1=pass, R2=pass, R3=pass, R4=pass, R5=pass, R6=pass, D2=pass, D4=pass, D3=fail`
-- Satisfied exits: `E1`
+- Current slice: `none`
+- Checks: `none`
+- Satisfied exits: `none`
 - Manual acceptance: `none`
-- Blocker: `SC2: Go/Android、浏览器或实际宿主环境缺失，完成独立迁移后仍有必需验收无法执行。; G5独立迁移与所有可执行验证已完成。R1-R6/D1/D2/D4最新pass，D3浏览器/Go/API均pass，仅Android缺环境：gradlew --version exit9009，JAVA_HOME/java和ANDROID_HOME/ANDROID_SDK_ROOT/adb/emulator均无，未找到SDK/设备，AAR/sample APK不存在。缺Android真实构建、WebView PDF/图片与await cleanup验收，G5 E2不能满足。`
-- Risks: `不得以缺环境/skip视为通过；G6保持未激活`
-- Next action: `恢复条件：配置可用JDK、匹配当前工程的Gradle/Android SDK35、adb真机或带WebView模拟器；resume后重读context并构建AAR/sample核对runtime资产，运行HTML/Schema PDF与图片及cleanup，补验stale检查和D3再pass-gate`
-- Contract revision: `Include remaining Designer extension developer guidance in G5 evidence`
+- Blocker: `none`
+- Risks: `none`
+- Next action: `select the first slice from the Gate contract`
+- Contract revision: `修复跨机器换行符假漂移：合同输入、manifest 和 evidence fingerprint 对 UTF-8 文本统一将 CRLF 归一化为 LF；二进制及 transaction integrity 保持原始字节校验。正文、空格、标点和最终换行变化仍触发漂移。`

@@ -34,8 +34,10 @@ const outputDir = resolve(smokeRoot, 'output')
 const requestPath = resolve(smokeRoot, 'supermarket-request.json')
 const diagnosticsPath = resolve(smokeRoot, 'supermarket-diagnostics.json')
 const outputPath = resolve(outputDir, 'supermarket-receipt.pdf')
-const nativeWindows = process.platform === 'win32'
-const hostBinaryPath = nativeWindows ? resolve(smokeRoot, 'easyink-render.exe') : resolve(hostRoot, 'easyink-render')
+const nativeHost = process.platform === 'win32' || process.platform === 'darwin'
+const hostBinaryPath = nativeHost
+  ? resolve(smokeRoot, process.platform === 'win32' ? 'easyink-render.exe' : 'easyink-render')
+  : resolve(hostRoot, 'easyink-render')
 
 void main().catch((error) => {
   console.error(error)
@@ -46,7 +48,7 @@ async function main(): Promise<void> {
   try {
     resetSmokeRoot()
     writeSupermarketRequest()
-    if (nativeWindows) {
+    if (nativeHost) {
       buildNativeHostBinary()
       renderWithNativeChromium()
     }
@@ -55,7 +57,7 @@ async function main(): Promise<void> {
       renderWithChromium()
     }
     assertSmokeResult()
-    if (nativeWindows)
+    if (nativeHost)
       await renderWithActualApi()
   }
   finally {
@@ -69,7 +71,7 @@ async function renderWithActualApi(): Promise<void> {
     ...loadRenderApiConfig({}),
     binary: hostBinaryPath,
     workDir,
-    defaultRuntime: { noDaemon: true, disableSandbox: true, browserPath: process.env.EASYINK_RENDER_BROWSER_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe' },
+    defaultRuntime: { noDaemon: true, disableSandbox: true, browserPath: nativeBrowserPath() },
   } })
   try {
     const address = await api.listen(0, '127.0.0.1')
@@ -123,13 +125,18 @@ function buildNativeHostBinary(): void {
   run('go', ['build', '-C', hostRoot, '-trimpath', '-o', hostBinaryPath, './cmd/easyink-render'])
 }
 
-function renderWithNativeChromium(): void {
+function nativeBrowserPath(): string {
   const browserPath = process.env.EASYINK_RENDER_BROWSER_PATH ?? [
     'C:/Program Files/Google/Chrome/Application/chrome.exe',
     'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   ].find(path => existsSync(path))
   if (!browserPath)
-    throw new Error('Set EASYINK_RENDER_BROWSER_PATH to a Chromium executable for the native Windows smoke check')
+    throw new Error('Set EASYINK_RENDER_BROWSER_PATH to a Chromium executable for the native smoke check')
+  return browserPath
+}
+
+function renderWithNativeChromium(): void {
   run(hostBinaryPath, [
     'render',
     '--no-daemon',
@@ -139,7 +146,7 @@ function renderWithNativeChromium(): void {
     '--out',
     outputPath,
     '--browser-path',
-    browserPath,
+    nativeBrowserPath(),
     '--profile-root',
     resolve(smokeRoot, 'profile'),
     '--temp-dir',

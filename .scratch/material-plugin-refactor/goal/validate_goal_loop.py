@@ -91,15 +91,24 @@ class Event:
 
 
 def sha256_bytes(data: bytes) -> str:
+    """Hash exact bytes for transaction integrity."""
     return hashlib.sha256(data).hexdigest()
 
 
+def content_sha256_bytes(data: bytes) -> str:
+    """Ignore checkout line endings in UTF-8 text; keep binary bytes exact."""
+    if b"\0" not in data:
+        try:
+            data.decode("utf-8")
+        except UnicodeDecodeError:
+            pass
+        else:
+            data = data.replace(b"\r\n", b"\n")
+    return sha256_bytes(data)
+
+
 def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return content_sha256_bytes(path.read_bytes())
 
 
 def find_repo_root(effort: Path) -> Path:
