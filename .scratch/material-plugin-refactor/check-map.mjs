@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -34,6 +35,8 @@ function headingIds(body) {
 
 function checkLinks(file) {
   const body = read(file).replace(/^```[^\n]*\n[\s\S]*?^```[^\n]*$/gm, '')
+  const historical = relative(file).startsWith('.scratch/material-plugin-refactor/evidence/') || path.basename(file) === 'architecture-audit.md'
+  const baseline = historical ? body.match(/(?:HEAD |源码基线：`|当前源码：`)([a-f\d]{40})/)?.[1] : undefined
   for (const match of body.matchAll(/\[[^\]\n]*\]\(([^)\n]+)\)/g)) {
     const href = match[1].replace(/^<|>$/g, '')
     if (/^[a-z][a-z\d+.-]*:/i.test(href))
@@ -41,6 +44,15 @@ function checkLinks(file) {
     const [pathname, anchor] = href.split('#')
     const target = pathname ? path.resolve(path.dirname(file), decodeURIComponent(pathname)) : file
     if (!existsSync(target)) {
+      // Historical evidence remains tied to its declared revision after cutover.
+      // Verify the actual Git object instead of suppressing deleted-source links.
+      if (baseline && target.startsWith(`${repositoryRoot}${path.sep}`) && !target.endsWith('.md')) {
+        try {
+          execFileSync('git', ['cat-file', '-e', `${baseline}:${relative(target)}`], { cwd: repositoryRoot, stdio: 'pipe' })
+          continue
+        }
+        catch {}
+      }
       errors.push(`${relative(file)}: missing link ${href}`)
       continue
     }

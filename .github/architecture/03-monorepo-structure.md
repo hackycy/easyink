@@ -66,7 +66,7 @@ easyink/
 - `./designer` 提供完整 Designer 物料、只读查询、受控编辑及参数/结果关联的命令；`./viewer` 提供同步 renderer、受管 loader 与可选会话实现声明。
 - `./ui` 单独引用 Vue，声明物料目录、专属属性组件及独立工具栏、右键和弹层扩展。根、material、designer、viewer 入口不重导出 UI。
 - 依赖 core/schema/shared 的领域协议及 datasource 描述类型，不依赖 Designer/Viewer 实现；底层包不反向依赖 plugin-api。
-- 公共声明与消费夹具已落地，Designer/Viewer 创建入口已接入每实例 Host；后续 Gate 继续验收物料、UI 和 Render Session 业务。
+- 公共声明与消费夹具已落地，全部物料、Designer UI、Render Session 和实际宿主使用每实例 Host。
 
 ### `@easyink/plugin-runtime`
 

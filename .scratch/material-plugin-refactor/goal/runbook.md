@@ -1,12 +1,12 @@
 # 物料能力装配层重构 Goal Runbook
 
 Schema: `goal-loop/runbook-v2`
-Revision: `464`
+Revision: `550`
 
 ## Contract Baseline
 
 - Manifest: `goal/contract-baseline.json`
-- Manifest SHA-256: `542095ade1e4bb0e461daa0a4b157f92e5ddbb9b9bc27e2ba0e23f363468072b`
+- Manifest SHA-256: `62502bc0c116cf135087b12bd18c18fb43f05a1922f24e13be252cc67ea099d3`
 
 ## State Rules
 
@@ -29,19 +29,19 @@ Revision: `464`
 | G3: Designer UI 与受控服务迁移 | passed | G2 | `implementation-plan.md -> G3: Designer UI 与受控服务迁移` | `goal/history/G3.md` | `G3-E0016` | `G3@G3-E0016` |
 | G4: Render Session 与输出所有权 | passed | G3 | `implementation-plan.md -> G4: Render Session 与输出所有权` | `goal/history/G4.md` | `G4-E0137` | `G4@G4-E0137` |
 | G5: 全部物料与实际宿主切换 | passed | G4 | `implementation-plan.md -> G5: 全部物料与实际宿主切换` | `goal/history/G5.md` | `G5-E0130` | `G5@G5-E0130` |
-| G6: 0.1.0 候选制品与手动发布交接 | active | G5 | `implementation-plan.md -> G6: 0.1.0 候选制品与手动发布交接` | `goal/history/G6.md` | `G6-E0001` | `G5@G5-E0130` |
+| G6: 0.1.0 候选制品与手动发布交接 | passed | G5 | `implementation-plan.md -> G6: 0.1.0 候选制品与手动发布交接` | `goal/history/G6.md` | `G6-E0086` | `G6@G6-E0086` |
 
 ## Current Checkpoint
 
-- Gate: `G6: 0.1.0 候选制品与手动发布交接`
-- History: `goal/history/G6.md`
-- History head: `G6-E0001`
+- Gate: `none`
+- History: `none`
+- History head: `G6-E0086`
 - Last completed slice: `none`
 - Current slice: `none`
-- Checks: `none`
-- Satisfied exits: `none`
+- Checks: `all pass`
+- Satisfied exits: `all`
 - Manual acceptance: `none`
 - Blocker: `none`
 - Risks: `none`
-- Next action: `select the first slice from the Gate contract`
-- Contract revision: `修复跨机器换行符假漂移：合同输入、manifest 和 evidence fingerprint 对 UTF-8 文本统一将 CRLF 归一化为 LF；二进制及 transaction integrity 保持原始字节校验。正文、空格、标点和最终换行变化仍触发漂移。`
+- Next action: `effort complete`
+- Contract revision: `G6 实际候选/平台/文档验收完成后更新地图和路线的已落地实施摘要；保持全部有效决议、Gate 检查和发布边界不变。`

@@ -124,7 +124,7 @@ EasyInk 里有两套同名但不同语义的 selection 模型，必须在阅读�
 
 ### 宿主消费
 
-- Contribution 通过 `ctx.onDiagnostic(fn)` 订阅，返回的 unsubscribe 在 contribution dispose 时被 registry 自动调用。
+- 工作台和宿主通过 `store.diagnostics.subscribe(fn)` 订阅，并在自身清理时调用返回的 unsubscribe。独立 Designer 扩展通过受控 `context.reportDiagnostic()` 上报错误。
 - 内置 `DebugPanel.vue` 渲染最近 200 条（severity 颜色边框 + JSON detail + clear），开发与排查现场可直接打开。
 
 ## 22.1 设计动机

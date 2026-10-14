@@ -66,7 +66,7 @@ EasyInk 分层的关键点是：设计器和 Viewer 是两个明确协作的上�
 
 `createHost` 在内核中同步收集并校验完整声明，维护唯一只读登记源和 Scope 所有权，等待宿主提供的核心消费者初始化。内核不解释布局、不创建 Vue 组件、不编辑文档；只依赖 plugin-api。locale 错误降级运行，登记或核心初始化错误等待整体清理后拒绝创建。
 
-销毁先同步失效和撤销登记视图，再停用消费者、逆序清理 Scope；受管任务同时检查 Host、Scope 和任务代次，迟到资源单独释放。Viewer 与 DesignerStore.create 已通过 Promise 创建接入独立 Host，删除物料/locale 的创建后写入登记。Store 的工作台目录由内核声明只读投影，命令按登记 owner 执行；Vue 组件内部等待创建并管理卸载，旧 Contribution registry 和完整 Store 注入已删除。工作台业务与各 Render Session 的完整迁移验收仍按后续 Gate 推进。
+销毁先同步失效和撤销登记视图，再停用消费者、逆序清理 Scope；受管任务同时检查 Host、Scope 和任务代次，迟到资源单独释放。Viewer 与 DesignerStore.create 已通过 Promise 创建接入独立 Host，删除物料/locale 的创建后写入登记。Store 的工作台目录由内核声明只读投影，命令按登记 owner 执行；Vue 组件内部等待创建并管理卸载，旧 Contribution registry 和完整 Store 注入已删除。工作台业务与各 Render Session 已使用这一边界，类型消费和公共行为测试覆盖双宿主、异步迟到、输出持有与清理。
 
 ### `datasource` 层
 

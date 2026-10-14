@@ -290,7 +290,7 @@ Designer 会自己负责加载字体和注入 `@font-face`。宿主不用再手�
 
 框架在创建时安装声明，并为每个命令和 UI 挂载提供受控 context。组件以 `ready` / `error` 反馈创建结果；更换物料或扩展集合需要重新创建宿主。
 
-完整写法可以继续看 [贡献扩展开发](/advanced/contributions)。
+完整写法可以继续看 [Designer 扩展开发](/advanced/contributions)。
 
 ## 宿主交互接管 {#interaction-provider}
 
@@ -422,7 +422,7 @@ Designer 还提供一个顶栏插槽：
 </EasyInkDesigner>
 ```
 
-如果你需要的不是简单插槽，而是按钮、面板、命令和诊断订阅，那就继续往 [贡献扩展开发](/advanced/contributions) 看。
+如果你需要按钮、面板、命令和诊断上报，可以继续看 [Designer 扩展开发](/advanced/contributions)。
 
 ## 样式导入 {#styles}
 

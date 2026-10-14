@@ -6,10 +6,10 @@ import process from 'node:process'
 import ts from 'typescript'
 
 function blocks(path) {
-  return [...readFileSync(path, 'utf8').matchAll(/```ts\r?\n([\s\S]*?)```/g)].map(match => match[1])
+  return [...readFileSync(path, 'utf8').matchAll(/```(?:ts|typescript)\r?\n([\s\S]*?)```/g)].map(match => match[1])
 }
 
-function compile(name, source) {
+function compile(name, source, extraFiles = []) {
   const file = resolve(`.scratch/material-plugin-refactor/${name}.mts`).replaceAll('\\', '/')
   const entries = {
     '@easyink/plugin-api/material': ['packages/plugin-api', './material'],
@@ -17,10 +17,13 @@ function compile(name, source) {
     '@easyink/plugin-api/designer': ['packages/plugin-api', './designer'],
     '@easyink/plugin-api/viewer': ['packages/plugin-api', './viewer'],
     '@easyink/designer': ['packages/designer', '.'],
+    '@easyink/designer/locale': ['packages/designer', './locale'],
+    '@easyink/assistant-designer-bridge': ['packages/assistant/designer-bridge', '.'],
     '@easyink/viewer': ['packages/viewer', '.'],
     '@easyink/schema': ['packages/schema', '.'],
     '@easyink/icons': ['packages/icons', '.'],
     '@easyink/builtin/all/designer': ['packages/builtin', './all/designer'],
+    '@easyink/builtin/all': ['packages/builtin', './all'],
     '@easyink/builtin/all/viewer': ['packages/builtin', './all/viewer'],
     '@easyink/print-integration-hiprint': ['packages/print/integration-hiprint', '.'],
     '@easyink/print-integration-lodop': ['packages/print/integration-lodop', '.'],
@@ -38,7 +41,7 @@ function compile(name, source) {
   const exists = host.fileExists.bind(host)
   host.fileExists = path => path.replaceAll('\\', '/') === file || exists(path)
   host.getSourceFile = (path, ...args) => path.replaceAll('\\', '/') === file ? ts.createSourceFile(path, source, options.target, true) : getSource(path, ...args)
-  const diagnostics = ts.getPreEmitDiagnostics(ts.createProgram([file], options, host))
+  const diagnostics = ts.getPreEmitDiagnostics(ts.createProgram([file, ...extraFiles], options, host))
   const messages = ts.formatDiagnosticsWithColorAndContext(diagnostics, { getCanonicalFileName: path => path, getCurrentDirectory: () => process.cwd(), getNewLine: () => '\n' })
   assert.equal(diagnostics.length, 0, `${name}: ${messages}`)
 }
@@ -55,6 +58,14 @@ await Promise.all([store.destroy(), viewer.destroy()])
 `)
 
 compile('extension-doc', blocks('docs/advanced/contributions.md')[0])
+compile('migration-doc', blocks('docs/guide/migration-0.1.0.md')[0])
+compile('architecture-extension', blocks('.github/architecture/23-contribution.md')[0])
+const assistant = readFileSync('docs/designer/assistant.md', 'utf8').match(/<script setup lang="ts">\r?\n([\s\S]*?)<\/script>/)[1]
+compile('assistant-doc', `${assistant}
+import { DesignerStore } from '@easyink/designer'
+const store = await DesignerStore.create({ schema: schema.value, materials, extensions, preferenceProvider })
+await store.destroy()
+`, [resolve('node_modules/vite/client.d.ts')])
 
 for (const path of ['docs/printing/index.md', 'docs/hiprint/index.md', 'docs/lodop/index.md', 'docs/dotnet/index.md', 'docs/hiprint/getting-started.md', 'docs/lodop/getting-started.md', 'docs/dotnet/getting-started.md', 'docs/viewer/print-export.md']) {
   const example = blocks(path).find(block => block.includes('viewerOptions: { materials: viewerMaterials }'))

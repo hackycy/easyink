@@ -50,6 +50,8 @@ export default defineConfig({
             { text: '快速上手', link: '/guide/getting-started' },
             { text: '核心概念', link: '/guide/concepts' },
             { text: '包概览', link: '/guide/packages' },
+            { text: '迁移到 0.1.0', link: '/guide/migration-0.1.0' },
+            { text: '0.1.0 发行与手动发布', link: '/guide/release-0.1.0' },
           ],
         },
       ],

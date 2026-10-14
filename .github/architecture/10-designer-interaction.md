@@ -447,7 +447,7 @@ interface DesignerInteractionProvider {
 - `designer.template.clear`：顶部工具栏清空模板
 - `designer.page.deleteWithElements`：固定分页删除含元素页面
 
-Contribution 也通过 `ctx.confirm()` 复用同一桥接层。Contribution、组件、composable 和 material designer UI 都不应各自调用浏览器原生确认 API。
+独立 Designer 扩展通过受控 `context.confirm()` 复用同一桥接层。扩展、组件、composable 和物料属性 UI 都通过该层请求确认。
 
 ## 10.7 深度编辑（Deep Editing）
 

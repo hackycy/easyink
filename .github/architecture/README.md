@@ -22,7 +22,7 @@
 - `viewer` 的 `exportDocument()` 走 `ViewerExporter` 注册表，独立 `@easyink/export-runtime` 负责格式插件运行时；第三方导出依赖通过对应插件或导出器按需装载
 - 物料通过 `DatasourceDropHandler` 协议自定义拖拽绑定行为
 - 设计器坐标术语统一为 `screen / document / local / viewport`，其中 `document` 是 Schema 单位坐标；交互层坐标换算统一经由 GeometryService
-- 破坏性用户确认通过 `DesignerInteractionProvider` 交给宿主接管，designer 内部功能与 Contribution 统一走 `DesignerInteractionService`
+- 破坏性用户确认通过 `DesignerInteractionProvider` 交给宿主接管，designer 内部功能与独立 Designer 扩展统一走 `DesignerInteractionService`
 
 ## 目录
 
@@ -66,7 +66,7 @@
 - 未识别物料、缺失数据、缺失字体、渲染失败都必须以可见诊断暴露，不允许静默吞掉
 - 对标产品的原始 JSON 字段命名存在历史噪音，EasyInk 提供无损兼容编解码层
 - `DocumentSchema.unit`、纸张预设、页面类型显示名称这类信息在属性面板中可见，但不固化进 `page` 规范字段
-- `@easyink/assistant-*` 是当前仓库中的 Assistant 平台包族，通过 Contribution 机制接入 Designer
+- `@easyink/assistant-*` 是当前仓库中的 Assistant 平台包族，通过 `DesignerExtension` 和受控 context 接入 Designer
 - 数据源系统支持运行时动态注册；核心设计器/Viewer 数据流不依赖具体 Assistant 实现
 
 ## 快速导航
@@ -79,5 +79,5 @@
 - **想了解设计器工作台?** -> [10-designer-interaction](./10-designer-interaction.md)
 - **想了解物料体系?** -> [11-element-system](./11-element-system.md)
 - **想了解命令与历史?** -> [12-command-undo-redo](./12-command-undo-redo.md)
-- **想了解 Contribution 机制?** -> [23-contribution](./23-contribution.md)
+- **想了解 Designer 扩展?** -> [23-contribution](./23-contribution.md)
 - **想了解 AI Agent 平台?** -> [25-ai-assistant](./25-ai-assistant.md)

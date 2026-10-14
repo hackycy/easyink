@@ -166,10 +166,10 @@ const widget: DesignerMaterial = {
 ```
 1. 物料 ai.ts 声明 knowledge
       ↓
-2. builtin 包注册物料到 Designer（aiDescriptor 含 knowledge）
+2. 应用选择 builtin 完整 materials，Designer Host 在创建时装配（ai 含 knowledge）
       ↓
-3. designer-bridge 调用 createAssistantMaterialManifest(store)
-   → material.aiDescriptor 直接作为 manifest.materials[].ai
+3. designer-bridge 调用 createAssistantMaterialManifest(context)
+   → material.ai 直接作为 manifest.materials[].ai
       ↓
 4. manifest 传入 Orchestrator（AssistantTaskInput.materialManifest）
       ↓

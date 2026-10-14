@@ -8,7 +8,7 @@ Designer 在创建前通过 `extensions` 接受 `@easyink/plugin-api/ui` 的 `De
 import type { DesignerCommand } from '@easyink/plugin-api/designer'
 import type { DesignerExtension } from '@easyink/plugin-api/ui'
 
-const review: DesignerCommand = {
+const review: DesignerCommand<undefined, boolean> = {
   id: 'review.open',
   handler: (_args, context) => context.confirm({ id: 'review', message: context.t('review.confirm') }),
 }
@@ -16,7 +16,9 @@ const extension: DesignerExtension = {
   id: 'review',
   locale: { messages: { review: { confirm: 'Review this document' } } },
   commands: [review],
-  ui: { toolbar: [{ id: 'review.open', label: 'Review', onClick: context => context.executeCommand(review, undefined) }] },
+  ui: { toolbar: [{ id: 'review.open', label: 'Review', onClick: async (context) => {
+    await context.executeCommand(review, undefined)
+  } }] },
 }
 ```
 
@@ -24,7 +26,7 @@ const extension: DesignerExtension = {
 
 ## 23.2 五类 UI 与上下文
 
-`toolbar`、`overlays`、`windows`、`canvas` 属于独立扩展；`properties` 属于完整物料的 UI。位置、排序和稳定 id 由声明给出，UI 只读消费最终 registry。属性扩展默认 append，可选 replace-body；绑定、条件、几何等核心区仍由框架管理。
+`toolbar`、`contextMenu`、`overlays` 属于独立扩展；`palette`、`properties` 属于完整物料的 UI。位置、排序和稳定 id 由声明给出，UI 只读消费最终 registry。属性扩展默认 append，可选 replace-body；绑定、条件、几何等核心区仍由框架管理。
 
 组件的最后一个 `context` prop 由框架提供，业务 props 不能覆盖。独立 UI 和命令获得 `DesignerContext`；物料属性获得较窄的 `MaterialPropertiesContext`；绘制实例获得 `DesignerRendererContext`。查询为冻结快照，写入通过 tx、typed command 或受控文档操作。物料属性编辑遵循原撤销与 pending editor flush 规则。
 

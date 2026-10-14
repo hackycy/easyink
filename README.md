@@ -71,3 +71,7 @@ pnpm play
 [viewer-npm-version-src]: https://img.shields.io/npm/v/@easyink/viewer?style=flat&colorA=080f12&colorB=1fa669
 [viewer-npm-downloads-src]: https://img.shields.io/npm/dm/@easyink/viewer?style=flat&colorA=080f12&colorB=1fa669
 [viewer-npm-version-href]: https://npmjs.com/package/@easyink/viewer
+
+## 0.1.0 破坏性切换
+
+0.1.0 将使用完整物料和创建前配置；Schema 无迁移。版本号和最终制品由维护者在手动发布流程中确定。见[迁移指南](docs/guide/migration-0.1.0.md)与[发行/人工发布说明](docs/guide/release-0.1.0.md)。

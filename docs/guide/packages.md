@@ -10,7 +10,7 @@ description: EasyInk 包概览：Designer、Viewer、Schema、Core、Datasource 
 
 ## 编辑与预览
 
-大多数业务项目先装这两个包：
+大多数业务项目先装这三个包：
 
 ```bash
 pnpm add @easyink/designer @easyink/viewer @easyink/builtin
@@ -18,9 +18,9 @@ pnpm add @easyink/designer @easyink/viewer @easyink/builtin
 
 - `@easyink/designer` 提供设计器组件和相关扩展接口。
 - `@easyink/viewer` 提供预览、打印和导出所需的运行时。
-- `@easyink/builtin` 提供官方内置物料集合，由你按公开子路径显式注册；根入口默认等同 all 集合，并提供 all/basic/none 的显式别名。
+- `@easyink/builtin` 提供官方内置物料集合，创建前从对应宿主入口选择 `materials`；根/all/basic 为 Designer，all/viewer 与 basic/viewer 为 Viewer，none 为空集合。
 
-如果你现在处在“先把页面跑起来”的阶段，这两个包已经够用了。
+如果你现在处在“先把页面跑起来”的阶段，这些包已经够用了。
 
 ## 模板能力
 
@@ -112,7 +112,7 @@ AI 能力通过 Assistant 平台实现，分为三层：
 
 | 包 | 作用 |
 | --- | --- |
-| `@easyink/assistant-designer-bridge` | 通过 Contribution 机制将 AI 面板接入 Designer |
+| `@easyink/assistant-designer-bridge` | 通过独立 Designer 扩展将 AI 面板接入 Designer |
 | `@easyink/assistant-ui` | AI 任务面板 Vue 组件 |
 
 **Orchestrator 服务层：**
