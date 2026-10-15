@@ -6,7 +6,7 @@ EasyInk shared chart kernel with ECharts integration helpers
 
 ## Documentation
 
-- [Docs](https://hackycy.github.io/easyink/docs/)
+- [Docs](https://hackycy.github.io/easyink/docs/0.1/)
 
 ## License
 

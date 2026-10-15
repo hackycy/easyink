@@ -4,7 +4,7 @@ Shared DOM capture utilities for EasyInk browser export plugins.
 
 ## Documentation
 
-- [Docs](https://hackycy.github.io/easyink/docs/)
+- [Docs](https://hackycy.github.io/easyink/docs/0.1/)
 
 ## License
 

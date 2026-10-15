@@ -6,7 +6,7 @@ Type-driven data alignment engine for automatic binding generation in EasyInk As
 
 ## Documentation
 
-- [Docs](https://hackycy.github.io/easyink/docs/)
+- [Docs](https://hackycy.github.io/easyink/docs/0.1/)
 
 ## License
 

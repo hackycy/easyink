@@ -6,7 +6,7 @@ Scenario-based template library with classifier and progressive context loading 
 
 ## Documentation
 
-- [Docs](https://hackycy.github.io/easyink/docs/)
+- [Docs](https://hackycy.github.io/easyink/docs/0.1/)
 
 ## License
 

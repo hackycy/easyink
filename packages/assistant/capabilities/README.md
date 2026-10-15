@@ -6,7 +6,7 @@ Pure EasyInk Assistant capabilities for schema, datasource alignment, validation
 
 ## Documentation
 
-- [Docs](https://hackycy.github.io/easyink/docs/)
+- [Docs](https://hackycy.github.io/easyink/docs/0.1/)
 
 ## License
 

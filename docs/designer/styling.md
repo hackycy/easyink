@@ -4,7 +4,7 @@ description: Designer 样式自定义：通过 CSS 变量覆盖和自定义主�
 
 # 样式自定义 {#styling}
 
-Designer 现在没有单独的主题 API，但这不意味着你只能接受默认样式。
+Designer 通过 CSS 变量和主题类定制样式。
 
 当前最稳的定制方式有两种：
 

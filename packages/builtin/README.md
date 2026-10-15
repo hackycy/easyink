@@ -26,7 +26,7 @@ Every public entry exports only `materials`. Choose the array while creating the
 
 ## Documentation
 
-- [Docs](https://hackycy.github.io/easyink/docs/)
+- [Docs](https://hackycy.github.io/easyink/docs/0.1/)
 
 ## License
 

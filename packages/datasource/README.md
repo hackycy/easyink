@@ -6,7 +6,7 @@ Data source protocol and field tree for EasyInk designer
 
 ## Documentation
 
-- [Docs](https://hackycy.github.io/easyink/docs/)
+- [Docs](https://hackycy.github.io/easyink/docs/0.1/)
 
 ## License
 

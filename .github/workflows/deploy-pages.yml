@@ -24,8 +24,12 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Checkout
+      # Publishing a maintenance series must still build the complete website.
+      - name: Checkout central documentation infrastructure
         uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -36,6 +40,9 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - name: Fix documentation source commits
+        run: node scripts/docs-versions.mjs resolve --git-sources --sources-file .cache/docs-sources.json
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
@@ -43,39 +50,39 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Prepare build metadata
+        shell: bash
         run: |
           {
-            echo "VITE_BUILD_SHA=$GITHUB_SHA"
-            echo "VITE_BUILD_REF_NAME=$GITHUB_REF_NAME"
+            echo "VITE_BUILD_SHA=$(git rev-parse HEAD)"
+            echo "VITE_BUILD_REF_NAME=main"
             echo "VITE_BUILD_TIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           } >> "$GITHUB_ENV"
+
+      - name: Build packages
+        run: pnpm build
 
       - name: Lint
         run: pnpm lint
 
-      - name: Build packages
-        run: pnpm build
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test documentation infrastructure
+        run: pnpm exec vitest run scripts/docs-site.test.mjs docs/.vitepress/versioning.test.ts
 
       - name: Build playground
         env:
           VITE_EASYINK_ASSISTANT_ENDPOINT: ${{ secrets.EASYINK_ASSISTANT_SERVER_URL }}
         run: pnpm --filter @easyink/playground build
 
-      - name: Build docs
-        env:
-          EASYINK_DOCS_BASE: /easyink/docs/
-        run: pnpm docs:build
-
-      - name: Typecheck
-        run: pnpm typecheck
+      - name: Build all documentation series
+        run: pnpm docs:build:all --sources-file .cache/docs-sources.json --out .pages/docs
 
       - name: Assemble Pages artifact
         shell: bash
         run: |
-          rm -rf .pages
-          mkdir -p .pages/docs
           cp -R playground/dist/. .pages/
-          cp -R docs/.vitepress/dist/. .pages/docs/
+          node scripts/docs-versions.mjs check --out .pages/docs
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

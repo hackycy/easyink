@@ -6,7 +6,7 @@ EasyInk shared table kernel: geometry, rendering, topology helpers
 
 ## Documentation
 
-- [Docs](https://hackycy.github.io/easyink/docs/)
+- [Docs](https://hackycy.github.io/easyink/docs/0.1/)
 
 ## License
 

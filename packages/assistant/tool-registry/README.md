@@ -6,7 +6,7 @@ Agent tool registry with material, data, layout, schema and validation tools for
 
 ## Documentation
 
-- [Docs](https://hackycy.github.io/easyink/docs/)
+- [Docs](https://hackycy.github.io/easyink/docs/0.1/)
 
 ## License
 

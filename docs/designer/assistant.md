@@ -93,7 +93,7 @@ const assistant = createAssistantContribution({
 
 传入 `plugins` 后，Assistant 面板里会出现插件中心入口。用户可以在插件中心里启用或停用插件；提交任务时，面板会把已启用插件的提示词和上下文结果一起发给 Assistant 服务。
 
-官方插件现在有三类：
+官方插件有三类：
 
 | 包 | 面板名称 | 作用 |
 |----|----------|------|

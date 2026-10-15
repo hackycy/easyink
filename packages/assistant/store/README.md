@@ -6,7 +6,7 @@ Task, run, version, draft, and event stores for EasyInk Assistant
 
 ## Documentation
 
-- [Docs](https://hackycy.github.io/easyink/docs/)
+- [Docs](https://hackycy.github.io/easyink/docs/0.1/)
 
 ## License
 

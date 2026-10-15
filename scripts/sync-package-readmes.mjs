@@ -16,6 +16,7 @@ async function main() {
   const runtimeOptions = parseRuntimeOptions(process.argv.slice(2))
 
   const rootPackageJson = await readJson(resolve(repoRoot, 'package.json'))
+  const docsSeries = (await readJson(resolve(repoRoot, 'docs/.vitepress/series.json'))).id
   const repositoryUrl = resolveRepositoryUrl(rootPackageJson)
   const packageJsonFiles = await collectPackageJsonFiles(packagesRoot)
 
@@ -44,6 +45,7 @@ async function main() {
     const readmePath = resolve(packageDir, 'README.md')
     const readmeContent = buildReadme({
       description: packageJson.description,
+      docsSeries,
       packageName: packageJson.name,
       repositoryUrl,
     })
@@ -158,12 +160,12 @@ function escapeRegExp(value) {
   return value.replace(/[|\\{}()[\]^$+?.]/g, '\\$&')
 }
 
-function buildReadme({ packageName, description, repositoryUrl }) {
+function buildReadme({ packageName, description, repositoryUrl, docsSeries }) {
   const npmPackageName = encodeURIComponent(packageName)
   const npmUrl = `https://www.npmjs.com/package/${npmPackageName}`
   const versionBadgeUrl = `https://img.shields.io/npm/v/${npmPackageName}?logo=npm`
   const downloadsBadgeUrl = `https://img.shields.io/npm/dm/${npmPackageName}?logo=npm`
-  const documentationUrl = `https://hackycy.github.io/easyink/docs/`
+  const documentationUrl = `https://hackycy.github.io/easyink/docs/${docsSeries}/`
 
   return [
     `# ${packageName}`,

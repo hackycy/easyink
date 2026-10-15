@@ -33,3 +33,6 @@ docker-compose.*.yml
 .claude
 .agents
 skills-lock.json
+
+# Assembled documentation website
+.pages

@@ -306,7 +306,7 @@ viewer.registerExporter({
 })
 ```
 
-现在可以直接调用 Viewer：
+直接调用 Viewer：
 
 ```ts
 const pdfResult = await viewer.exportDocument({ format: 'pdf' })

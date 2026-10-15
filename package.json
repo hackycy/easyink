@@ -38,7 +38,9 @@
     "changeset:publish": "changeset publish",
     "docs:dev": "pnpm sync:logos && vitepress dev docs",
     "docs:build": "pnpm sync:logos && vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "docs:preview": "vitepress preview docs",
+    "docs:build:all": "node scripts/docs-versions.mjs build",
+    "docs:preview:all": "node scripts/docs-versions.mjs preview"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:cli",

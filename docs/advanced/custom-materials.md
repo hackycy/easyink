@@ -4,7 +4,7 @@ description: 自定义物料开发：用一份共享 model 和两个宿主声明
 
 # 自定义物料开发 {#custom-materials}
 
-EasyInk 的物料以 `model` 为共享契约。应用在创建宿主时选择完整物料声明：Designer 选择包含编辑器渲染器和 UI 能力的 `DesignerMaterial`，Viewer 选择包含输出渲染器的 `ViewerMaterial`。应用不再创建 bundle，也不在 Viewer 创建后逐项注册 renderer。
+EasyInk 的物料以 `model` 为共享契约。应用在创建宿主时选择完整物料声明：Designer 选择包含编辑器渲染器和 UI 能力的 `DesignerMaterial`，Viewer 选择包含输出渲染器的 `ViewerMaterial`。物料集合在宿主创建时完成装配。更换集合时，先销毁宿主，再使用新的集合创建宿主。
 
 ## 什么时候做成物料 {#when-to-use}
 
@@ -263,4 +263,4 @@ const tableViewer: ViewerMaterial = {
 - 异步 renderer、图表引擎、字体和事件都通过 `ResourceContext.onDispose` 清理；
 - 绑定、条件、measure、分页和未知物料诊断有真实宿主测试；
 - 更换物料集合时先 `await viewer.destroy()` 或 `await store.destroy()`；
-- 内置集合从 `@easyink/builtin/all/designer` 和 `@easyink/builtin/all/viewer` 分别选择，不依赖旧 bundle 或 registry。
+- 内置集合从 `@easyink/builtin/all/designer` 和 `@easyink/builtin/all/viewer` 分别选择。
