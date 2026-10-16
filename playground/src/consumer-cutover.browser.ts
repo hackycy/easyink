@@ -1,8 +1,10 @@
+import type { DesignerCreateOptions, DesignerStore } from '@easyink/designer'
 import type {} from '../../internal-packages/viewer-runtime/src/main'
 import { materials } from '@easyink/builtin/all/viewer'
+import { EasyInkDesigner, useDesignerStore } from '@easyink/designer'
 import { createManagedPrintViewer } from '@easyink/print-core'
 import { normalizeDocumentSchema } from '@easyink/viewer'
-import { createApp, nextTick } from 'vue'
+import { createApp, defineComponent, h, nextTick } from 'vue'
 import App from './App.vue'
 
 function assert(value: unknown, message: string): asserts value {
@@ -15,6 +17,78 @@ async function until(predicate: () => unknown, label: string) {
   while (!predicate()) {
     assert(performance.now() < deadline, `Timed out: ${label}`)
     await new Promise(resolve => setTimeout(resolve, 25))
+  }
+}
+
+async function checkDesignerRetry() {
+  type Material = NonNullable<DesignerCreateOptions['materials']>[number]
+  type Renderer = Awaited<ReturnType<NonNullable<Material['loadRenderer']>>>
+  const retry = Promise.withResolvers<Renderer>()
+  let attempts = 0
+  let store!: DesignerStore
+  const probe = defineComponent({ setup() {
+    store = useDesignerStore()
+    return () => null
+  } })
+  const material: Material = {
+    model: {
+      type: 'retry-fixture',
+      binding: { kind: 'none' },
+      createDefaultNode: () => ({ id: 'retry-a', type: 'retry-fixture', x: 10, y: 10, width: 65, height: 15, props: {} }),
+    },
+    loadRenderer: () => ++attempts === 1 ? Promise.reject(new Error('retry fixture initial failure')) : retry.promise,
+  }
+  const schema = normalizeDocumentSchema({ elements: [material.model.createDefaultNode(), { ...material.model.createDefaultNode(), id: 'retry-b', y: 30 }] })
+  const root = document.createElement('div')
+  root.style.cssText = 'width:1100px;height:800px'
+  document.body.appendChild(root)
+  const app = createApp(defineComponent({ setup: () => () => h(EasyInkDesigner, { schema, materials: [material] }, { topbar: () => h(probe) }) }))
+  app.mount(root)
+  try {
+    const buttons = () => [...root.querySelectorAll<HTMLButtonElement>('[data-material-diagnostic="MATERIAL_LOAD_ERROR"] button')]
+    await until(() => buttons().length === 2, 'actual canvas failure placeholders')
+    const before = JSON.stringify(store.schema)
+    assert(attempts === 1 && !root.querySelector('animateTransform'), 'Failure must stop loading without retrying')
+    store.notifyMaterialExtensionLoaded()
+    await nextTick()
+    assert(attempts === 1, 'Ordinary canvas repaint must not retry')
+    store.setLocale(undefined, 'en-US')
+    await nextTick()
+    assert(buttons().every(button => button.textContent === 'Retry'), 'Actual canvas locale did not update')
+    const [button, second] = buttons()
+    button.scrollIntoView({ block: 'center', inline: 'center' })
+    const rect = button.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    assert(rect.width > 0 && rect.height > 0 && document.elementFromPoint(x, y) === button, 'Retry button must be visible and receive pointer events')
+    button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: x, clientY: y, button: 0, pointerId: 1 }))
+    window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: x + 50, clientY: y + 50, pointerId: 1 }))
+    window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: x + 50, clientY: y + 50, pointerId: 1 }))
+    button.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: x, clientY: y }))
+    button.click()
+    second.click()
+    assert(Number(attempts) === 2, 'Multiple retry buttons must share one attempt')
+    await nextTick()
+    assert(root.querySelectorAll('animateTransform').length === 2, 'Retry must refresh both canvas nodes')
+    assert(!store.selection.ids.length && !store.isInDeepEditing && !store.commands.canUndo, 'Retry triggered canvas selection, editing or commands')
+    assert(JSON.stringify(store.schema) === before, 'Retry changed Schema or dragged a node')
+    retry.resolve(() => ({ renderContent: (node, container) => {
+      container.textContent = `Recovered ${node.get().id}`
+      return () => container.replaceChildren()
+    } }))
+    await until(() => root.textContent?.includes('Recovered retry-a') && root.textContent.includes('Recovered retry-b'), 'actual canvas retry recovery')
+    assert(!buttons().length && !root.querySelector('animateTransform') && Number(attempts) === 2, 'Successful retry must restore both nodes')
+    assert(JSON.stringify(store.schema) === before, 'Recovered rendering changed Schema')
+  }
+  finally {
+    const disposal = store?.destroy()
+    try {
+      app.unmount()
+    }
+    finally {
+      await disposal
+      root.remove()
+    }
   }
 }
 
@@ -98,6 +172,9 @@ export async function runConsumerCutoverChecks() {
     }
     root.remove()
   }
+
+  await checkDesignerRetry()
+  passed.push('actual canvas lazy failure, localized manual retry, shared recovery and unchanged Schema/selection/editing')
 
   const schema = normalizeDocumentSchema({ page: { width: 80, height: 40 }, elements: [{ id: 'print-text', type: 'text', x: 1, y: 1, width: 60, height: 15, props: { content: 'Managed cutover' } }] })
   const managed = createManagedPrintViewer({ viewer: 'iframe', viewerOptions: { materials } })

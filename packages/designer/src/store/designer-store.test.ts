@@ -201,6 +201,52 @@ describe('designer store schema initialization', () => {
     expect(store.diagnostics.entries).toEqual([])
   })
 
+  it('publishes one destruction Promise before abort listeners and cleanup callbacks reenter', async () => {
+    const release = Promise.withResolvers<void>()
+    const failure = new Error('cleanup failure')
+    const nested: Promise<unknown>[] = []
+    let store!: DesignerStore
+    const cleanup = vi.fn(() => {
+      nested.push(store.destroy())
+      return release.promise
+    })
+    let context!: DesignerRendererContext
+    store = await create({ materials: [{ ...material('sample'), renderer: (ctx) => {
+      context = ctx
+      ctx.onDispose(() => {
+        throw failure
+      })
+      ctx.onDispose(cleanup)
+      return { renderContent: () => () => {} }
+    } }] })
+    context.signal.addEventListener('abort', () => {
+      nested.push(store.destroy())
+    }, { once: true })
+    const disposal = store.destroy()
+    try {
+      expect(context.signal.aborted).toBe(true)
+      expect(nested).toHaveLength(1)
+      expect(nested[0]).toBe(disposal)
+      expect(store.destroy()).toBe(disposal)
+      await vi.waitFor(() => expect(cleanup).toHaveBeenCalledOnce())
+      expect(nested[1]).toBe(disposal)
+      let finished = false
+      void disposal.then(() => {
+        finished = true
+      })
+      await Promise.resolve()
+      expect(finished).toBe(false)
+    }
+    finally {
+      release.resolve()
+    }
+    const result = await disposal
+    expect(result.errors).toContainEqual(expect.objectContaining({ cause: failure }))
+    expect(result.errors).toHaveLength(1)
+    expect(cleanup).toHaveBeenCalledOnce()
+    expect(store.destroy()).toBe(disposal)
+  })
+
   it('executes declared commands with stable owner contexts independently across Hosts', async () => {
     const contexts: DesignerContext[] = []
     const cleanup = vi.fn()

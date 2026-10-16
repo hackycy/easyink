@@ -19,6 +19,7 @@ import { deepClone } from '@easyink/shared'
 import { markRaw, reactive } from 'vue'
 import { EditingSessionManager } from '../editing/editing-session-manager'
 import { DesignerInteractionService } from '../interactions/interaction-service'
+import { createFailedExtension } from '../materials/failed-extension'
 import { createDesignerMaterialHost } from '../materials/host-consumer'
 import { createDesignerContext } from '../materials/renderer-context'
 import { createStoreRendererOperations } from '../materials/store-operations'
@@ -101,6 +102,7 @@ export class DesignerStore {
   private _destruction?: Promise<DisposeResult>
   private _disposed = false
   private readonly _loadingTypes = markRaw(new Set<string>())
+  private readonly _failedExtensions = markRaw(new Map<string, DesignerRenderInstance>())
   localeRevision = 0
   readonly paperRegistry: PaperRegistry
 
@@ -171,6 +173,7 @@ export class DesignerStore {
           store.refreshInteractionAvailability()
         },
         () => store._loadingTypes.clear(),
+        () => store._failedExtensions.clear(),
         () => store._contexts.clear(),
         () => store._contextTokens.clear(),
       ]
@@ -455,17 +458,34 @@ export class DesignerStore {
     const cached = this._assembly.peekExtension(type)
     if (cached)
       return cached
+    const failed = this._failedExtensions.get(type)
+    if (failed)
+      return failed
     if (!this._registry.getMaterial(type)?.value.loadRenderer)
       return undefined
     if (!this._loadingTypes.has(type)) {
       this._loadingTypes.add(type)
       void this._assembly.getExtension(type).then(() => {
-        if (!this._disposed)
-          this.notifyMaterialExtensionLoaded()
+        if (this._disposed)
+          return
+        this._loadingTypes.delete(type)
+        this._failedExtensions.delete(type)
+        this.notifyMaterialExtensionLoaded()
       }).catch((cause) => {
-        if (!this._disposed)
-          this.diagnostics.push({ source: 'material-extension', severity: 'error', message: `Lazy material failed: ${type}`, detail: { cause } })
-      }).finally(() => this._loadingTypes.delete(type))
+        if (this._disposed)
+          return
+        this._loadingTypes.delete(type)
+        const failure = createFailedExtension(key => this.t(key), () => {
+          if (this._disposed || this._failedExtensions.get(type) !== failure)
+            return
+          this._failedExtensions.delete(type)
+          this.getDesignerExtension(type)
+          this.notifyMaterialExtensionLoaded()
+        }, this._consumerResources.signal)
+        this._failedExtensions.set(type, failure)
+        this.diagnostics.push({ source: 'material-extension', severity: 'error', message: `Lazy material failed: ${type}`, detail: { code: 'MATERIAL_LOAD_ERROR', type, cause } })
+        this.notifyMaterialExtensionLoaded()
+      })
     }
     return LOADING_EXTENSION
   }
@@ -667,8 +687,13 @@ export class DesignerStore {
   destroy(): Promise<DisposeResult> {
     if (this._destruction)
       return this._destruction
+    const completion = Promise.withResolvers<DisposeResult>()
+    this._destruction = completion.promise
     this._disposed = true
-    this._destruction = this._assembly.destroy().then(result => Object.freeze({ errors: Object.freeze([...result.errors, ...this._uiCleanupErrors]) }))
+    void this._assembly.destroy().then(
+      result => completion.resolve(Object.freeze({ errors: Object.freeze([...result.errors, ...this._uiCleanupErrors]) })),
+      completion.reject,
+    )
     return this._destruction
   }
 }

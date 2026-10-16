@@ -84,7 +84,8 @@ async function checkReadme() {
     .replace(/main\(\)\.catch\([\s\S]*$/, 'export { buildReadme }')
   const { buildReadme } = await import(`data:text/javascript;base64,${Buffer.from(generator).toString('base64')}`)
   const pkg = JSON.parse(readFileSync('packages/builtin/package.json', 'utf8'))
-  const expected = buildReadme({ packageName: pkg.name, description: pkg.description, repositoryUrl: 'https://github.com/hackycy/easyink' })
+  const { id: docsSeries } = JSON.parse(readFileSync('docs/.vitepress/series.json', 'utf8'))
+  const expected = buildReadme({ packageName: pkg.name, description: pkg.description, repositoryUrl: 'https://github.com/hackycy/easyink', docsSeries })
   assert.equal(readFileSync('packages/builtin/README.md', 'utf8').replaceAll('\r\n', '\n'), expected)
   process.stdout.write('Custom material, extension and 8 print examples consume emitted declarations; builtin README matches its generator.\n')
 }

@@ -205,6 +205,8 @@ export const chartViewer: ViewerMaterial = {
 
 取消或销毁只影响当前宿主。异步结果迟到时，框架会清理该物料的资源；应用不需要维护第二个 registry。
 
+Designer 同样支持 `loadRenderer`。同一个 Designer 内，同类型节点共享加载请求；加载失败后显示随当前语言更新的错误占位和“重试”按钮，并记录 `MATERIAL_LOAD_ERROR` 诊断。普通重绘不会自动重试，点击按钮才会通过原加载器重新加载该类型，成功后恢复所有同类型节点的内容。重试不修改 Schema；不同 Designer 的加载和失败状态彼此隔离。
+
 ## 数据绑定 {#binding}
 
 在 `model.binding` 中声明物料支持的绑定方式。renderer 从 `context.resolvedProps` 读取已经解析的值，不要在 DOM renderer 里自行读取业务数据。
@@ -249,6 +251,8 @@ const tableViewer: ViewerMaterial = {
 ## measure、分页与 page-aware {#layout}
 
 只有布局确实需要运行时尺寸时才实现 `measure` 或 `getRenderSize`。分页物料可以在 Viewer renderer 上提供 `fragmentPaginator`；需要跨页复制的元素在 model 中声明 `pageAware`。这些能力必须与 model 的默认值和现有 Schema 行为一致。
+
+`fragmentPaginator` 使用 `@easyink/plugin-api/viewer` 导出的 `ViewerFragmentPaginator`，必须实现 `canPaginate`、`paginateFragment` 和 `getRemainingContent(fragment)`。计数方法返回非负安全整数；产生下一页时，下一页的剩余量必须严格小于输入片段，并通过 `createFragment` 为当前页和下一页创建各自的新身份。遗漏计数方法、非法计数、没有进展或返回不属于当前源的片段都会产生局部 `MATERIAL_PAGINATE_ERROR` 诊断，释放失败节点的计算资源并显示占位，其他节点继续输出。普通物料无需提供分页器；core 的独立 `FragmentPaginator` 仍保留可选计数方法。
 
 不要通过 `node.type` 在框架外另建分支来替代物料声明。布局、条件和 binding 都应从当前完整材料集合取得。
 

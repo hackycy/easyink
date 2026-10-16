@@ -1,4 +1,5 @@
-import type { ViewerContext, ViewerMaterial, ViewerRenderer } from '@easyink/plugin-api/viewer'
+import type { FragmentPaginator } from '@easyink/core'
+import type { ViewerContext, ViewerFragmentPaginator, ViewerMaterial, ViewerRenderer } from '@easyink/plugin-api/viewer'
 import { model } from './model'
 
 export * from '@easyink/plugin-api/viewer'
@@ -8,6 +9,20 @@ const renderer: ViewerRenderer = {
   measure: node => ({ width: node.width, height: node.height }),
   getRenderSize: node => ({ width: node.width }),
 }
+
+const corePaginator: FragmentPaginator = {
+  canPaginate: () => true,
+  paginateFragment: ({ fragment }) => ({ currentPage: fragment, diagnostics: [] }),
+}
+export const paginator: ViewerFragmentPaginator = {
+  ...corePaginator,
+  getRemainingContent: () => 1,
+}
+export const paginatedRenderer: ViewerRenderer = { ...renderer, fragmentPaginator: paginator }
+// @ts-expect-error Viewer pagination requires a remaining-content counter.
+export const missingCounter: ViewerFragmentPaginator = corePaginator
+// @ts-expect-error A core-only paginator cannot satisfy the Viewer renderer contract.
+export const coreOnlyRenderer: ViewerRenderer = { ...renderer, fragmentPaginator: corePaginator }
 
 export const material: ViewerMaterial = {
   model,

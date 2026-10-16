@@ -1,10 +1,10 @@
 import type { LayoutRuntimeRef } from '@easyink/core'
-import type { ViewerMaterial } from '@easyink/plugin-api/viewer'
+import type { ViewerFragmentPaginator, ViewerMaterial } from '@easyink/plugin-api/viewer'
 import type { MaterialNode, TableDataSchema, TableNode } from '@easyink/schema'
 import { materials as builtinModels } from '@easyink/builtin/all'
 import { trustedViewerHtml } from '@easyink/core'
 import { normalizeDocumentSchema } from '@easyink/schema'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createViewer } from './index'
 import { createBuiltinViewer } from './test-fixtures/builtin-viewer'
 
@@ -187,31 +187,43 @@ describe('fragment state through the Viewer pipeline', () => {
     }
   })
 
-  it.each(['no-progress', 'same-reference', 'invalid-count', 'unowned', 'throw', 'can-paginate'] as const)('stops a %s paginator locally and keeps sibling output', async (fault) => {
+  it.each(['no-progress', 'same-reference', 'invalid-count', 'negative-count', 'fractional-count', 'unsafe-count', 'missing-count', 'unowned', 'throw', 'can-paginate'] as const)('stops a %s paginator locally and keeps sibling output', async (fault) => {
     let calls = 0
+    const cleanup = vi.fn()
+    let signal!: AbortSignal
+    const invalidCounts: Record<string, number> = { 'invalid-count': Number.NaN, 'negative-count': -1, 'fractional-count': 0.5, 'unsafe-count': Number.MAX_SAFE_INTEGER + 1 }
+    const paginator: ViewerFragmentPaginator = {
+      canPaginate: () => {
+        if (fault === 'can-paginate')
+          throw new Error('cannot inspect pagination capability')
+        return true
+      },
+      getRemainingContent: fragment => fault in invalidCounts ? invalidCounts[fault] : fragment.node.id === 'bad' ? 2 : fault === 'no-progress' ? 2 : 1,
+      paginateFragment: ({ fragment, createFragment }) => {
+        calls++
+        if (fault === 'throw')
+          throw new Error('cannot split')
+        const currentPage = createFragment({ ...fragment.node, id: 'current' })
+        const nextPage = fault === 'same-reference' ? fragment : createFragment({ ...fragment.node, id: 'next' })
+        if (fault === 'unowned')
+          nextPage.runtimeRef = { session: Symbol('foreign'), fragment: 1 }
+        return { currentPage, nextPage, diagnostics: [] }
+      },
+    }
+    // JavaScript consumers can omit a method despite the public declaration.
+    if (fault === 'missing-count')
+      Reflect.deleteProperty(paginator, 'getRemainingContent')
     const bad: ViewerMaterial = {
       model: { type: 'bad-split', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'bad', type: 'bad-split', x: 0, y: 0, width: 10, height: 10, props: {} }) },
-      renderer: {
-        measure: node => ({ width: node.width, height: 100 }),
-        fragmentPaginator: {
-          canPaginate: () => {
-            if (fault === 'can-paginate')
-              throw new Error('cannot inspect pagination capability')
-            return true
-          },
-          getRemainingContent: fragment => fault === 'invalid-count' ? Number.NaN : fragment.node.id === 'bad' ? 2 : fault === 'no-progress' ? 2 : 1,
-          paginateFragment: ({ fragment, createFragment }) => {
-            calls++
-            if (fault === 'throw')
-              throw new Error('cannot split')
-            const nextPage = fault === 'same-reference' ? fragment : createFragment({ ...fragment.node, id: 'next' })
-            if (fault === 'unowned')
-              nextPage.runtimeRef = { session: Symbol('foreign'), fragment: 1 }
-            return { currentPage: fragment, nextPage, diagnostics: [] }
-          },
+      renderer: { createSession: () => ({
+        prepare: (_node, context) => {
+          signal = context.signal
+          context.onDispose(cleanup)
         },
+        measure: node => ({ width: node.width, height: 100 }),
+        fragmentPaginator: paginator,
         render: () => { throw new Error('failed paginator must never render') },
-      },
+      }) },
     }
     const good: ViewerMaterial = {
       model: { type: 'good', binding: { kind: 'none' }, createDefaultNode: () => ({ id: 'good', type: 'good', x: 20, y: 0, width: 10, height: 10, props: {} }) },
@@ -224,8 +236,12 @@ describe('fragment state through the Viewer pipeline', () => {
       expect(result.status).toBe('completed')
       if (result.status !== 'completed')
         throw new Error('Expected completed output with diagnostics')
-      expect(calls).toBe(fault === 'invalid-count' || fault === 'can-paginate' ? 0 : 1)
+      expect(calls).toBe(fault in invalidCounts || fault === 'missing-count' || fault === 'can-paginate' ? 0 : 1)
       expect(result.diagnostics.filter(d => d.code === 'MATERIAL_PAGINATE_ERROR')).toHaveLength(1)
+      if (fault === 'missing-count')
+        expect(String(result.diagnostics.find(d => d.code === 'MATERIAL_PAGINATE_ERROR')!.cause)).toContain('getRemainingContent')
+      expect(signal.aborted).toBe(true)
+      await vi.waitFor(() => expect(cleanup).toHaveBeenCalledOnce())
       expect(mount.querySelector<HTMLElement>('[data-element-id="bad"]')?.style.height).toBe('10mm')
       expect(mount.textContent).toContain('Unavailable')
       expect(mount.textContent).toContain('sibling')
@@ -233,5 +249,6 @@ describe('fragment state through the Viewer pipeline', () => {
     finally {
       await viewer.destroy()
     }
+    expect(cleanup).toHaveBeenCalledOnce()
   })
 })

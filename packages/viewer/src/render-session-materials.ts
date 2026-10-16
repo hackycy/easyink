@@ -1,6 +1,6 @@
 import type { LayoutFragment, LayoutRuntimeRef, MaterialBindingDefinition, MaterialConditionCapability, MaterialConditionDefinition } from '@easyink/core'
 import type { ResourceContext } from '@easyink/plugin-api'
-import type { ViewerContext, ViewerSessionRenderer } from '@easyink/plugin-api/viewer'
+import type { ViewerContext, ViewerFragmentPaginator, ViewerSessionRenderer } from '@easyink/plugin-api/viewer'
 import type { MaterialNode } from '@easyink/schema'
 import type { createViewerMaterialHost } from './material-host'
 import type { FragmentPaginator, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from './types'
@@ -153,11 +153,13 @@ export class RenderSessionMaterials {
     const entry = this.input(node, { ...context, runtimeRef: fragment.runtimeRef })
     if (!entry || entry.failed)
       return undefined
-    let paginator: FragmentPaginator | undefined
+    let paginator: ViewerFragmentPaginator | undefined
     try {
       paginator = this.renderer(node.type)?.fragmentPaginator
       if (!paginator || !synchronous(paginator.canPaginate(freezeSnapshot(node))))
         return undefined
+      if (typeof paginator.getRemainingContent !== 'function')
+        throw new TypeError('A Viewer fragmentPaginator must implement getRemainingContent')
     }
     catch (cause) {
       this.fail(entry, 'MATERIAL_PAGINATE_ERROR', cause, context)
@@ -168,7 +170,7 @@ export class RenderSessionMaterials {
       paginateFragment: (input) => {
         const derived = new Set<LayoutRuntimeRef>()
         try {
-          const remaining = synchronous(paginator!.getRemainingContent?.(input.fragment))
+          const remaining = synchronous(paginator!.getRemainingContent(input.fragment))
           assertRemainingContent(remaining)
           const split = synchronous(paginator!.paginateFragment({
             ...input,
@@ -186,7 +188,7 @@ export class RenderSessionMaterials {
             }
           }
           if (split.nextPage) {
-            const nextRemaining = synchronous(paginator!.getRemainingContent?.(split.nextPage))
+            const nextRemaining = synchronous(paginator!.getRemainingContent(split.nextPage))
             assertRemainingContent(nextRemaining)
             if (!derived.has(split.currentPage.runtimeRef!) || !derived.has(split.nextPage.runtimeRef!) || split.currentPage.runtimeRef === split.nextPage.runtimeRef || nextRemaining >= remaining)
               throw new Error('Paginator must reduce remaining content and assign a new reference')

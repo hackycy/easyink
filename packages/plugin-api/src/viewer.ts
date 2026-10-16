@@ -1,4 +1,4 @@
-import type { FragmentPaginator, LayoutRuntimeRef, ViewerMeasureResult, ViewerRenderOutput, ViewerRenderSize } from '@easyink/core'
+import type { FragmentPaginator, LayoutFragment, LayoutRuntimeRef, ViewerMeasureResult, ViewerRenderOutput, ViewerRenderSize } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
 import type { MaterialDeclaration, RendererDeclaration } from './material'
 import type { DeepReadonly, ResourceContext } from './resources'
@@ -19,12 +19,17 @@ export interface ViewerContext extends ResourceContext {
   readonly reportDiagnostic: (diagnostic: { code: string, message: string, nodeId?: string, cause?: unknown }) => void
 }
 
+/** Viewer pagination requires a progress counter for every fragment. */
+export interface ViewerFragmentPaginator extends FragmentPaginator {
+  readonly getRemainingContent: (fragment: LayoutFragment) => number
+}
+
 /** Methods stay synchronous; asynchronous preparation belongs to a session instance. */
 export interface ViewerRenderer {
   readonly render: (node: DeepReadonly<MaterialNode>, context: ViewerContext) => ViewerRenderOutput
   readonly measure?: (node: DeepReadonly<MaterialNode>, context: ViewerContext) => ViewerMeasureResult
   readonly getRenderSize?: (node: DeepReadonly<MaterialNode>, context: ViewerContext) => Partial<ViewerRenderSize>
-  readonly fragmentPaginator?: FragmentPaginator
+  readonly fragmentPaginator?: ViewerFragmentPaginator
 }
 
 export interface ViewerSessionRenderer extends ViewerRenderer {
