@@ -11,6 +11,7 @@ import { createServer } from 'vite'
 // Real browser Directed check. No DOM emulator or browser automation dependency.
 const root = fileURLToPath(new URL('../../../', import.meta.url))
 const cutover = process.argv.includes('--cutover')
+const entry = cutover ? 'playground/src/consumer-cutover.browser.ts' : 'internal-packages/viewer-runtime/src/resource-readiness.browser.ts'
 const browserPath = process.env.EASYINK_RENDER_BROWSER_PATH ?? [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
@@ -18,80 +19,98 @@ const browserPath = process.env.EASYINK_RENDER_BROWSER_PATH ?? [
   '/usr/bin/chromium-browser',
 ].find(path => existsSync(path))
 assert(browserPath, 'Set EASYINK_RENDER_BROWSER_PATH to a Chromium executable')
-const profile = await mkdtemp(join(tmpdir(), 'easyink-readiness-'))
 const font = await readFile(join(root, 'playground/public/fonts/站酷快乐体.ttf'))
 const image = await readFile(join(root, 'docs/public/logo.png'))
 const hits = new Map()
 const fixtureTimers = new Set()
-const server = await createServer({
-  configFile: cutover ? join(root, 'playground/vite.config.ts') : false,
-  root,
-  resolve: { alias: cutover ? {} : { '@easyink/viewer': join(root, 'packages/viewer/src/index.ts') } },
-
-  server: { host: '127.0.0.1', port: 0 },
-  plugins: [{
-    name: 'readiness-fixtures',
-    configureServer(server) {
-      server.middlewares.use((req, res, next) => {
-        const url = new URL(req.url, 'http://localhost')
-        if (url.pathname === '/readiness-check') {
-          res.setHeader('Content-Type', 'text/html')
-          res.end('<!doctype html><title>EasyInk resource readiness</title><body></body>')
-          return
-        }
-        if (url.pathname === '/cutover-runtime') {
-          void (async () => {
-            const runtimeRoot = join(root, 'internal-packages/viewer-runtime/dist/runtime/easyink-viewer')
-            let html = await readFile(join(runtimeRoot, 'index.html'), 'utf8')
-            const css = await readFile(join(runtimeRoot, 'assets/viewer.css'), 'utf8')
-            const js = (await readFile(join(runtimeRoot, 'assets/viewer.js'), 'utf8')).replaceAll('</script', '<\\/script')
-            html = html.replace('<style data-easyink-runtime="viewer-css"></style>', () => `<style>${css}</style>`)
-            html = html.replace('<script data-easyink-runtime="viewer-js"></script>', () => `<script>${js}</script>`)
-            html = html.replace('application/json">{}</script>', `application/json">${JSON.stringify({ schema: { page: { width: 80, height: 40 }, elements: [{ id: 'cutover', type: 'text', x: 1, y: 1, width: 60, height: 15, props: { content: 'Embedded cutover' } }] } })}</script>`)
-            res.setHeader('Content-Type', 'text/html; charset=utf-8')
-            res.end(html)
-          })().catch((error) => {
-            res.statusCode = 500
-            res.end(String(error))
-          })
-          return
-        }
-        if (!url.pathname.startsWith('/readiness-fixture/')) {
-          next()
-          return
-        }
-        const key = url.pathname.split('/').pop()
-        hits.set(key, (hits.get(key) ?? 0) + 1)
-        res.setHeader('Cache-Control', 'no-store')
-        const respond = () => {
-          if (url.searchParams.has('fail')) {
-            res.statusCode = 404
-            res.end('missing resource')
-          }
-          else {
-            res.setHeader('Content-Type', key.endsWith('.ttf') ? 'font/ttf' : 'image/png')
-            res.end(key.endsWith('.ttf') ? font : image)
-          }
-        }
-        const delay = Number(url.searchParams.get('delay') ?? 0)
-        if (delay) {
-          const timer = setTimeout(() => {
-            fixtureTimers.delete(timer)
-            respond()
-          }, delay)
-          fixtureTimers.add(timer)
-        }
-        else {
-          respond()
-        }
-      })
-    },
-  }],
-})
+const workDir = await mkdtemp(join(tmpdir(), 'easyink-readiness-'))
+const profile = join(workDir, 'browser-profile')
+let server
 let browser
 let socket
 try {
-  await server.listen()
+  server = await createServer({
+    configFile: cutover ? join(root, 'playground/vite.config.ts') : false,
+    root,
+    cacheDir: join(workDir, 'vite-cache'),
+    optimizeDeps: { entries: [entry] },
+    resolve: { alias: cutover ? {} : { '@easyink/viewer': join(root, 'packages/viewer/src/index.ts') } },
+    server: { host: '127.0.0.1', port: 0 },
+    plugins: [{
+      name: 'readiness-fixtures',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          const url = new URL(req.url, 'http://localhost')
+          if (url.pathname === '/readiness-check') {
+            res.setHeader('Content-Type', 'text/html')
+            res.end('<!doctype html><title>EasyInk resource readiness</title><body></body>')
+            return
+          }
+          if (url.pathname === '/cutover-runtime') {
+            void (async () => {
+              const runtimeRoot = join(root, 'internal-packages/viewer-runtime/dist/runtime/easyink-viewer')
+              let html = await readFile(join(runtimeRoot, 'index.html'), 'utf8')
+              const css = await readFile(join(runtimeRoot, 'assets/viewer.css'), 'utf8')
+              const js = (await readFile(join(runtimeRoot, 'assets/viewer.js'), 'utf8')).replaceAll('</script', '<\\/script')
+              html = html.replace('<style data-easyink-runtime="viewer-css"></style>', () => `<style>${css}</style>`)
+              html = html.replace('<script data-easyink-runtime="viewer-js"></script>', () => `<script>${js}</script>`)
+              html = html.replace('application/json">{}</script>', `application/json">${JSON.stringify({ schema: { page: { width: 80, height: 40 }, elements: [{ id: 'cutover', type: 'text', x: 1, y: 1, width: 60, height: 15, props: { content: 'Embedded cutover' } }] } })}</script>`)
+              res.setHeader('Content-Type', 'text/html; charset=utf-8')
+              res.end(html)
+            })().catch((error) => {
+              res.statusCode = 500
+              res.end(String(error))
+            })
+            return
+          }
+          if (!url.pathname.startsWith('/readiness-fixture/')) {
+            next()
+            return
+          }
+          const key = url.pathname.split('/').pop()
+          hits.set(key, (hits.get(key) ?? 0) + 1)
+          res.setHeader('Cache-Control', 'no-store')
+          const respond = () => {
+            if (url.searchParams.has('fail')) {
+              res.statusCode = 404
+              res.end('missing resource')
+            }
+            else {
+              res.setHeader('Content-Type', key.endsWith('.ttf') ? 'font/ttf' : 'image/png')
+              res.end(key.endsWith('.ttf') ? font : image)
+            }
+          }
+          const delay = Number(url.searchParams.get('delay') ?? 0)
+          if (delay) {
+            const timer = setTimeout(() => {
+              fixtureTimers.delete(timer)
+              respond()
+            }, delay)
+            fixtureTimers.add(timer)
+          }
+          else {
+            respond()
+          }
+        })
+      },
+    }],
+  })
+  let preparationTimer
+  try {
+    await Promise.race([
+      (async () => {
+        await server.listen()
+        assert(await server.transformRequest(`/${entry}`), `Browser check entry not found: ${entry}`)
+        await server.waitForRequestsIdle()
+      })(),
+      new Promise((_, reject) => {
+        preparationTimer = setTimeout(() => reject(new Error(`Browser check preparation timed out: ${entry}`)), 60_000)
+      }),
+    ])
+  }
+  finally {
+    clearTimeout(preparationTimer)
+  }
   const origin = server.resolvedUrls.local[0]
   browser = spawn(browserPath, [
     '--headless=new',
@@ -113,8 +132,14 @@ try {
         resolve(endpoint.replace(/^ws:/, 'http:').split('/devtools/')[0])
       }
     })
-    browser.once('error', reject)
-    browser.once('exit', code => reject(new Error(`Browser exited early: ${code}`)))
+    browser.once('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+    browser.once('exit', (code) => {
+      clearTimeout(timer)
+      reject(new Error(`Browser exited early: ${code}`))
+    })
   })
   const targets = await fetch(`${debugOrigin}/json/list`).then(res => res.json())
   socket = new WebSocket(targets.find(target => target.type === 'page').webSocketDebuggerUrl)
@@ -150,9 +175,7 @@ try {
   await call('Runtime.enable')
   await call('Page.navigate', { url: `${origin}readiness-check` })
   const result = await call('Runtime.evaluate', {
-    expression: cutover
-      ? `import(${JSON.stringify(`${origin}playground/src/consumer-cutover.browser.ts`)}).then(module => module.runConsumerCutoverChecks())`
-      : `import(${JSON.stringify(`${origin}internal-packages/viewer-runtime/src/resource-readiness.browser.ts`)}).then(module => module.runResourceReadinessChecks())`,
+    expression: `import(${JSON.stringify(`${origin}${entry}`)}).then(module => module.${cutover ? 'runConsumerCutoverChecks' : 'runResourceReadinessChecks'}())`,
     awaitPromise: true,
     returnByValue: true,
   })
@@ -165,14 +188,22 @@ try {
   console.log(JSON.stringify({ browser: (await call('Browser.getVersion')).product, ...result.result.value, actualRequests: Object.fromEntries(hits) }, null, 2))
 }
 finally {
-  socket?.close()
-  if (browser && browser.exitCode === null) {
-    const exited = new Promise(resolve => browser.once('exit', resolve))
-    browser.kill()
-    await exited
+  try {
+    socket?.close()
+    if (browser?.pid && browser.exitCode === null && browser.signalCode === null) {
+      const exited = new Promise(resolve => browser.once('exit', resolve))
+      browser.kill()
+      await exited
+    }
   }
-  for (const timer of fixtureTimers)
-    clearTimeout(timer)
-  await server.close()
-  await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+  finally {
+    for (const timer of fixtureTimers)
+      clearTimeout(timer)
+    try {
+      await server?.close()
+    }
+    finally {
+      await rm(workDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+    }
+  }
 }
