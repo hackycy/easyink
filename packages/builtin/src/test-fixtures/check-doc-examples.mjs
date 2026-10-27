@@ -10,7 +10,7 @@ function blocks(path) {
 }
 
 function compile(name, source, extraFiles = []) {
-  const file = resolve(`.scratch/material-plugin-refactor/${name}.mts`).replaceAll('\\', '/')
+  const file = resolve(`packages/builtin/src/test-fixtures/${name}.mts`).replaceAll('\\', '/')
   const entries = {
     '@easyink/plugin-api/material': ['packages/plugin-api', './material'],
     '@easyink/plugin-api/ui': ['packages/plugin-api', './ui'],

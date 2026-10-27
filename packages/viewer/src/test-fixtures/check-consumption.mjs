@@ -15,7 +15,7 @@ async function checkEntry(name) {
     configFile: false,
     logLevel: 'error',
     plugins: [{
-      name: 'g0-consumption-graph',
+      name: 'viewer-consumption-graph',
       generateBundle() {
         moduleIds = [...this.getModuleIds()].filter(id => !id.startsWith('\0')).map(normalize).sort()
       },

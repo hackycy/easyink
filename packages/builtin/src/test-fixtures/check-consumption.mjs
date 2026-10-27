@@ -106,7 +106,7 @@ let rejectedHostExports = 0
 for (const [pkg, names] of Object.entries(deletedHostExports)) {
   const packageRoot = pkg === 'print-core' ? 'packages/print/core' : `packages/${pkg}`
   const result = compile(names.map((name, i) => `import type { ${name} as old${i} } from '@easyink/${pkg}'`).join('\n'), packageRoot)
-  assert.equal(result.length, names.length, `${pkg}: every G0 legacy export must be absent`)
+  assert.equal(result.length, names.length, `${pkg}: every legacy export must be absent`)
   assert.ok(result.every(diagnostic => diagnostic.code === 2305 || diagnostic.code === 2724), `${pkg}: rejection must be a missing export`)
   rejectedHostExports += result.length
 }

@@ -8,7 +8,7 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { createServer } from 'vite'
 
-// Real browser Directed check. No DOM emulator or browser automation dependency.
+// Continuous resource and consumer regression checks in a real browser.
 const root = fileURLToPath(new URL('../../../', import.meta.url))
 const cutover = process.argv.includes('--cutover')
 const entry = cutover ? 'playground/src/consumer-cutover.browser.ts' : 'internal-packages/viewer-runtime/src/resource-readiness.browser.ts'
