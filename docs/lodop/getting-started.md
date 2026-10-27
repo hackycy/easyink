@@ -61,7 +61,7 @@ console.log(printers)
 打印器创建后，业务侧只需要传 `schema + data`：
 
 ```ts
-import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+import { materials as viewerMaterials } from '@easyink/builtin/all/viewer'
 import { createLodopClient, createLodopPrinter } from '@easyink/print-integration-lodop'
 
 const client = createLodopClient({
@@ -73,11 +73,7 @@ const client = createLodopClient({
 const printer = createLodopPrinter({
   client,
   viewer: 'iframe',
-  setupViewer(viewer) {
-    registerBuiltinViewerMaterials((type, binding, extension) => {
-      viewer.registerMaterial(type, binding, extension)
-    })
-  },
+  viewerOptions: { materials: viewerMaterials },
 })
 
 await client.useDefaultPrinter()
@@ -263,7 +259,7 @@ await client.printHtml({
 如果项目已经自己拿到了 LODOP runtime，就让 EasyInk 只接管模板渲染和提交：
 
 ```ts
-import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+import { materials as viewerMaterials } from '@easyink/builtin/all/viewer'
 import {
   createLodopPrinter,
   createLodopRuntimeClient,
@@ -279,11 +275,7 @@ const client = createLodopRuntimeClient({
 const printer = createLodopPrinter({
   client,
   viewer: 'iframe',
-  setupViewer(viewer) {
-    registerBuiltinViewerMaterials((type, binding, extension) => {
-      viewer.registerMaterial(type, binding, extension)
-    })
-  },
+  viewerOptions: { materials: viewerMaterials },
 })
 
 await printer.print({ schema, data })
@@ -315,7 +307,7 @@ await client.printBase64Image('data:image/png;base64,...', {
 打印完成后清理托管 Viewer：
 
 ```ts
-printer.destroy()
+await printer.destroy()
 ```
 
 LODOP runtime 和 script 的生命周期通常由浏览器页面或业务资源加载器管理。`LodopClient` 不会主动停止本地 LODOP 服务。

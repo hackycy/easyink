@@ -1,241 +1,82 @@
 <script setup lang="ts">
-import type { FontProvider } from '@easyink/core'
-import type { DataSourceDescriptor } from '@easyink/datasource'
-import type { DocumentSchema, DocumentSchemaInput } from '@easyink/schema'
-import type { Contribution } from '../contributions'
-import type { DesignerRuntimeConfig } from '../runtime-config'
-import type { DesignerInteractionProvider, LocaleMessages, PreferenceProvider, StatusBarState, StoreSetup, TemplateAutoSaveOptions } from '../types'
+import type { DocumentSchema } from '@easyink/schema'
+import type { DesignerCreateOptions, DesignerStore } from '../store/designer-store'
+import type { EasyInkDesignerProps } from '../types'
 import { builtinLocales } from '@easyink/locales'
-import { onBeforeUnmount, onMounted, provide, reactive, ref, shallowRef, watch } from 'vue'
-import { provideDesignerStore } from '../composables'
-import { useTemplateAutoSave } from '../composables/use-template-autosave'
-import { useWorkbenchPersistence } from '../composables/use-workbench-persistence'
-import { ContributionRegistry } from '../contributions/contribution-registry'
-import { CONTRIBUTION_REGISTRY_KEY } from '../contributions/injection'
-import { registerMaterialBundle } from '../materials/registry'
-import { DesignerStore } from '../store/designer-store'
-import CanvasWorkspace from './CanvasWorkspace.vue'
-import DesignerConfirmHost from './DesignerConfirmHost.vue'
-import StatusBar from './StatusBar.vue'
-import TopBarB from './TopBarB.vue'
+import { onBeforeUnmount, shallowRef } from 'vue'
+import { DesignerStore as Store } from '../store/designer-store'
+import DesignerWorkbench from './DesignerWorkbench.vue'
 
-const props = defineProps<{
-  schema?: DocumentSchemaInput
-  dataSources?: DataSourceDescriptor[]
-  fontProvider?: FontProvider
-  preferenceProvider?: PreferenceProvider
-  autoSave?: TemplateAutoSaveOptions
-  locale?: LocaleMessages
-  localeCode?: string
-  setupStore?: StoreSetup
-  contributions?: Contribution[]
-  interactionProvider?: DesignerInteractionProvider
-  runtimeConfig?: DesignerRuntimeConfig
-}>()
+type DisposeResult = Awaited<ReturnType<DesignerStore['destroy']>>
 
+const props = defineProps<EasyInkDesignerProps>()
 const emit = defineEmits<{
   'update:schema': [schema: DocumentSchema]
+  'ready': []
+  'error': [cause: unknown]
 }>()
-
-const designerRootRef = ref<HTMLElement | null>(null)
-const store = reactive(new DesignerStore(
-  props.schema,
-  props.preferenceProvider,
-  props.interactionProvider,
-  props.runtimeConfig,
-)) as DesignerStore
-if (store.schema !== props.schema) {
-  emit('update:schema', store.schema)
+const store = shallowRef<DesignerStore>()
+const failure = shallowRef<unknown>()
+let active = true
+function localeCode() {
+  return props.localeCode ?? Object.entries(builtinLocales).find(([, messages]) => messages === props.locale)?.[0]
 }
-// EditingSessionManager was constructed before the reactive proxy existed;
-// re-target it at the proxy so mutations made through tx.run trigger Vue
-// reactivity (otherwise patches mutate the raw store and templates stay stale).
-store.editingSession.setStore(store)
-registerRuntimeMaterialBundles(store, props.runtimeConfig)
-store.setFontProvider(props.fontProvider)
-props.setupStore?.(store)
-provideDesignerStore(store)
-
-// Wire workbench persistence (debounced save on state changes + flush on unmount)
-if (props.preferenceProvider) {
-  useWorkbenchPersistence(store.workbench, props.preferenceProvider)
+const options: DesignerCreateOptions = {
+  schema: props.schema,
+  materials: props.materials,
+  extensions: props.extensions,
+  locale: { code: localeCode(), messages: props.locale },
+  dataSources: props.dataSources,
+  fontProvider: props.fontProvider,
+  preferenceProvider: props.preferenceProvider,
+  interactionProvider: props.interactionProvider,
+  runtimeConfig: props.runtimeConfig,
 }
-
-const templateAutoSave = useTemplateAutoSave(store, () => props.autoSave)
-
-if (props.locale) {
-  store.setLocale(props.locale, resolveLocaleCode(props.locale))
+const creation = Store.create(options)
+let disposal: Promise<DisposeResult | undefined> | undefined
+function destroy(): Promise<DisposeResult | undefined> {
+  if (disposal)
+    return disposal
+  active = false
+  const current = store.value
+  const cleanup = current?.destroy()
+  disposal = (async () => {
+    const created = current ?? await creation.catch(() => undefined)
+    return cleanup ?? created?.destroy()
+  })()
+  return disposal
 }
-
-if (props.dataSources) {
-  for (const source of props.dataSources) {
-    store.dataSourceRegistry.registerSource(source)
+defineExpose({ destroy })
+void creation.then(async (created) => {
+  if (!active) {
+    await created.destroy()
+    return
   }
-}
-
-// Contribution registry (panels / toolbar actions / commands)
-const contributionRegistry = shallowRef(new ContributionRegistry())
-if (props.contributions && props.contributions.length > 0) {
-  contributionRegistry.value.activate(props.contributions, store)
-}
-provide(CONTRIBUTION_REGISTRY_KEY, {
-  registry: contributionRegistry.value,
-  // Lazy access — only resolved when a toolbar action is clicked, by which
-  // point at least one contribution must have been activated.
-  get context() {
-    return contributionRegistry.value.context
-  },
-})
-
-watch(() => props.schema, (newSchema) => {
-  if (newSchema !== store.schema) {
-    store.setSchema(newSchema)
-    templateAutoSave.markSchemaLoaded()
+  if (props.schema !== options.schema)
+    created.setSchema(props.schema)
+  store.value = created
+  emit('ready')
+}).catch((cause) => {
+  if (active) {
+    failure.value = cause
+    emit('error', cause)
   }
 })
-
-// Sync schema replacement back to the parent so `v-model:schema` reflects
-// programmatic mutations (e.g. AI generation calling `store.setSchema`).
-// In-place mutations of the same object reach the parent automatically
-// because props are passed by reference; this watcher only fires when the
-// internal _schema is reassigned to a new object identity.
-watch(() => store.schema, (newSchema) => {
-  if (newSchema !== props.schema) {
-    emit('update:schema', newSchema)
-  }
-})
-
-watch([() => props.locale, () => props.localeCode], ([newLocale]) => {
-  if (newLocale)
-    store.setLocale(newLocale, resolveLocaleCode(newLocale))
-})
-
-function resolveLocaleCode(locale: LocaleMessages): string | undefined {
-  if (props.localeCode)
-    return props.localeCode
-  for (const [code, messages] of Object.entries(builtinLocales)) {
-    if (messages === locale)
-      return code
-  }
-  return undefined
-}
-
-function registerRuntimeMaterialBundles(store: DesignerStore, runtimeConfig: DesignerRuntimeConfig | undefined): void {
-  for (const bundle of runtimeConfig?.materials?.bundles ?? [])
-    registerMaterialBundle(store, bundle)
-}
-
-watch(() => props.interactionProvider, (newProvider) => {
-  store.setInteractionProvider(newProvider)
-})
-
-watch(() => props.fontProvider, (newProvider) => {
-  store.setFontProvider(newProvider)
-})
-
-function getFocusStateFromTarget(target: EventTarget | null): StatusBarState['focus'] {
-  if (!(target instanceof Element))
-    return 'none'
-
-  if (target.closest('.ei-dialog, .ei-dialog-overlay'))
-    return 'dialog'
-
-  const root = designerRootRef.value
-  if (!root || !root.contains(target))
-    return 'none'
-
-  if (target.closest('.ei-workspace-window, .ei-topbar-b'))
-    return 'panel'
-
-  if (target.closest('.ei-canvas-scroll, .ei-canvas-page, .ei-canvas-rulers'))
-    return 'canvas'
-
-  return 'none'
-}
-
-function syncFocusState(target: EventTarget | null): void {
-  store.setFocusState(getFocusStateFromTarget(target))
-}
-
-function handleGlobalPointerDown(event: PointerEvent): void {
-  syncFocusState(event.target)
-}
-
-function handleGlobalFocusIn(event: FocusEvent): void {
-  const focusState = getFocusStateFromTarget(event.target)
-  if (focusState !== 'none')
-    store.setFocusState(focusState)
-}
-
-function handleWindowBlur(): void {
-  store.setFocusState('none')
-}
-
-onMounted(() => {
-  store.setFontTarget(designerRootRef.value?.ownerDocument ?? document)
-  window.addEventListener('pointerdown', handleGlobalPointerDown, true)
-  window.addEventListener('focusin', handleGlobalFocusIn, true)
-  window.addEventListener('blur', handleWindowBlur)
-})
-
 onBeforeUnmount(() => {
-  store.setFontTarget(undefined)
-  window.removeEventListener('pointerdown', handleGlobalPointerDown, true)
-  window.removeEventListener('focusin', handleGlobalFocusIn, true)
-  window.removeEventListener('blur', handleWindowBlur)
-  contributionRegistry.value.dispose()
-  store.destroy()
+  void destroy()
 })
 </script>
 
 <template>
-  <div ref="designerRootRef" class="ei-designer">
-    <slot name="topbar" />
-    <TopBarB />
-    <CanvasWorkspace />
-    <StatusBar />
-    <DesignerConfirmHost />
-
-    <!-- Overlay root for contribution-registered panels (Vue Teleport target). -->
-    <div id="ei-overlay-root" class="ei-designer__overlay-root" />
-
-    <!-- Mount registered panels via Teleport. The contribution owns layout.
-         `defer` waits for the overlay-root sibling above to be mounted. -->
-    <template
-      v-for="panel in contributionRegistry.panels"
-      :key="panel.id"
-    >
-      <Teleport defer :to="panel.teleportTarget ?? '#ei-overlay-root'">
-        <component
-          :is="panel.component"
-          v-bind="{ store, ...(panel.props ?? {}) }"
-        />
-      </Teleport>
+  <DesignerWorkbench v-if="store" v-bind="props" :store="store" @update:schema="emit('update:schema', $event)">
+    <template #topbar>
+      <slot name="topbar" />
     </template>
+  </DesignerWorkbench>
+  <div v-else class="ei-designer" :aria-busy="!failure">
+    <slot v-if="failure" name="error" :error="failure">
+      Designer failed to initialize.
+    </slot>
+    <slot v-else name="loading" />
   </div>
 </template>
-
-<style scoped lang="scss">
-.ei-designer {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  background: var(--ei-bg, #fff);
-  color: var(--ei-text, #333);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  overflow: hidden;
-  position: relative;
-
-  &__overlay-root {
-    position: fixed;
-    inset: 0;
-    z-index: 999;
-    pointer-events: none;
-
-    > * {
-      pointer-events: auto;
-    }
-  }
-}
-</style>

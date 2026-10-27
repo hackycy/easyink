@@ -13,12 +13,12 @@ description: '@easyink/viewer 是独立的渲染运行时，接收 Schema 和数
 先看一段最小代码：
 
 ```ts
-import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+import { materials } from '@easyink/builtin/all/viewer'
 import { createViewer } from '@easyink/viewer'
 
-const viewer = createViewer({ iframe: iframeElement })
-registerBuiltinViewerMaterials((type, binding, extension) => {
-  viewer.registerMaterial(type, binding, extension)
+const viewer = await createViewer({
+  iframe: iframeElement,
+  materials,
 })
 
 await viewer.open({
@@ -28,26 +28,25 @@ await viewer.open({
   },
 })
 
-viewer.destroy()
+await viewer.destroy()
 ```
 
 这段代码做了三件事：
 
-- `createViewer({ iframe })` 创建运行时，并把渲染目标放进 iframe。
-- `registerBuiltinViewerMaterials()` 注册内置物料渲染器。
+- `createViewer({ iframe, materials })` 创建运行时，并在创建阶段安装完整物料集合。
 - `open({ schema, data })` 校验 Schema、归一化 Schema，然后渲染页面。
-- `destroy()` 清理当前 Host 挂载内容、注册表和字体缓存。
+- `destroy()` 清理当前 Host 挂载内容、物料资源和字体缓存。
 
-Viewer 不会自动内置官方物料；如果你的模板使用内置物料，需要先从 `@easyink/builtin/all` 或 `@easyink/builtin/basic` 注册对应渲染器。
+Viewer 不会自动内置官方物料；如果模板使用内置物料，需要在创建时从 `@easyink/builtin/all/viewer` 或 `@easyink/builtin/basic/viewer` 选择完整 Viewer 物料集合。自定义物料也通过同一个 `materials` 数组传入。
 
 ## 创建 Viewer {#create-viewer}
 
 `createViewer()` 接收一个 `ViewerOptions` 对象。
 
 ```ts
-const iframeViewer = createViewer({ iframe: iframeElement })
-const domViewer = createViewer({ container: containerElement })
-const customViewer = createViewer({ host })
+const iframeViewer = await createViewer({ iframe: iframeElement, materials })
+const domViewer = await createViewer({ container: containerElement, materials })
+const customViewer = await createViewer({ host, materials })
 ```
 
 常用选项是这几个：
@@ -57,6 +56,7 @@ const customViewer = createViewer({ host })
 | `iframe` | 快捷创建 Iframe Host |
 | `container` | 快捷创建 Browser Host |
 | `host` | 传入你自己创建的 `ViewerHost` |
+| `materials` | 创建时选择的完整 Viewer 物料声明 |
 | `fontProvider` | 提供字体目录和字体资源 |
 
 `iframe` 和 `container` 都只是快捷写法。它们最终都会变成一个 `ViewerHost`，再交给运行时使用。
@@ -94,16 +94,17 @@ Designer 里的 `dataSources` 不会传给 Viewer。它们是设计态字段树�
 ```ts
 const result = await viewer.render()
 
-console.log(result.pages)
-console.log(result.thumbnails)
-console.log(result.diagnostics)
+if (result.status === 'completed') {
+  console.log(result.pages)
+  console.log(result.thumbnails)
+  console.log(result.diagnostics)
+}
 ```
 
 当前实现的渲染流程是：
 
 ```text
 校验 Schema
-  -> beforeSchemaNormalize hook
   -> 归一化 Schema
   -> 加载字体
   -> 解析绑定
@@ -116,14 +117,20 @@ console.log(result.diagnostics)
 `render()` 返回 `ViewerRenderResult`：
 
 ```ts
-interface ViewerRenderResult {
+type ViewerRenderResult = {
+  status: 'completed'
+  requestId: number
   pages: ViewerPageResult[]
   thumbnails: ThumbnailResult[]
   diagnostics: ViewerDiagnosticEvent[]
+} | {
+  status: 'cancelled'
+  requestId: number
+  reason: 'superseded' | 'document-changed' | 'destroyed'
 }
 ```
 
-`pages` 里会带页面尺寸、元素数量和页面 DOM。`thumbnails` 是基于页面结果生成的 SVG data URL。
+完成时 `pages` 带页面尺寸、元素数量和页面 DOM，`thumbnails` 是基于页面结果生成的 SVG data URL。后续请求或销毁导致取消时先检查 `status`；整体失败则拒绝 Promise。
 
 ## 更新数据 {#update-data}
 
@@ -153,10 +160,13 @@ Viewer 提供打印和导出的运行时入口。
 ```ts
 await viewer.print()
 
-const blob = await viewer.exportDocument({
+const result = await viewer.exportDocument({
   format: 'pdf',
   entry: 'preview',
 })
+if (result.status === 'completed') {
+  console.log(result.file, result.diagnostics)
+}
 ```
 
 这里有两个前提要分清：
@@ -168,31 +178,19 @@ const blob = await viewer.exportDocument({
 
 完整用法继续看 [打印与导出](./print-export)。
 
-## 注册物料渲染器 {#register-material}
+## 选择物料 {#select-materials}
 
-Viewer 允许你为某个物料 `type` 注册运行时渲染器。
+Viewer 在创建时一次性接收完整物料声明。每个声明同时提供共享 `model` 和 Viewer `renderer`（或异步 `loadRenderer`），不能在创建后再补注册。
 
 ```ts
-import { trustedViewerHtml } from '@easyink/core'
+import { materials as builtinMaterials } from '@easyink/builtin/all/viewer'
+import { badge } from './materials/badge/viewer'
 
-viewer.registerMaterial('my-widget', { kind: 'none' }, {
-  render(node, context) {
-    return {
-      html: trustedViewerHtml('<div>Custom Widget</div>'),
-    }
-  },
-  measure(node) {
-    return {
-      width: node.width,
-      height: node.height,
-    }
-  },
+const viewer = await createViewer({
+  container: containerElement,
+  materials: [...builtinMaterials, badge],
 })
 ```
-
-`render()` 返回 `html` 或 `element`。返回 HTML 时，当前接口要求你用 `trustedViewerHtml()` 明确标记这段内容是可信 Viewer HTML。
-
-`measure()` 是可选的。只有需要运行时测量尺寸的物料才需要实现它。
 
 自定义物料的完整开发方式继续看 [自定义物料开发](/advanced/custom-materials)。
 
@@ -230,10 +228,10 @@ viewer.registerExporter({
 Viewer 是有状态运行时。组件卸载或页面离开时，我们建议你显式销毁。
 
 ```ts
-viewer.destroy()
+await viewer.destroy()
 ```
 
-`destroy()` 会把实例标记为已销毁，清理当前 Schema、数据、物料注册表、打印驱动、导出器、字体缓存和 Host 挂载内容。
+`destroy()` 会把实例标记为已销毁，清理当前 Schema、数据、物料资源、打印驱动、导出器、字体缓存和 Host 挂载内容。应用更换物料集合时，应先 `await destroy()`，再创建新的 Viewer。
 
 关于 Viewer，目前知道这些就够用了。接下来可以继续看：
 

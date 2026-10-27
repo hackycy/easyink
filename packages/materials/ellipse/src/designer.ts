@@ -1,9 +1,10 @@
-import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { EllipseProps } from './schema'
 import { getNodeProps } from '@easyink/schema'
 import { buildEllipseSvg } from './svg'
 
-export function createEllipseExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createEllipseExtension(context: DesignerRendererContext): DesignerRenderInstance {
   return {
     renderContent(nodeSignal, container) {
       function render() {

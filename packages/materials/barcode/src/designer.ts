@@ -1,4 +1,5 @@
-import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { MaterialNode } from '@easyink/schema'
 import type { BarcodeProps } from './schema'
 import { getBindingRefs } from '@easyink/schema'
@@ -80,7 +81,7 @@ function createPlaceholder(document: Document, props: BarcodeProps, label: strin
   return placeholder
 }
 
-function buildElement(node: MaterialNode, context: MaterialExtensionContext, document: Document): HTMLElement {
+function buildElement(node: MaterialNode, context: DesignerRendererContext, document: Document): HTMLElement {
   const props = resolveBarcodeProps(node)
   const frame = document.createElement('div')
   applyFrameStyles(frame, props, context.getSchema().unit)
@@ -114,7 +115,7 @@ function buildElement(node: MaterialNode, context: MaterialExtensionContext, doc
   return frame
 }
 
-export function createBarcodeExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createBarcodeExtension(context: DesignerRendererContext): DesignerRenderInstance {
   return {
     renderContent(nodeSignal, container) {
       function render() {

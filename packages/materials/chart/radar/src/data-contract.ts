@@ -1,4 +1,4 @@
-import type { ChartCategoryValuePoint } from '@easyink/material-chart-kernel'
+import type { ChartCategoryValuePoint } from '@easyink/material-chart-kernel/viewer'
 import type { MaterialNode } from '@easyink/schema'
 import type { ChartRadarProps } from './schema'
 import { resolveMaterialDataContract } from '@easyink/core'

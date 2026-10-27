@@ -1,17 +1,6 @@
-import type {
-  BehaviorRegistration,
-  DatasourceDropHandler,
-  EditingSessionRef,
-  MaterialControlPolicy,
-  MaterialDesignerExtension,
-  MaterialExtensionContext,
-  MaterialGeometry,
-  Rect,
-  Selection,
-  SelectionType,
-  SubPropertySchema,
-  TransactionAPI,
-} from '@easyink/core'
+import type { BehaviorRegistration, DatasourceDropHandler, EditingSessionRef, MaterialControlPolicy, MaterialGeometry, Rect, Selection, SelectionType, SubPropertySchema, TransactionAPI } from '@easyink/core'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { BindingRef, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat } from '@easyink/shared'
 import type { FlowColumnLayoutRect } from './rendering'
@@ -28,14 +17,7 @@ import {
   IconTextAlignLeft,
   IconTextAlignRight,
 } from '@easyink/icons/svg-strings'
-import {
-  createPointerGesture,
-  materialToolbarButtonStyle,
-  materialToolbarDockStyle,
-  materialToolbarGroupStyle,
-  materialToolbarIconStyle,
-  materialToolbarShellStyle,
-} from '@easyink/shared'
+import { createPointerGesture, deepClone, materialToolbarButtonStyle, materialToolbarDockStyle, materialToolbarGroupStyle, materialToolbarIconStyle, materialToolbarShellStyle } from '@easyink/shared'
 import { computed, defineComponent, h, onUnmounted, ref, watch } from 'vue'
 import {
   computeFlowColumnRects,
@@ -240,7 +222,7 @@ function createColumnGeometry(): MaterialGeometry {
   }
 }
 
-function createColumnSelectionType(context: MaterialExtensionContext): SelectionType<FlowColumnSelectionPayload> {
+function createColumnSelectionType(context: DesignerRendererContext): SelectionType<FlowColumnSelectionPayload> {
   return {
     id: FLOW_COLUMN_SELECTION_TYPE,
     validate(payload): payload is FlowColumnSelectionPayload {
@@ -259,11 +241,11 @@ function createColumnSelectionType(context: MaterialExtensionContext): Selection
 function createColumnSubPropertySchema(
   sel: Selection<FlowColumnSelectionPayload>,
   node: MaterialNode,
-  context: MaterialExtensionContext,
+  context: DesignerRendererContext,
 ): SubPropertySchema {
   function getColumn(): FlowColumnDef | undefined {
     const current = context.getNode(sel.nodeId)
-    const props = current ? getFlowRowProps(current) : getFlowRowProps(node)
+    const props = current ? getFlowRowProps(deepClone(current) as MaterialNode) : getFlowRowProps(node)
     return props.columns[sel.payload.index]
   }
 
@@ -544,7 +526,7 @@ function createColumnCommandBehavior(): BehaviorRegistration {
   }
 }
 
-function createDatasourceDropHandler(context: MaterialExtensionContext): DatasourceDropHandler {
+function createDatasourceDropHandler(context: DesignerRendererContext): DatasourceDropHandler {
   return {
     onDragOver(_field, point, node) {
       const rect = getDesignerColumnRects(node).find(item =>
@@ -585,7 +567,7 @@ function createDatasourceDropHandler(context: MaterialExtensionContext): Datasou
   }
 }
 
-function createColumnDecorationComponent(context: MaterialExtensionContext) {
+function createColumnDecorationComponent(context: DesignerRendererContext) {
   return defineComponent({
     name: 'FlowRowColumnDecoration',
     props: {
@@ -837,7 +819,7 @@ function createColumnDecorationComponent(context: MaterialExtensionContext) {
   })
 }
 
-export function createFlowRowExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createFlowRowExtension(context: DesignerRendererContext): DesignerRenderInstance {
   const geometry = createColumnGeometry()
   const selectionType = createColumnSelectionType(context)
 

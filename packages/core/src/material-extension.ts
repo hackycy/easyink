@@ -1,7 +1,7 @@
 import type { BindingRef, DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { BindingDisplayFormat, PropSchemaType } from '@easyink/shared'
 import type { Command } from './command'
-import type { BehaviorRegistration, EditingSessionRef, MaterialGeometry, SelectionDecorationDef, SelectionType, TransactionAPI } from './editing-session'
+import type { EditingSessionRef } from './editing-session'
 
 // ─── Material Extensions ───────────────────────────────────────────
 
@@ -46,62 +46,6 @@ export interface MaterialDesignerRenderContext {
 export interface MaterialDesignerRenderContextSignal {
   get: () => MaterialDesignerRenderContext
   subscribe: (callback: (context: MaterialDesignerRenderContext) => void) => () => void
-}
-
-/**
- * Material designer extension contract.
- */
-export interface MaterialDesignerExtension {
-  /**
-   * Mount content into the provided DOM container using the reactive NodeSignal.
-   * Returns a cleanup function called when the element is removed from the canvas.
-   */
-  renderContent: (
-    nodeSignal: NodeSignal,
-    container: HTMLElement,
-    renderContextSignal?: MaterialDesignerRenderContextSignal,
-  ) => () => void
-  /**
-   * Datasource drag-and-drop handler. Materials implement this to take over
-   * dragOver detection and drop binding instead of the default BindFieldCommand.
-   * When absent, the designer falls back to default behavior (whole element as drop zone).
-   */
-  datasourceDrop?: DatasourceDropHandler
-
-  // ─── Editing Behavior Protocol (Chapter 22) ─────────────────────
-
-  // Entry trigger is unified to dblclick. The previous `enterTrigger` field
-  // (with a 'click' value for tables) was removed because the resulting
-  // "pointerdown enters editing" path stole the first gesture from canvas
-  // selection/drag, breaking parity with non-table materials and producing
-  // the bug class called out in audit/202605011431.md item 1.
-
-  /** Geometry protocol: material declares hit-test, layout, and selection-to-rect mapping. */
-  geometry?: MaterialGeometry
-  /** Selection types this material supports (e.g. 'table.cell'). */
-  selectionTypes?: SelectionType<unknown>[]
-  /** Behavior middleware chain (Koa-style). */
-  behaviors?: BehaviorRegistration[]
-  /** Selection decoration definitions (framework auto-renders). */
-  decorations?: SelectionDecorationDef[]
-
-  // ─── Resize Side-Effect Protocol ────────────────────────────────
-
-  /**
-   * Resize adapter: lets a material participate in element resize operations.
-   * The framework drives the geometry; the adapter mutates material-private
-   * data (e.g. table row heights) in lockstep, and produces an undo-safe
-   * side-effect that bundles into ResizeMaterialCommand.
-   */
-  resize?: MaterialResizeAdapter
-
-  /**
-   * Dynamic design-time control policy. Materials use this to declare that
-   * some outer geometry controls, resize handles, or property fields are
-   * unavailable for the current node state (for example runtime-measured
-   * repeat rows whose height is content-owned).
-   */
-  resolveControlPolicy?: (node: MaterialNode, context: MaterialControlPolicyContext) => MaterialControlPolicy
 }
 
 // ─── Design-Time Control Policy ─────────────────────────────────
@@ -245,32 +189,6 @@ export interface DatasourceDropHandler {
     point: { x: number, y: number },
     node: MaterialNode,
   ) => void
-}
-
-/** Factory that receives a context and returns a material extension instance. */
-export type MaterialExtensionFactory = (context: MaterialExtensionContext) => MaterialDesignerExtension
-
-/** Async designer factory loader. Used by heavyweight materials in Designer only. */
-export type LazyMaterialExtensionFactory = () => Promise<MaterialExtensionFactory>
-
-/** Context provided to material extension factories for querying state and issuing commands. */
-export interface MaterialExtensionContext {
-  getSchema: () => DocumentSchema
-  getNode: (id: string) => MaterialNode | undefined
-  getSelection: () => SelectionSnapshot
-  getBindingLabel: (binding: BindingRef) => string
-  commitCommand: (command: Command) => void
-  /** Transaction API for draft-based mutations (generates PatchCommand). */
-  tx: TransactionAPI
-  requestPropertyPanel: (overlay: PropertyPanelOverlay | null) => void
-  emit: (event: string, payload: unknown) => void
-  on: (event: string, handler: (...args: unknown[]) => void) => () => void
-  /** Current viewport zoom level (1 = 100%). */
-  getZoom: () => number
-  /** DOM element of the page canvas, used for coordinate conversion. */
-  getPageEl: () => HTMLElement | null
-  /** Translate an i18n key to the current locale. */
-  t: (key: string) => string
 }
 
 export interface SelectionSnapshot {

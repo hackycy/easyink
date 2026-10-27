@@ -6,27 +6,30 @@ export function createRadarEChartsOption(data: ChartCategoryValuePoint[], style:
   const maxValue = resolveMaxValue(data, style.maxValue)
   const series: RadarSeriesOption = {
     type: 'radar',
-    data: [
-      {
-        value: data.map(point => point.value),
-        name: 'Value',
-        lineStyle: {
-          color: style.lineColor || '#2563eb',
-          width: 2,
-        },
-        itemStyle: {
-          color: style.pointColor || style.lineColor || '#2563eb',
-        },
-        ...(style.showArea
-          ? {
-              areaStyle: {
-                color: style.areaColor || style.lineColor || '#93c5fd',
-                opacity: 0.28,
-              },
-            }
-          : {}),
-      },
-    ],
+    // ECharts cannot lay out a data item with zero radar indicators.
+    data: data.length === 0
+      ? []
+      : [
+          {
+            value: data.map(point => point.value),
+            name: 'Value',
+            lineStyle: {
+              color: style.lineColor || '#2563eb',
+              width: 2,
+            },
+            itemStyle: {
+              color: style.pointColor || style.lineColor || '#2563eb',
+            },
+            ...(style.showArea
+              ? {
+                  areaStyle: {
+                    color: style.areaColor || style.lineColor || '#93c5fd',
+                    opacity: 0.28,
+                  },
+                }
+              : {}),
+          },
+        ],
     symbol: style.showPoints ? 'circle' : 'none',
     symbolSize: 5,
     label: {

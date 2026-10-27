@@ -33,6 +33,8 @@ DocumentSchema
 
 不变量：`MaterialNode.x/y/width/height` 存储文档坐标；测量、回流、分页和编辑态投影都不能把运行结果静默写回原始 schema。
 
+Viewer 每次计算使用固定的 Schema/data 快照。`LayoutDocument`、分页计划和候选页面只属于该请求；可见页数在候选绘制成功且提交权仍有效后更新。同文档计算失败保留旧页面及对应 metrics；显式 `open()` 清空旧输出。该提交边界不改变 `flow-y`、分页、copies 或逐页 overlay 的正常算法；可选 runtimeRef 从源关联穿过 reflow、分页、copies、逐页 overlay 和 Viewer 页面绘制；core 只携带该引用，不引入插件依赖。实际拆分由 Viewer 分配新的片段身份，坐标移动保留原身份。
+
 ## 24.3 Schema 契约
 
 `PageSchema` 保留原有打印和背景字段，并增加四层策略字段：
@@ -115,7 +117,7 @@ ViewerRuntime 当前主流程：
 1. 迁移 legacy schema，并执行 schema validation。
 2. 执行 schema normalize hook，保存规范 schema。
 3. 加载字体。
-4. 投影数据绑定，包含 table-data/table-static 的单元格预解析。
+4. 投影源节点绑定，调用 beforePagePlan，再等待可选会话 prepare。table-data 在自己的 prepare 中解析单元格绑定与展开行。
 5. 调用物料 `measure()`，把运行态尺寸写入 `measurements` map。
 6. `runLayoutPipeline()` 根据 `reflow.strategy` 生成 `LayoutDocument`。
 7. `runPagination()` 根据 `pagination.strategy` 生成输出页，并通过 `FragmentPaginator` 处理可拆分页物料。
@@ -159,20 +161,21 @@ Designer 属性面板按页面策略注入行为项：
 
 ## 24.6 可分页物料
 
-`MaterialViewerExtension` 支持可选 `fragmentPaginator`：
+`ViewerSessionRenderer` 支持可选 `fragmentPaginator`：
 
 ```ts
 interface FragmentPaginator {
   canPaginate(node: MaterialNode): boolean
+  getRemainingContent?(fragment: LayoutFragment): number
   paginateFragment(input: FragmentPaginateInput): FragmentPaginateResult
 }
 ```
 
 `table-data` 已经实现首个分页器：
 
-- `measureTableData()` 展开 repeat-template 行、处理 header/footer 显隐、计算运行态行高，并把结果缓存在 table schema 对象上。
-- `tableDataFragmentPaginator` 在 `auto-sheets` 中按可用高度拆分行，当前页保留 header，后续页继续带 header，footer 进入剩余片段。
-- 分页生成虚拟 table fragment，保留 `sourceNodeId`，不改写原始 `table.topology.rows`。
+- `createTableDataSession()` 为每轮建立私有状态；prepare 使用原声明尺寸展开 repeat-template 行、处理 header/footer 显隐并计算行高。measure 和 render 同步读取同一准备结果，不依赖 schema 对象缓存。
+- 会话的 fragmentPaginator 在 auto-sheets 中按可用高度拆分行，当前页保留 header，后续页继续带 header，footer 进入剩余片段。每次派生通过框架 createFragment 分配新运行引用并保存对应行状态。
+- 分页生成虚拟 table fragment，保留 sourceNodeId 和源绑定，不改写原始 table.topology.rows。Viewer 检查剩余正文行数为非负安全整数，nextPage 必须严格递减并使用新身份；失败停止该项并占位，其它物料继续。无引用的 core 纯布局仍可用。
 
 ## 24.7 Designer 编辑表面
 

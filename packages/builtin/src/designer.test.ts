@@ -1,34 +1,42 @@
 import { IconFilePen, IconSignature } from '@easyink/icons'
-import { describe, expect, it } from 'vitest'
-import { builtinDesignerMaterialSets, createBuiltinDesignerMaterialBundle } from './designer'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { DesignerStore } from '../../designer/src/store/designer-store'
+import { materials } from './all/designer'
+import { materials as basic } from './basic/designer'
+import { materials as none } from './none'
 
-const builtinDesignerMaterialBundle = createBuiltinDesignerMaterialBundle('all')
+let store: DesignerStore
+let basicStore: DesignerStore
+beforeAll(async () => {
+  store = await DesignerStore.create({ materials })
+  basicStore = await DesignerStore.create({ materials: basic })
+})
+afterAll(async () => {
+  await Promise.all([store.destroy(), basicStore.destroy()])
+})
 
-function catalogItemTypes(groupId: string, bundle = builtinDesignerMaterialBundle): string[] {
-  return bundle.catalogs.find(group => group.id === groupId)?.items.map(item => item.type) ?? []
+function catalogItemTypes(groupId: string, host = store): string[] {
+  return host.getCatalogGroups().find(group => group.id === groupId)?.items.map(item => item.materialType) ?? []
 }
 
-describe('builtin designer material bundle', () => {
+describe('builtin complete Designer materials', () => {
   it('exposes all, basic, and none material sets', () => {
-    expect(builtinDesignerMaterialSets.all.materials.length).toBeGreaterThan(0)
-    expect(builtinDesignerMaterialSets.basic.materials.map(material => material.type)).toContain('table-static')
-    expect(builtinDesignerMaterialSets.basic.materials.map(material => material.type)).toContain('svg')
-    expect(builtinDesignerMaterialSets.basic.materials.some(material => material.category === 'chart')).toBe(false)
-    expect(builtinDesignerMaterialSets.basic.materials.map(material => material.type)).not.toContain('signature')
-    expect(catalogItemTypes('basic', builtinDesignerMaterialSets.basic)).not.toContain('signature')
-    expect(builtinDesignerMaterialSets.basic.catalogs.map(group => group.id)).not.toContain('chart')
-    expect(builtinDesignerMaterialSets.none).toEqual({
-      materials: [],
-      catalogs: [],
-    })
+    expect(materials.length).toBeGreaterThan(0)
+    expect(basic.map(material => material.model.type)).toContain('table-static')
+    expect(basic.map(material => material.model.type)).toContain('svg')
+    expect(basic.some(material => material.ui?.palette?.[0]?.group.id === 'chart')).toBe(false)
+    expect(basic.map(material => material.model.type)).not.toContain('signature')
+    expect(catalogItemTypes('basic', basicStore)).not.toContain('signature')
+    expect(basicStore.getCatalogGroups().map(group => group.id)).not.toContain('chart')
+    expect(none).toEqual([])
   })
 
   it('exposes every catalog entry as a registered material', () => {
-    const materialTypes = new Set(builtinDesignerMaterialBundle.materials.map(material => material.type))
+    const materialTypes = new Set(materials.map(material => material.model.type))
 
-    for (const group of builtinDesignerMaterialBundle.catalogs) {
+    for (const group of store.getCatalogGroups()) {
       for (const entry of group.items)
-        expect(materialTypes.has(entry.type)).toBe(true)
+        expect(materialTypes.has(entry.materialType)).toBe(true)
     }
   })
 
@@ -41,16 +49,16 @@ describe('builtin designer material bundle', () => {
   })
 
   it('shows signature as a non-bindable basic quick material', () => {
-    const material = builtinDesignerMaterialBundle.materials.find(item => item.type === 'signature')
+    const material = materials.find(item => item.model.type === 'signature')
 
     expect(catalogItemTypes('basic')).toContain('signature')
-    expect(material?.category).toBe('basic')
-    expect(material?.binding).toEqual({ kind: 'none' })
-    expect(material?.capabilities.bindable).toBe(false)
-    expect(material?.capabilities.rotatable).toBe(false)
-    expect(material?.icon).toBe(IconSignature)
-    expect(material?.icon).not.toBe(IconFilePen)
-    expect(material?.propSchemas?.map(schema => schema.key)).toEqual(['backgroundColor', 'penColor'])
+    expect(material?.ui?.palette?.[0]?.group.id).toBe('basic')
+    expect(material?.model.binding).toEqual({ kind: 'none' })
+    expect(material?.model.binding.kind).toBe('none')
+    expect(material?.model.capabilities?.rotatable).toBe(false)
+    expect(material?.ui?.palette?.[0]?.icon).toBe(IconSignature)
+    expect(material?.ui?.palette?.[0]?.icon).not.toBe(IconFilePen)
+    expect(material?.properties?.map(schema => schema.key)).toEqual(['backgroundColor', 'penColor'])
   })
 
   it('shows radar chart in the chart catalog group', () => {
@@ -60,81 +68,81 @@ describe('builtin designer material bundle', () => {
   it('shows ring progress in the data catalog group with custom-only formatting', () => {
     expect(catalogItemTypes('data')).toContain('ring-progress')
 
-    const material = builtinDesignerMaterialBundle.materials.find(item => item.type === 'ring-progress')
+    const material = materials.find(item => item.model.type === 'ring-progress')
 
-    expect(material?.category).toBe('data')
-    expect(material?.binding).toEqual({
+    expect(material?.ui?.palette?.[0]?.group.id).toBe('data')
+    expect(material?.model.binding).toEqual({
       kind: 'ordinary',
       primaryProp: 'value',
       formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
     })
-    expect(material?.icon).toBeDefined()
-    expect(material?.icon).not.toBe(builtinDesignerMaterialBundle.materials.find(item => item.type === 'chart-gauge')?.icon)
-    expect(material?.icon).not.toBe(builtinDesignerMaterialBundle.materials.find(item => item.type === 'ellipse')?.icon)
+    expect(material?.ui?.palette?.[0]?.icon).toBeDefined()
+    expect(material?.ui?.palette?.[0]?.icon).not.toBe(materials.find(item => item.model.type === 'chart-gauge')?.ui?.palette?.[0]?.icon)
+    expect(material?.ui?.palette?.[0]?.icon).not.toBe(materials.find(item => item.model.type === 'ellipse')?.ui?.palette?.[0]?.icon)
   })
 
   it('shows progress in the data catalog group with custom-only formatting and a distinct icon', () => {
     expect(catalogItemTypes('data')).toContain('progress')
 
-    const material = builtinDesignerMaterialBundle.materials.find(item => item.type === 'progress')
-    const ringProgress = builtinDesignerMaterialBundle.materials.find(item => item.type === 'ring-progress')
+    const material = materials.find(item => item.model.type === 'progress')
+    const ringProgress = materials.find(item => item.model.type === 'ring-progress')
 
-    expect(material?.category).toBe('data')
-    expect(material?.binding).toEqual({
+    expect(material?.ui?.palette?.[0]?.group.id).toBe('data')
+    expect(material?.model.binding).toEqual({
       kind: 'ordinary',
       primaryProp: 'value',
       formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
     })
-    expect(material?.icon).toBeDefined()
-    expect(material?.icon).not.toBe(ringProgress?.icon)
-    expect(material?.icon).not.toBe(builtinDesignerMaterialBundle.materials.find(item => item.type === 'chart-bar')?.icon)
+    expect(material?.ui?.palette?.[0]?.icon).toBeDefined()
+    expect(material?.ui?.palette?.[0]?.icon).not.toBe(ringProgress?.ui?.palette?.[0]?.icon)
+    expect(material?.ui?.palette?.[0]?.icon).not.toBe(materials.find(item => item.model.type === 'chart-bar')?.ui?.palette?.[0]?.icon)
   })
 
   it('shows rating in the data catalog group with custom-only value binding', () => {
     expect(catalogItemTypes('data')).toContain('rating')
 
-    const material = builtinDesignerMaterialBundle.materials.find(item => item.type === 'rating')
+    const material = materials.find(item => item.model.type === 'rating')
 
-    expect(material?.category).toBe('data')
-    expect(material?.binding).toEqual({
+    expect(material?.ui?.palette?.[0]?.group.id).toBe('data')
+    expect(material?.model.binding).toEqual({
       kind: 'ordinary',
       primaryProp: 'value',
       formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
     })
-    expect(material?.capabilities.bindable).toBe(true)
-    expect(material?.aiDescriptor?.binding).toBe('single')
-    expect(material?.icon).toBeDefined()
-    expect(builtinDesignerMaterialBundle.materials.filter(item => item.type !== 'rating').map(item => item.icon)).not.toContain(material?.icon)
+    expect(material?.model.binding.kind).not.toBe('none')
+    expect(material?.ai?.binding).toBe('single')
+    expect(material?.ui?.palette?.[0]?.icon).toBeDefined()
+    expect(materials.filter(item => item.model.type !== 'rating').map(item => item.ui?.palette?.[0]?.icon)).not.toContain(material?.ui?.palette?.[0]?.icon)
   })
 
   it('shows custom ECharts in the chart catalog group with a distinct icon', () => {
     expect(catalogItemTypes('chart')).toContain('chart-custom')
 
-    const chartCustom = builtinDesignerMaterialBundle.materials.find(item => item.type === 'chart-custom')
-    const chartMaterialIcons = builtinDesignerMaterialBundle.materials
-      .filter(item => item.category === 'chart' && item.type !== 'chart-custom')
-      .map(item => item.icon)
+    const chartCustom = materials.find(item => item.model.type === 'chart-custom')
+    const chartMaterialIcons = materials
+      .filter(item => item.ui?.palette?.[0]?.group.id === 'chart' && item.model.type !== 'chart-custom')
+      .map(item => item.ui?.palette?.[0]?.icon)
 
-    expect(chartCustom?.icon).toBeDefined()
-    expect(chartMaterialIcons).not.toContain(chartCustom?.icon)
+    expect(chartCustom?.ui?.palette?.[0]?.icon).toBeDefined()
+    expect(chartMaterialIcons).not.toContain(chartCustom?.ui?.palette?.[0]?.icon)
   })
 
   it('registers custom svg as an ordinary bindable material', () => {
-    const material = builtinDesignerMaterialBundle.materials.find(item => item.type === 'svg')
+    const material = materials.find(item => item.model.type === 'svg')
 
-    expect(material?.capabilities.bindable).toBe(true)
-    expect(material?.binding).toEqual({
+    expect(material?.model.binding.kind).not.toBe('none')
+    expect(material?.model.binding).toEqual({
       kind: 'ordinary',
       primaryProp: 'content',
       formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
     })
-    expect(material?.aiDescriptor?.binding).toBe('single')
+    expect(material?.ai?.binding).toBe('single')
   })
 
   it('limits structured chart material data formatting to custom formatters', () => {
-    const chartMaterials = builtinDesignerMaterialBundle.materials.filter(material => material.category === 'chart')
+    const chartMaterials = materials.filter(material => material.ui?.palette?.[0]?.group.id === 'chart')
 
-    expect(chartMaterials.map(material => material.type).sort()).toEqual([
+    expect(chartMaterials.map(material => material.model.type).sort()).toEqual([
       'chart-bar',
       'chart-custom',
       'chart-gauge',
@@ -143,20 +151,20 @@ describe('builtin designer material bundle', () => {
       'chart-radar',
       'chart-scatter',
     ])
-    for (const material of chartMaterials.filter(item => item.type !== 'chart-custom'))
-      expect(material.binding).toMatchObject({ kind: 'data-contract', formatEditor: { tabs: ['custom'], defaultTab: 'custom' } })
+    for (const material of chartMaterials.filter(item => item.model.type !== 'chart-custom'))
+      expect(material.model.binding).toMatchObject({ kind: 'data-contract', formatEditor: { tabs: ['custom'], defaultTab: 'custom' } })
   })
 
   it('registers custom ECharts as an ordinary option-bound lazy material', () => {
-    const material = builtinDesignerMaterialBundle.materials.find(item => item.type === 'chart-custom')
+    const material = materials.find(item => item.model.type === 'chart-custom')
 
-    expect(material?.capabilities.bindable).toBe(true)
-    expect(material?.binding).toEqual({
+    expect(material?.model.binding.kind).not.toBe('none')
+    expect(material?.model.binding).toEqual({
       kind: 'ordinary',
       primaryProp: 'option',
       formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
     })
-    expect(material?.lazyFactory).toEqual(expect.any(Function))
-    expect(material?.aiDescriptor?.binding).toBe('single')
+    expect(material?.loadRenderer).toEqual(expect.any(Function))
+    expect(material?.ai?.binding).toBe('single')
   })
 })

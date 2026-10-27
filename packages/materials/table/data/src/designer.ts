@@ -1,5 +1,7 @@
-import type { DatasourceDropHandler, MaterialControlPolicy, MaterialDesignerExtension, MaterialExtensionContext, SelectionType } from '@easyink/core'
+import type { DatasourceDropHandler, MaterialControlPolicy, SelectionType } from '@easyink/core'
 import type { TableEditingDelegate } from '@easyink/material-table-kernel'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { BindingRef, MaterialNode, TableDataSchema, TableNode, TableRowSchema } from '@easyink/schema'
 import type { UnitType } from '@easyink/shared'
 import type { TableDataProps } from './schema'
@@ -28,6 +30,7 @@ import {
   resolveMergeOwner,
 } from '@easyink/material-table-kernel'
 import { getNodeProps, isTableNode } from '@easyink/schema'
+import { deepClone } from '@easyink/shared'
 
 const ROLE_BG_MAP: Record<string, keyof TableDataProps> = {
   header: 'headerBackground',
@@ -94,7 +97,7 @@ export function canResizeTableDataRow(node: TableNode, rowIndex: number): boolea
   return Boolean(node.table.topology.rows[rowIndex]) && !hidden[rowIndex]
 }
 
-function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensionContext): string {
+function buildHtml(node: MaterialNode, unit: UnitType, context: DesignerRendererContext): string {
   if (!isTableNode(node)) {
     const label = escapeHtml(context.t('materials.tableData.name'))
     return `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#999;font-size:11px">${label}</div>`
@@ -212,12 +215,13 @@ function buildHtml(node: MaterialNode, unit: UnitType, context: MaterialExtensio
   })
 }
 
-function createDelegate(context: MaterialExtensionContext): TableEditingDelegate {
+function createDelegate(context: DesignerRendererContext): TableEditingDelegate {
   const unitManager = new UnitManager(context.getSchema().unit)
 
   return {
     getNode(nodeId) {
-      const node = context.getNode(nodeId)
+      const snapshot = context.getNode(nodeId)
+      const node = snapshot ? deepClone(snapshot) as MaterialNode : undefined
       return node && isTableNode(node) ? node : undefined
     },
     getTableKind: () => 'data' as const,
@@ -234,7 +238,7 @@ function createDelegate(context: MaterialExtensionContext): TableEditingDelegate
   }
 }
 
-function createDatasourceDropHandler(context: MaterialExtensionContext): DatasourceDropHandler {
+function createDatasourceDropHandler(context: DesignerRendererContext): DatasourceDropHandler {
   return {
     onDragOver(field, point, node) {
       if (!isTableNode(node))
@@ -334,7 +338,7 @@ function getRowCollectionPrefixes(row: TableRowSchema): string[] {
   return [...prefixes]
 }
 
-export function createTableDataExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createTableDataExtension(context: DesignerRendererContext): DesignerRenderInstance {
   const delegate = createDelegate(context)
   const tableGeometry = createTableGeometry(delegate)
   const cellSelectionType = createTableCellSelectionType(delegate)

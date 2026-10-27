@@ -1,6 +1,6 @@
-import type { ChartGaugeValuePoint, GaugeChartStyleOptions } from '@easyink/material-chart-kernel'
+import type { ChartGaugeValuePoint, GaugeChartStyleOptions } from '@easyink/material-chart-kernel/viewer'
 import type { ChartGaugeProps } from './schema'
-import { createGaugeEChartsOption } from '@easyink/material-chart-kernel'
+import { createGaugeEChartsOption } from '@easyink/material-chart-kernel/viewer'
 import { CHART_GAUGE_DEFAULTS } from './schema'
 
 export const DEFAULT_CHART_GAUGE_PREVIEW_DATA: ChartGaugeValuePoint[] = [

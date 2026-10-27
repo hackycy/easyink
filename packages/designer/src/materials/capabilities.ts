@@ -1,11 +1,11 @@
 import type { MaterialNode } from '@easyink/schema'
-import type { MaterialDefinition } from '../types'
+import type { MaterialPresentation } from './presentation'
 
 interface MaterialLookup {
-  getMaterial: (type: string) => Pick<MaterialDefinition, 'capabilities'> | undefined
+  getMaterial: (type: string) => Pick<MaterialPresentation, 'capabilities'> | undefined
 }
 
-export function isMaterialRotatable(material: Pick<MaterialDefinition, 'capabilities'> | undefined): boolean {
+export function isMaterialRotatable(material: Pick<MaterialPresentation, 'capabilities'> | undefined): boolean {
   return material?.capabilities.rotatable !== false
 }
 

@@ -12,8 +12,9 @@
   "exports": {
     ".": "./dist/index.mjs",
     "./ai": "./dist/ai.mjs",
-    "./designer": "./dist/designer.mjs",
+    "./designer-material": "./dist/designer-material.mjs",
     "./locale": "./dist/locale.mjs",
+    "./material-model": "./dist/material-model.mjs",
     "./prop-schemas": "./dist/prop-schemas.mjs",
     "./schema": "./dist/schema.mjs",
     "./viewer": "./dist/viewer.mjs",
@@ -29,7 +30,9 @@
   },
   "dependencies": {
     "@easyink/core": "workspace:*",
+    "@easyink/icons": "workspace:*",
     "@easyink/material-chart-kernel": "workspace:*",
+    "@easyink/plugin-api": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*"
   }

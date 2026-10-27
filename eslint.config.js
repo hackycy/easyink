@@ -6,7 +6,15 @@ export default antfu(
     type: 'lib',
     vue: true,
     pnpm: false,
-    ignores: ['.github/**/*.md', 'docs/**/*.md', '**/bin/**', '**/obj/**', '**/.dart_tool/**', 'lib/**'],
+    ignores: [
+      '.github/**/*.md',
+      'docs/**/*.md',
+      '**/bin/**',
+      '**/obj/**',
+      '**/.dart_tool/**',
+      'lib/**',
+      '.scratch/**',
+    ],
     rules: {
       'ts/explicit-function-return-type': 'off',
     },

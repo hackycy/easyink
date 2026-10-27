@@ -1,0 +1,41 @@
+{
+  "name": "@easyink/plugin-api",
+  "type": "module",
+  "version": "0.0.31",
+  "description": "Host-isolated material and extension contracts for EasyInk",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./designer": "./dist/designer.mjs",
+    "./material": "./dist/material.mjs",
+    "./ui": "./dist/ui.mjs",
+    "./viewer": "./dist/viewer.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch"
+  },
+  "peerDependencies": {
+    "vue": "catalog:framework"
+  },
+  "peerDependenciesMeta": {
+    "vue": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@easyink/core": "workspace:*",
+    "@easyink/datasource": "workspace:*",
+    "@easyink/schema": "workspace:*",
+    "@easyink/shared": "workspace:*"
+  }
+}

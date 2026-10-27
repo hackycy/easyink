@@ -1,8 +1,10 @@
-import type { DocumentSchema, DocumentSchemaInput, ViewerDiagnosticEvent } from '@easyink/viewer'
-import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+import type { DocumentSchema, DocumentSchemaInput, ViewerDiagnosticEvent, ViewerRuntime } from '@easyink/viewer'
+import { materials } from '@easyink/builtin/all/viewer'
 import { createViewer, normalizeDocumentSchema } from '@easyink/viewer'
 import './polyfills'
 import './style.css'
+
+type DisposeResult = Awaited<ReturnType<ViewerRuntime['destroy']>>
 
 interface RuntimePayload {
   runtimeVersion?: string
@@ -15,10 +17,32 @@ declare global {
     easyinkReady?: boolean
     easyinkRenderedPages?: Array<{ index?: number, width: number, height: number, unit: string }>
     __easyinkGetPages?: () => Array<{ index?: number, width: number, height: number, unit: string }>
+    __easyinkDestroy?: () => Promise<DisposeResult | undefined>
   }
 }
 
-void boot()
+let viewer: ViewerRuntime | undefined
+let closing = false
+let disposal: Promise<DisposeResult | undefined> | undefined
+const creation = boot()
+window.__easyinkDestroy = () => {
+  if (disposal)
+    return disposal
+  closing = true
+  window.easyinkReady = false
+  const cleanup = viewer?.destroy()
+  disposal = (async () => {
+    await creation.catch(() => {})
+    const result = await (cleanup ?? viewer?.destroy())
+    window.easyinkRenderedPages = []
+    window.__easyinkGetPages = () => []
+    document.getElementById('easyink-root')?.classList.remove('easyink-ready')
+    return result
+  })()
+  return disposal
+}
+
+void creation.catch(() => {})
 
 async function boot(): Promise<void> {
   try {
@@ -29,18 +53,19 @@ async function boot(): Promise<void> {
       throw new Error('easyink root is missing')
 
     const schema = normalizeRuntimeSchema(payload.schema)
-    const viewer = createViewer({ container: root })
-    registerBuiltinViewerMaterials((type, binding, extension) => {
-      viewer.registerMaterial(type, binding, extension)
-    })
-    await viewer.open({
+    viewer = await createViewer({ container: root, materials })
+    if (closing)
+      return
+    const result = await viewer.open({
       schema,
       data: isRecord(payload.data) ? payload.data : {},
       onDiagnostic: reportDiagnostic,
     })
+    if (closing || result.status === 'cancelled')
+      return
 
     window.easyinkRenderedPages = viewer.renderedPages
-    window.__easyinkGetPages = () => viewer.renderedPages
+    window.__easyinkGetPages = () => viewer?.renderedPages ?? []
     applyRenderedPageCSS(viewer.renderedPages)
     root.classList.add('easyink-ready')
     root.setAttribute('data-easyink-runtime', payload.runtimeVersion || 'embedded')
@@ -48,6 +73,7 @@ async function boot(): Promise<void> {
     document.dispatchEvent(new CustomEvent('easyink:ready'))
   }
   catch (error) {
+    await viewer?.destroy()
     window.easyinkReady = false
     document.documentElement.setAttribute('data-easyink-runtime-error', errorMessage(error))
     console.error('[easyink-render-runtime]', error)

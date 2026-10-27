@@ -5,12 +5,9 @@ Use this reference when a material should be generated, selected, repaired, or r
 ## Current Implementation Map
 
 - `packages/shared/src/ai-generation.ts`: source types for `AIMaterialDescriptor` and `MaterialKnowledgeDescriptor`.
-- `packages/designer/src/materials/registry.ts`: stores each registered Designer material's optional `aiDescriptor`.
-- `packages/builtin/src/designer.ts`: built-in Designer registration must pass `aiDescriptor` on the material entry.
-- `packages/builtin/src/index.ts`, `packages/builtin/src/all.ts`, `packages/builtin/src/basic.ts`, and `packages/builtin/src/none.ts`: public entry points expose the selected built-in Designer bundle and matching Viewer registrations. `package.json` only publishes the root entry plus `./all`, `./basic`, `./none`, and `./package.json`; `src/designer.ts`, `src/viewer.ts`, and `src/bindings.ts` remain internal sources.
-- `packages/builtin/src/ai.ts`: derived descriptor list from the built-in Designer bundle, not a second hand-maintained registry.
-- `packages/assistant/designer-bridge/src/material-manifest.ts`: exports the live Designer store as `AssistantMaterialManifest`; props and binding definitions are serialized, and `material.aiDescriptor` becomes `manifest.materials[].ai`.
-- `packages/assistant/designer-bridge/src/contribution.ts`: passes `materialManifest` through a getter so Assistant sees newly registered materials without restart.
+- Material-local complete declarations own `ai`; `collection-source.ts` selects built-in membership once.
+- `packages/assistant/designer-bridge/src/material-manifest.ts`: serializes selected Host model, properties and AI via `DesignerContext`, filtering runtime values.
+- `packages/assistant/designer-bridge/src/contribution.ts`: directly declares a DesignerExtension; panel props read the current Host manifest. Change material collections by destroy/recreate.
 - `packages/assistant/capabilities/src/types.ts`: runtime zod shape for `AssistantMaterialManifest` and `AssistantAIMaterialDescriptorSchema`.
 - `packages/assistant/orchestrator/src/prompts.ts`: linear Assistant pipeline builds a lightweight Material Router index from manifest `ai` and `ai.knowledge`, then expands only the selected manifest into layout/schema/repair prompts.
 - `packages/assistant/orchestrator/src/agents.ts`: Material Router Agent selects the minimal registered Designer material set before layout and schema generation.
@@ -150,16 +147,16 @@ The `sizing` field in knowledge is always declared in mm (internal reference). T
 Built-in materials:
 
 1. Export `xAIMaterialDescriptor` from the material package.
-2. Add `aiDescriptor: xAIMaterialDescriptor` to the material entry in `packages/builtin/src/designer.ts`.
+2. Add `ai: xAIMaterialDescriptor` to the package-local complete Designer declaration.
 3. Keep root `@easyink/builtin`, `@easyink/builtin/all`, and any applicable reduced-set entry point aligned so the live Designer material manifest reflects what the host registered. Do not route consumers through unpublished `@easyink/builtin/designer`, `@easyink/builtin/viewer`, or `@easyink/builtin/bindings` subpaths.
 4. Do not add material-specific prompt text. Assistant reads the live material manifest, including binding and data-contract target fields.
 5. Keep Designer capabilities, prop schemas, Viewer behavior, and AI descriptor claims aligned.
 
 Custom host materials:
 
-1. Pass `aiDescriptor` on the `registerMaterialBundle()` material entry.
-2. Register the matching Viewer material in the host.
-3. Do not depend on `packages/builtin/src/ai.ts`; live Assistant sees the Designer store manifest through `createAssistantMaterialManifest()`.
+1. Declare `ai` on the complete Designer material.
+2. Choose the matching complete Viewer material before Viewer creation.
+3. Assistant reads `createAssistantMaterialManifest(context)` from current selected declarations.
 4. Provide host locale messages for any Designer-facing labels in prop schemas or material UI.
 
 ## Assistant Data Flow

@@ -1,10 +1,11 @@
-import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { ChartRadarProps } from './schema'
 import { createChartDesignerRenderHost, mountECharts } from '@easyink/material-chart-kernel'
 import { getNodeProps } from '@easyink/schema'
 import { createChartRadarPreviewOption } from './options'
 
-export function createChartRadarExtension(_context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createChartRadarExtension(_context: DesignerRendererContext): DesignerRenderInstance {
   return {
     renderContent(nodeSignal, container) {
       container.replaceChildren()

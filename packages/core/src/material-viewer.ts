@@ -1,7 +1,6 @@
 import type { MaterialNode } from '@easyink/schema'
 import type { BindingFormatDiagnostic } from './binding-format'
-import type { MaterialConditionCapability } from './condition'
-import type { LayoutDiagnostic, LayoutFragment } from './layout-plan'
+import type { LayoutDiagnostic, LayoutFragment, LayoutRuntimeRef } from './layout-plan'
 
 export type TrustedViewerHtmlSource = 'material-internal' | 'sanitized-rich-text'
 
@@ -31,6 +30,7 @@ export function readTrustedViewerHtml(html: TrustedViewerHtml): string {
  * Provides document-level unit and zoom for physical unit calculations.
  */
 export interface ViewerRenderContext {
+  runtimeRef?: LayoutRuntimeRef
   /** Host document used to create material-owned DOM nodes. */
   readonly document: Document
   data: Record<string, unknown>
@@ -53,6 +53,7 @@ export interface ViewerRenderSize {
 }
 
 export interface ViewerMeasureContext {
+  runtimeRef?: LayoutRuntimeRef
   data: Record<string, unknown>
   unit: string
   reportDiagnostic?: (diagnostic: BindingFormatDiagnostic & { nodeId?: string }) => void
@@ -70,6 +71,8 @@ export interface FragmentPaginateInput {
   pageContext: {
     pageIndex: number
   }
+  /** Framework assigns content identity; movement alone keeps the existing reference. */
+  createFragment: (node: MaterialNode) => LayoutFragment
 }
 
 export interface FragmentPaginateResult {
@@ -81,14 +84,6 @@ export interface FragmentPaginateResult {
 export interface FragmentPaginator {
   canPaginate: (node: MaterialNode) => boolean
   paginateFragment: (input: FragmentPaginateInput) => FragmentPaginateResult
-}
-
-export interface MaterialViewerExtension {
-  render: (node: MaterialNode, context: ViewerRenderContext) => ViewerRenderOutput
-  measure?: (node: MaterialNode, context: ViewerMeasureContext) => ViewerMeasureResult
-  getRenderSize?: (node: MaterialNode, context: ViewerRenderContext) => Partial<ViewerRenderSize>
-  fragmentPaginator?: FragmentPaginator
-  /** When true, the element is replicated to every page by the pageAware post-processing step. */
-  pageAware?: boolean
-  condition?: MaterialConditionCapability
+  /** Remaining splittable content, excluding repeated decorations. */
+  getRemainingContent?: (fragment: LayoutFragment) => number
 }

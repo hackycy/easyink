@@ -6,7 +6,7 @@ Viewer runtime for EasyInk: preview, print, export
 
 ## Documentation
 
-- [Docs](https://hackycy.github.io/easyink/docs/)
+- [Docs](https://hackycy.github.io/easyink/docs/0.1/)
 
 ## License
 

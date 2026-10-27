@@ -30,7 +30,7 @@ import { useEasyInkPrint } from './hooks/useEasyInkPrint'
 import { usePrinter } from './hooks/useHiPrint'
 import { useLodopPrint } from './hooks/useLodopPrint'
 import { useRenderApiService } from './hooks/useRenderApiService'
-import { setupPlaygroundViewerMaterials } from './viewer-materials'
+import { playgroundViewerMaterials } from './viewer-materials'
 
 const props = defineProps<{
   schema: DocumentSchema
@@ -51,6 +51,10 @@ const iframeRef = ref<HTMLIFrameElement>()
 let viewerHost: ViewerHost | undefined
 let viewerViewport: HTMLElement | undefined
 let viewer: ViewerRuntime | undefined
+let creation: Promise<ViewerRuntime | undefined> | undefined
+let disposed = false
+let disposal: Promise<void> | undefined
+let closeEmitted = false
 const exportRuntime = createExportRuntime({ entry: 'preview' })
 
 const zoom = ref(100)
@@ -71,11 +75,33 @@ const isPrinting = ref(false)
 // Auto-connect is handled inside each persisted singleton hook.
 
 onMounted(async () => {
-  if (!iframeRef.value)
+  const iframe = iframeRef.value
+  if (!iframe || disposed)
     return
 
-  await waitForIframeDocument(iframeRef.value)
-  const iframeHost = createIframeViewerHost(iframeRef.value)
+  creation = createPreviewViewer(iframe)
+  const runtime = await creation
+  if (!runtime || disposed)
+    return
+
+  viewer = runtime
+  registerOutputIntegrations(runtime)
+  const result = await runtime.open({
+    schema: props.schema,
+    data: props.data,
+  })
+
+  if (disposed || result.status === 'cancelled')
+    return
+  updatePageCount()
+  document.addEventListener('keydown', handleKeyDown)
+})
+
+async function createPreviewViewer(iframe: HTMLIFrameElement): Promise<ViewerRuntime | undefined> {
+  await waitForIframeDocument(iframe)
+  if (disposed)
+    return
+  const iframeHost = createIframeViewerHost(iframe)
   const viewerMount = setupIframeSurface(iframeHost)
   viewerViewport = iframeHost.mount
   viewerHost = createCustomViewerHost({
@@ -85,27 +111,43 @@ onMounted(async () => {
     print: iframeHost.print,
   })
 
-  viewer = createViewer({ host: viewerHost, fontProvider: playgroundFontProvider })
-  setupPlaygroundViewerMaterials(viewer)
-  registerOutputIntegrations(viewer)
-  await viewer.open({
-    schema: props.schema,
-    data: props.data,
-  })
-
-  updatePageCount()
-  document.addEventListener('keydown', handleKeyDown)
-})
+  return createViewer({ host: viewerHost, fontProvider: playgroundFontProvider, materials: playgroundViewerMaterials })
+}
 
 onBeforeUnmount(() => {
+  void disposeViewer()
+})
+
+async function closePreview(): Promise<void> {
+  await disposeViewer()
+  if (!closeEmitted) {
+    closeEmitted = true
+    emit('close')
+  }
+}
+
+function disposeViewer(): Promise<void> {
+  if (disposal)
+    return disposal
+
+  disposed = true
   document.removeEventListener('keydown', handleKeyDown)
   viewerViewport?.removeEventListener('wheel', handleWheel)
   viewerViewport?.removeEventListener('scroll', handleScroll)
-  viewer?.destroy()
+  const current = viewer
   viewer = undefined
   viewerHost = undefined
   viewerViewport = undefined
-})
+  const cleanup = current?.destroy()
+  disposal = (async () => {
+    // Creation failures have already completed rollback and are reported by onMounted.
+    const runtime = current ?? await creation?.catch(() => undefined)
+    await (cleanup ?? runtime?.destroy())
+  })()
+  return disposal
+}
+
+defineExpose({ destroy: disposeViewer })
 
 function registerOutputIntegrations(runtime: ViewerRuntime) {
   exportRuntime.registerPlugin(createDomPdfExportPlugin())
@@ -297,7 +339,7 @@ function updatePageCount() {
 
 function handleKeyDown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
-    emit('close')
+    void closePreview()
   }
 }
 
@@ -422,14 +464,18 @@ function updatePhaseToast(progressId: string | number, message: string | undefin
 async function runViewerExport(format: string, filename: string, label: string) {
   const progressId = toast.loading(`${label}中...`)
   try {
-    const blob = await viewer?.exportDocument({
+    const result = await viewer?.exportDocument({
       format,
       entry: 'preview',
-      throwOnError: true,
       onPhase: event => updatePhaseToast(progressId, event.message, `${label}中...`),
       onProgress: progress => updateProgressToast(progressId, progress, label),
       onDiagnostic: showWarningDiagnostic,
     })
+    if (result?.status === 'cancelled') {
+      toast.dismiss(progressId)
+      return
+    }
+    const blob = result?.file
     if (!(blob instanceof Blob))
       throw new Error('导出结果为空')
 
@@ -621,15 +667,16 @@ async function runViewerPrint(driverId: string, pageSizeMode: 'driver' | 'fixed'
   isPrinting.value = true
   const progressId = toast.loading(`${label}中...`)
   try {
-    await viewer?.print({
+    const result = await viewer?.print({
       driverId,
       pageSizeMode,
-      throwOnError: true,
       onPhase: event => updatePhaseToast(progressId, event.message, `${label}中...`),
       onProgress: progress => updateProgressToast(progressId, progress, label),
       onDiagnostic: showWarningDiagnostic,
     })
     toast.dismiss(progressId)
+    if (result?.status === 'cancelled')
+      return
     toast.success(label === '浏览器打印' ? '已打开浏览器打印' : '已发送到打印机')
   }
   catch (err) {
@@ -859,7 +906,7 @@ async function handleExport() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button variant="outline" size="icon-sm" @click="emit('close')">
+        <Button variant="outline" size="icon-sm" aria-label="关闭预览" @click="void closePreview()">
           <IconClose :size="16" />
         </Button>
       </div>

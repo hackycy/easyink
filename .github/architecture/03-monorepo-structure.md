@@ -8,6 +8,8 @@ easyink/
 │   ├── shared/                 # @easyink/shared — 通用类型、工具、常量
 │   ├── schema/                 # @easyink/schema — Schema 类型、默认值、迁移、序列化、校验
 │   ├── core/                   # @easyink/core — 命令、选择、几何、分页、字体、物料协议
+│   ├── plugin-api/             # @easyink/plugin-api — 物料和扩展公共声明，UI 类型独立入口
+│   ├── plugin-runtime/         # @easyink/plugin-runtime — 每 Host 声明事务、只读登记源和受管生命周期
 │   ├── datasource/             # @easyink/datasource — 字段树、数据源引用、绑定格式模板
 │   ├── viewer/                 # @easyink/viewer — ViewerRuntime、预览、打印、导出、缩略图
 │   ├── export/
@@ -18,7 +20,7 @@ easyink/
 │   │   ├── core/              # @easyink/print-core — 打印驱动共享纯工具
 │   │   ├── integration-easyink-printer/ # @easyink/print-integration-easyink-printer — EasyInk.Printer 客户端与 Viewer 驱动
 │   │   └── integration-hiprint/         # @easyink/print-integration-hiprint — HiPrint 客户端与 Viewer 驱动
-│   ├── builtin/                # @easyink/builtin — 内置物料注册、Designer/Viewer/Assistant 共享清单
+│   ├── builtin/                # @easyink/builtin — 内置完整物料集合与宿主隔离入口
 │   ├── designer/               # @easyink/designer — 设计器工作台 Vue 组件
 │   ├── locales/                # @easyink/locales — 设计器内置语言包
 │   ├── prop-schemas/           # @easyink/prop-schemas — 内置物料基础属性 Schema
@@ -58,11 +60,27 @@ easyink/
 - 历史（undo/redo）由 CommandManager 内部栈管理，无独立 HistoryModel
 - 几何计算、辅助线、吸附、分页计划、区域模型
 
+### `@easyink/plugin-api`
+
+- `./material` 提供共享模型、binding、静态能力、condition/pageAware、locale 和 AI 声明。
+- `./designer` 提供完整 Designer 物料、只读查询、受控编辑及参数/结果关联的命令；`./viewer` 提供同步 renderer、受管 loader 与可选会话实现声明。
+- `./ui` 单独引用 Vue，声明物料目录、专属属性组件及独立工具栏、右键和弹层扩展。根、material、designer、viewer 入口不重导出 UI。
+- 依赖 core/schema/shared 的领域协议及 datasource 描述类型，不依赖 Designer/Viewer 实现；底层包不反向依赖 plugin-api。
+- 公共声明与消费夹具已落地，全部物料、Designer UI、Render Session 和实际宿主使用每实例 Host。
+
+### `@easyink/plugin-runtime`
+
+- 同步收集完整物料与扩展，按 Scope 暂存；最终组合通过才构建每 Host 的只读 registry，并等待核心消费者初始化后交付实例。
+- 只由 runtime 写入登记源，重复身份或唯一 key 争用整体失败；登记异常被捕获仍不能提交，异步 setup 不受支持。
+- locale 选择应用非空覆盖或稳定首值，保持整树语言 fallback；不同文本和无效叶子记录非阻断诊断。
+- Scope 及任务资源按实例归属；destroy 同步失效，先停消费者再逆序释放，汇总清理错误并复用完成 Promise，迟到资源自清理。
+- 只依赖 plugin-api，无 Vue 或 Designer/Viewer 实现；ViewerRuntime 与 DesignerStore.create 每实例拥有独立 Host，Store 不再维护物料/locale 写入注册表。Vue 组件内部等待 Promise 创建，失败反馈并清理卸载后迟到实例；旧 Contribution registry 与完整 Store 注入已删除。
+
 ### `@easyink/builtin`
 
-- 汇总内置物料的 Designer 注册元数据、Viewer 渲染注册以及 AI 物料知识描述符
-- 作为内部装配层被 `designer`、`viewer` 和 Assistant 物料知识链路消费，不作为宿主应用主入口推荐
-- 统一维护默认物料清单，避免 Designer / Viewer / Assistant 三处漂移
+- 聚合完整物料：根/all/basic 导出 Designer `materials`，all/viewer 与 basic/viewer 导出纯 Viewer `materials`，none 导出两端可用的空集合
+- 应用在创建前选择集合；底层 Designer/Viewer 不自动导入 builtin，产品层显式选择 all
+- 旧 bundle 输出尚未删除，但未接入新 Host；成员清单生成统一与完整业务对照在后续物料 Gate 验收
 
 ### `@easyink/datasource`
 
@@ -74,7 +92,7 @@ easyink/
 - 负责预览、缩略图、打印、导出文档入口
 - 负责数据绑定投影、字体加载、页面计划与最终页面渲染
 - 通过 `ViewerExporter` / `PrintDriver` 承接外部导出和打印运行时；打印驱动由 `driverId` 显式选择，未指定时回退浏览器打印
-- 默认注册内置物料；宿主后续注册同类型物料时以后注册覆盖默认注册
+- Promise 创建前选择完整物料，产品层显式选择 all，底层仅消费所传集合；省略或空数组为 none；活动后不能增删或覆盖物料，destroy 返回同一 Promise 与清理结果
 
 ### `@easyink/export-runtime`
 
@@ -112,10 +130,10 @@ easyink/
 
 - 顶部工具栏、画布、面板系统、概览图、历史记录
 - 管理设计态工作台状态
-- 通过插槽、`setupStore` 和 `useDesignerStore()` 暴露宿主集成点，不在包级直接依赖 `@easyink/viewer`
-- 默认注册内置物料；宿主通过 `setupStore` 追加注册时以后注册覆盖默认注册
+- 应用通过插槽和 `useDesignerStore()` 接入工作台；物料/独立扩展创建前传完整声明，扩展仅取得受控 context，不再使用 `setupStore` 或旧 Contribution activate。Designer 不在包级直接依赖 `@easyink/viewer`。
+- 应用创建前显式选择完整物料，产品默认选择 builtin all；底层省略或空数组为 none，重复物料身份失败，不按顺序覆盖
 - 依赖 `@easyink/locales` 和 `@easyink/prop-schemas` 获取内置语言包与基础属性 Schema；对外仍通过 `@easyink/designer/locale` 透出语言包
-- 暴露 **Contribution API**（`Contribution` / `ContributionRegistry`）作为唯一外部扩展协议；不直接依赖 Assistant 集成包或 `@easyink/schema-tools`
+- 独立 UI/命令使用 plugin-api 的 `DesignerExtension` 声明和受控 context；旧 Contribution API 已删除，不直接依赖 Assistant 集成包或 `@easyink/schema-tools`
 - 对外发布时保持 `vue` 为 peerDependencies，避免宿主拿到重复 Vue runtime；`codemirror` 属于 designer 自身运行时组成部分，必须作为 dependencies 随包安装，保证开箱即用
 
 ### `@easyink/locales`
@@ -172,12 +190,14 @@ core        datasource
   │
 material-* ── core + schema + shared (+ datasource 按需)
   ↑
-builtin ───── designer + viewer + assistant-* + material-*
+builtin ───── material-* + plugin-api (+ core/schema/shared)
 
-designer ─── builtin + core + datasource + schema + shared + ui + icons + locales + prop-schemas + material-table-kernel
+plugin-api ─── core + datasource + schema + shared (Vue 类型仅 ui 子入口)
+plugin-runtime ─── plugin-api
+designer ─── plugin-api + plugin-runtime + core + datasource + schema + shared + ui + icons + locales + prop-schemas
 locales ─── (no runtime deps)
 prop-schemas ─── core
-viewer ─── builtin + core + schema + shared
+viewer ─── plugin-api + plugin-runtime + core + schema + shared
 export-runtime ─── shared
 export-plugin-dom-pdf ─── export-runtime + shared + html2canvas + jspdf
 print-core ─── viewer + export-runtime
@@ -191,10 +211,10 @@ playground ── designer + viewer + export-runtime + samples + schema
 
 依赖原则：
 
-- `designer` 依赖 `builtin`、`core`、`datasource`、`schema`、`shared`、`ui`、`icons`、`locales`、`prop-schemas` 与 `material-table-kernel`，默认启用内置物料；调用方可通过 `setupStore` 继续扩展或覆盖
+- `designer` 依赖 `plugin-api`、`plugin-runtime`、`core`、`datasource`、`schema`、`shared`、`ui`、`icons`、`locales` 与 `prop-schemas`；仅测试 fixture 通过 devDependencies 选择 builtin 和单物料，不形成宿主运行依赖
 - `locales` 与 `prop-schemas` 是 Designer 静态资源边界包：前者维护内置语言包，后者维护基础属性 Schema。它们可独立构建、测试和发布，但应用层稳定入口仍优先使用 `@easyink/designer` 及其 `./locale` facade
 - 已被 designer 内部直接使用且宿主不应手动补齐的第三方运行时依赖（如 `codemirror`）必须声明为 `dependencies`；只有需要与宿主单例对齐的框架依赖（当前为 `vue`）才保留为 `peerDependencies`
-- `viewer` 依赖 `builtin`、`core`、`schema`、`shared`，默认启用内置物料；调用方可通过 `viewer.registerMaterial()` 继续扩展或覆盖。`viewer` 不依赖 `datasource`
+- `viewer` 依赖 `plugin-api`、`plugin-runtime`、`core`、`schema`、`shared`；所选完整物料创建前传入，不提供创建后 `registerMaterial`。`viewer` 无 datasource 运行依赖
 - `export-runtime` 仅依赖 `shared`，不绑定任何导出格式实现，不依赖 `viewer`、`designer` 或 Vue
 - `export-plugin-dom-pdf` 依赖 `export-runtime`、`shared` 与按需装载的 `html2canvas` / `jspdf`；任何具体导出链路一律走独立 plugin 包，不再回灌到 runtime
 - `print-core` 只承接打印驱动共享逻辑；具体打印通道放在 `packages/print/*` 下独立包中
@@ -204,19 +224,22 @@ playground ── designer + viewer + export-runtime + samples + schema
 - `ui` 依赖 `icons` 和 `shared`，不依赖 `designer`；方向为 designer 依赖 ui
 - `samples` 依赖 `datasource`、`schema`、`shared`，不依赖 `designer`
 - `schema-tools` 仅依赖 `datasource`、`schema`、`shared`；无 Vue 依赖；可在 Node 与浏览器双端运行
-- `assistant-*` 形成独立平台子图，通过 Contribution 接入 Designer，核心 Designer / Viewer 不反向依赖 Assistant 包
+- `assistant-*` 形成独立平台子图，通过 DesignerExtension 与 typed commands 接入 Designer，核心 Designer / Viewer 不反向依赖 Assistant 包
 
 ## 3.4 对外消费方式
 
 ```typescript
 import { EasyInkDesigner } from '@easyink/designer'
 import { createViewer } from '@easyink/viewer'
+import { materials as designerMaterials } from '@easyink/builtin/all'
+import { materials as viewerMaterials } from '@easyink/builtin/all/viewer'
 
 // Vue template
-// <EasyInkDesigner v-model:schema="schema" />
+// <EasyInkDesigner v-model:schema="schema" :materials="designerMaterials" />
 
-const viewer = createViewer({ mode: 'fixed' })
+const viewer = await createViewer({ mode: 'fixed', materials: viewerMaterials })
 await viewer.open({ schema, data })
+await viewer.destroy()
 ```
 
 公开入口的目标是两个：

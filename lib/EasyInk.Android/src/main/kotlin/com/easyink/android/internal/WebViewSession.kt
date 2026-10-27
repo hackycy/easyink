@@ -39,6 +39,15 @@ internal class WebViewSession(
         return MainThread.run {
             val view = createWebView()
             webView = view
+            // Fix the initial viewport before navigation. Resizing a zero-width WebView
+            // after load can change its page zoom independently of devicePixelRatio.
+            val widthPx = prepared.pages.maxOfOrNull { mmToPx(it.widthMm) } ?: 1
+            val heightPx = prepared.pages.sumOf { mmToPx(it.heightMm) }.coerceAtLeast(1)
+            view.measure(
+                android.view.View.MeasureSpec.makeMeasureSpec(widthPx, android.view.View.MeasureSpec.EXACTLY),
+                android.view.View.MeasureSpec.makeMeasureSpec(heightPx, android.view.View.MeasureSpec.EXACTLY),
+            )
+            view.layout(0, 0, widthPx, heightPx)
             view.loadUrl(url)
             view
         }.let { view ->
@@ -56,16 +65,62 @@ internal class WebViewSession(
     }
 
     suspend fun dispose() {
-        MainThread.run {
-            webView?.apply {
-                stopLoading()
-                removeJavascriptInterface(JS_BRIDGE_NAME)
-                loadUrl("about:blank")
-                destroy()
-            }
-            webView = null
+        try {
+            webView?.let { disposeRuntime(it) }
         }
-        scheduler.shutdownNow()
+        finally {
+            MainThread.run {
+                webView?.apply {
+                    stopLoading()
+                    removeJavascriptInterface(JS_BRIDGE_NAME)
+                    loadUrl("about:blank")
+                    destroy()
+                }
+                webView = null
+            }
+            scheduler.shutdownNow()
+        }
+    }
+
+    private suspend fun disposeRuntime(view: WebView) {
+        // evaluateJavascript returns before a Promise settles; observe an explicit completion flag.
+        evaluate(view, """
+            window.__easyinkCleanupDone = false;
+            Promise.resolve().then(function () {
+                return window.__easyinkDestroy ? window.__easyinkDestroy() : undefined;
+            }).then(function (result) {
+                if (result && result.errors && result.errors.length) {
+                    console.error('Viewer cleanup errors', result.errors);
+                }
+            }).catch(function (error) {
+                console.error('Viewer cleanup failed', error);
+            }).then(function () { window.__easyinkCleanupDone = true; });
+        """.trimIndent())
+        suspendCoroutine<Unit> { continuation ->
+            val completed = AtomicBoolean(false)
+            val started = System.currentTimeMillis()
+            fun tick() {
+                if (completed.get()) return
+                if (System.currentTimeMillis() - started >= 5000) {
+                    if (completed.compareAndSet(false, true)) {
+                        diagnostics.warning("Viewer cleanup timed out before WebView disposal.")
+                        continuation.resume(Unit)
+                    }
+                    return
+                }
+                MainThread.post {
+                    view.evaluateJavascript("Boolean(window.__easyinkCleanupDone)") { value ->
+                        if (value == "true") {
+                            if (completed.compareAndSet(false, true)) continuation.resume(Unit)
+                        }
+                        else {
+                            scheduler.schedule({ tick() }, 10, java.util.concurrent.TimeUnit.MILLISECONDS)
+                        }
+                    }
+                }
+            }
+            scheduler.execute { tick() }
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -370,7 +425,7 @@ internal class WebViewSession(
     }
 
     private fun mmToPx(value: Double): Int {
-        return (value / 25.4 * 96.0).toInt().coerceAtLeast(1)
+        return ceil(value / 25.4 * 96.0 * context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
     }
 
     companion object {

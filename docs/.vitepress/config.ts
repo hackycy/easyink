@@ -1,25 +1,29 @@
-import process from 'node:process'
+import type { DefaultTheme } from 'vitepress'
+import type { VersionConfig } from './versioning'
 import { defineConfig } from 'vitepress'
+import { buildVersion } from './build-version'
+import series from './series.json'
 
-const base = process.env.EASYINK_DOCS_BASE ?? '/'
-const siteUrl = 'https://hackycy.github.io/easyink/docs'
+const { base, siteUrl, versioning, hooks } = buildVersion(series.id)
 
-export default defineConfig({
+export default defineConfig<DefaultTheme.Config & { versioning: VersionConfig }>({
+  ...hooks,
   base,
+  srcExclude: ['**/AGENTS.md'],
   lang: 'zh-CN',
   title: 'EasyInk',
+  titleTemplate: `:title | EasyInk ${series.id}.x`,
   description: 'EasyInk - 面向开发者的模板设计与渲染框架，Schema 驱动，支持可视化设计、预览、打印与导出',
   head: [
     ['link', { rel: 'icon', href: `${base}logo.ico` }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:title', content: 'EasyInk - 模板设计与渲染框架' }],
     ['meta', { property: 'og:description', content: '面向开发者的模板设计与渲染框架，Schema 驱动，支持可视化设计、预览、打印与导出' }],
-    ['meta', { property: 'og:image', content: `${siteUrl}${base}logo.png` }],
-    ['meta', { property: 'og:url', content: siteUrl }],
+    ['meta', { property: 'og:image', content: `${siteUrl}logo.png` }],
     ['meta', { name: 'twitter:card', content: 'summary' }],
     ['meta', { name: 'twitter:title', content: 'EasyInk - 模板设计与渲染框架' }],
     ['meta', { name: 'twitter:description', content: '面向开发者的模板设计与渲染框架，Schema 驱动，支持可视化设计、预览、打印与导出' }],
-    ['meta', { name: 'twitter:image', content: `${siteUrl}${base}logo.png` }],
+    ['meta', { name: 'twitter:image', content: `${siteUrl}logo.png` }],
     ['meta', { name: 'theme-color', content: '#5f67ee' }],
   ],
   sitemap: {
@@ -32,6 +36,7 @@ export default defineConfig({
   },
 
   themeConfig: {
+    versioning,
     nav: [
       { text: '指南', link: '/guide/getting-started' },
       { text: 'Designer', link: '/designer/' },
@@ -50,6 +55,8 @@ export default defineConfig({
             { text: '快速上手', link: '/guide/getting-started' },
             { text: '核心概念', link: '/guide/concepts' },
             { text: '包概览', link: '/guide/packages' },
+            { text: '迁移到 0.1.0', link: '/guide/migration-0.1.0' },
+            { text: '0.1.0 发行说明', link: '/guide/release-0.1.0' },
           ],
         },
       ],
@@ -249,7 +256,7 @@ export default defineConfig({
           text: '进阶',
           items: [
             { text: '自定义物料开发', link: '/advanced/custom-materials' },
-            { text: '贡献扩展开发', link: '/advanced/contributions' },
+            { text: 'Designer 扩展开发', link: '/advanced/contributions' },
             { text: '自定义打印驱动', link: '/advanced/print-drivers' },
             { text: '自定义导出插件', link: '/advanced/exporters' },
             { text: 'Schema 参考', link: '/advanced/schema' },

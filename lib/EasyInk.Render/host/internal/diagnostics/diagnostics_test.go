@@ -1,7 +1,10 @@
 package diagnostics
 
 import (
+	"encoding/json"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -16,7 +19,7 @@ func TestWriteSummaryWritesDiagnosticsByID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("write summary: %v", err)
 	}
-	if !strings.HasSuffix(path, "diagnostics/diag-123/diagnostics.json") {
+	if !strings.HasSuffix(path, filepath.Join("diagnostics", "diag-123", "diagnostics.json")) {
 		t.Fatalf("unexpected diagnostics path: %s", path)
 	}
 	data, err := os.ReadFile(path)
@@ -34,7 +37,7 @@ func TestWriteAttachmentWritesFileInDiagnosticsDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("write attachment: %v", err)
 	}
-	if !strings.HasSuffix(path, "diagnostics/diag-123/snapshot.html") {
+	if !strings.HasSuffix(path, filepath.Join("diagnostics", "diag-123", "snapshot.html")) {
 		t.Fatalf("unexpected attachment path: %s", path)
 	}
 	data, err := os.ReadFile(path)
@@ -62,7 +65,7 @@ func TestWriteLogWritesReadableDiagnosticsLog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("write log: %v", err)
 	}
-	if !strings.HasSuffix(path, "diagnostics/diag-123/render.log") {
+	if !strings.HasSuffix(path, filepath.Join("diagnostics", "diag-123", "render.log")) {
 		t.Fatalf("unexpected diagnostics log path: %s", path)
 	}
 	data, err := os.ReadFile(path)
@@ -103,7 +106,7 @@ func assertPrivateFile(t *testing.T, path string) {
 	if err != nil {
 		t.Fatalf("stat %s: %v", path, err)
 	}
-	if got := info.Mode().Perm(); got != 0o600 {
+	if got := info.Mode().Perm(); runtime.GOOS != "windows" && got != 0o600 {
 		t.Fatalf("file mode = %o", got)
 	}
 }
@@ -113,7 +116,7 @@ func TestWriteSummarySanitizesDiagnosticsID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("write summary: %v", err)
 	}
-	if strings.Contains(path, "..") || strings.Contains(path, ":") {
+	if filepath.Base(filepath.Dir(path)) != "diag123" {
 		t.Fatalf("expected sanitized path, got %s", path)
 	}
 }
@@ -134,7 +137,11 @@ func TestWriteSummaryIncludesAttachmentPathWhenProvided(t *testing.T) {
 	if !strings.Contains(string(data), `"attachmentPath"`) {
 		t.Fatalf("summary did not include attachmentPath: %s", string(data))
 	}
-	if !strings.Contains(string(data), path) {
+	var summary protocol.Diagnostics
+	if err := json.Unmarshal(data, &summary); err != nil {
+		t.Fatalf("decode summary: %v", err)
+	}
+	if summary.AttachmentPath != path {
 		t.Fatalf("summary did not reference summary path: %s", string(data))
 	}
 }

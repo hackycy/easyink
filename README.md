@@ -71,3 +71,9 @@ pnpm play
 [viewer-npm-version-src]: https://img.shields.io/npm/v/@easyink/viewer?style=flat&colorA=080f12&colorB=1fa669
 [viewer-npm-downloads-src]: https://img.shields.io/npm/dm/@easyink/viewer?style=flat&colorA=080f12&colorB=1fa669
 [viewer-npm-version-href]: https://npmjs.com/package/@easyink/viewer
+
+## 文档版本
+
+[默认文档](https://hackycy.github.io/easyink/docs/)展示 0.1.x；[0.0.x 文档](https://hackycy.github.io/easyink/docs/0.0/)持续维护，站内菜单可以切换系列。
+
+从 0.0.x 接入的应用请阅读[迁移指南](docs/guide/migration-0.1.0.md)和[发行说明](docs/guide/release-0.1.0.md)。文档分支、构建和发布流程见[Agent 维护指引](docs/AGENTS.md)。

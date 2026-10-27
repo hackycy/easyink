@@ -18,6 +18,12 @@ export interface FlowBreakConstraints {
   orphans?: number
 }
 
+/** Opaque to core; identifies transient content within one render computation. */
+export interface LayoutRuntimeRef {
+  readonly session: symbol
+  readonly fragment: number
+}
+
 export interface LayoutFragment {
   id: string
   sourceNodeId: string
@@ -32,6 +38,7 @@ export interface LayoutFragment {
     participates: boolean
   }
   measured?: ViewerMeasureResult
+  runtimeRef?: LayoutRuntimeRef
 }
 
 export interface LayoutDocument {

@@ -1,21 +1,48 @@
 import type { EphemeralPanelDef, FontLoadRequest, FontLoadStatus, FontManager, FontProvider, PropertyPanelOverlay } from '@easyink/core'
+import type { DeepReadonly } from '@easyink/plugin-api'
+import type { DesignerCommand, DesignerContext, DesignerRenderInstance, MaterialPropertiesContext } from '@easyink/plugin-api/designer'
+
+import type { LocaleTree } from '@easyink/plugin-api/material'
+import type { DesignerExtension, DesignerMaterial } from '@easyink/plugin-api/ui'
+import type { CapabilityPoint, CleanupError, ConsumerContext, ContributionOwner, DisposeResult, HostRegistry } from '@easyink/plugin-runtime'
 import type { DocumentSchema, DocumentSchemaInput, ElementGroupSchema, MaterialNode } from '@easyink/schema'
 import type { PaperPreset } from '@easyink/shared'
+import type { MaterialPresentation, PaletteGroup, PaletteItem } from '../materials/presentation'
+import type { DesignerRendererOperations } from '../materials/renderer-context'
 import type { DesignerRuntimeConfig } from '../runtime-config'
-import type { DesignerInteractionProvider, LazyMaterialExtensionFactory, LocaleMessageRegistration, LocaleMessages, MaterialCatalogEntry, MaterialCatalogGroup, MaterialDefinition, MaterialDesignerExtension, MaterialExtensionFactory, PreferenceProvider, SnapLine, StatusBarState } from '../types'
+import type { DesignerInteractionProvider, PreferenceProvider, SnapLine, StatusBarState } from '../types'
 import { CommandManager, SelectionModel } from '@easyink/core'
 import { DataSourceRegistry } from '@easyink/datasource'
+import { builtinLocales, zhCN } from '@easyink/locales'
 import { findNodeById, normalizeDocumentSchema } from '@easyink/schema'
-import { markRaw } from 'vue'
+import { deepClone } from '@easyink/shared'
+import { markRaw, reactive } from 'vue'
 import { EditingSessionManager } from '../editing/editing-session-manager'
 import { DesignerInteractionService } from '../interactions/interaction-service'
+import { createFailedExtension } from '../materials/failed-extension'
+import { createDesignerMaterialHost } from '../materials/host-consumer'
+import { createDesignerContext } from '../materials/renderer-context'
+import { createStoreRendererOperations } from '../materials/store-operations'
+import { UIMountScope } from '../materials/ui-mount-scope'
 import { DiagnosticsChannel } from './diagnostics'
 import { FontService } from './font-service'
-import { MaterialRegistry } from './material-registry'
+import { LOADING_EXTENSION, MaterialConsumer } from './material-consumer'
 import { PaperRegistry } from './paper-registry'
 import { applyPersistedWorkbench, loadWorkbenchPreferences } from './preference-persistence'
 import { SaveStatusManager } from './save-status-manager'
 import { createDefaultSaveBranchMenu, createDefaultWorkbenchState } from './workbench'
+
+export interface DesignerCreateOptions {
+  schema?: DocumentSchemaInput
+  materials?: readonly DesignerMaterial[]
+  extensions?: readonly DesignerExtension[]
+  locale?: { code?: string, messages?: LocaleTree }
+  dataSources?: readonly import('@easyink/datasource').DataSourceDescriptor[]
+  fontProvider?: FontProvider
+  preferenceProvider?: PreferenceProvider
+  interactionProvider?: DesignerInteractionProvider
+  runtimeConfig?: DesignerRuntimeConfig
+}
 
 /**
  * DesignerStore is the central state manager for the designer.
@@ -63,7 +90,20 @@ export class DesignerStore {
   snapActiveLines: readonly SnapLine[] = []
   materialExtensionRevision = 0
 
-  readonly materialRegistry: MaterialRegistry
+  private _materialConsumer!: MaterialConsumer
+  private _assembly!: Awaited<ReturnType<typeof createDesignerMaterialHost<DesignerMaterial>>>
+  private _consumerResources!: ConsumerContext
+  private _registry!: HostRegistry<DesignerMaterial>
+  private _rendererOperations!: DesignerRendererOperations
+  private readonly _contexts = markRaw(new Map<string, DesignerContext>())
+  private readonly _contextTokens = markRaw(new Map<string, object>())
+  private readonly _uiMounts = markRaw(new Set<UIMountScope>())
+  private readonly _uiCleanupErrors = markRaw<CleanupError[]>([])
+  private _destruction?: Promise<DisposeResult>
+  private _disposed = false
+  private readonly _loadingTypes = markRaw(new Set<string>())
+  private readonly _failedExtensions = markRaw(new Map<string, DesignerRenderInstance>())
+  localeRevision = 0
   readonly paperRegistry: PaperRegistry
 
   // ─── Editing Session Manager ─────────────────────────────────────
@@ -76,12 +116,7 @@ export class DesignerStore {
   // ─── Page element provider (for coordinate conversion) ──────
   private _pageElProvider: () => HTMLElement | null = () => null
 
-  // ─── Locale ───────────────────────────────────────────────────
-  private _locale?: LocaleMessages
-  private _localeCode?: string
-  private readonly _localeRegistrations: LocaleMessageRegistration[] = []
-
-  constructor(
+  private constructor(
     schema?: DocumentSchemaInput,
     preferenceProvider?: PreferenceProvider,
     interactionProvider?: DesignerInteractionProvider,
@@ -89,7 +124,6 @@ export class DesignerStore {
   ) {
     this._schema = normalizeDocumentSchema(schema)
     this.fontService = new FontService(this.diagnostics)
-    this.materialRegistry = new MaterialRegistry()
     this.paperRegistry = new PaperRegistry(runtimeConfig?.paper)
     this.applyRuntimeDefaults(runtimeConfig, schema)
     this.setInteractionProvider(interactionProvider)
@@ -106,6 +140,75 @@ export class DesignerStore {
         applyPersistedWorkbench(this.workbench, persisted)
       }
     }
+  }
+
+  static async create(options: DesignerCreateOptions = {}): Promise<DesignerStore> {
+    let store!: DesignerStore
+    const assembly = await createDesignerMaterialHost({
+      kind: 'designer',
+      materials: options.materials ?? [],
+      extensions: [{ id: 'easyink.framework', locale: { messages: zhCN, locales: builtinLocales } }, ...(options.extensions ?? [])],
+      locale: options.locale,
+    }, (registry, resources) => {
+      store = reactive(new DesignerStore(options.schema, options.preferenceProvider, options.interactionProvider, options.runtimeConfig)) as DesignerStore
+      store.editingSession.setStore(store)
+      store._registry = markRaw(registry)
+      store._consumerResources = markRaw(resources)
+      store._materialConsumer = markRaw(new MaterialConsumer(registry))
+      const cleanups = [
+        () => store.editingSession.exit(),
+        () => store.commands.clear(),
+        () => store.selection.clear(),
+        () => store.dataSourceRegistry.clear(),
+        () => store.fontService.clear(),
+        () => store.paperRegistry.clear(),
+        () => { store.clipboard = [] },
+        () => {
+          store._propertyOverlay = null
+          store._ephemeralPanel = null
+        },
+        () => {
+          store.setInteractionProvider(undefined)
+          store.interactions.setFallbackProvider(undefined)
+          store.refreshInteractionAvailability()
+        },
+        () => store._loadingTypes.clear(),
+        () => store._failedExtensions.clear(),
+        () => store._contexts.clear(),
+        () => store._contextTokens.clear(),
+      ]
+      // Scope cleanup is reverse ordered; all framework consumers stop independently.
+      for (const cleanup of cleanups.reverse())
+        resources.onDispose(cleanup)
+      resources.onDispose(async () => {
+        for (const mount of [...store._uiMounts].reverse())
+          await mount.dispose()
+        store._uiMounts.clear()
+      })
+      let invalidationFailure: { cause: unknown } | undefined
+      resources.onDispose(() => {
+        if (invalidationFailure)
+          throw invalidationFailure.cause
+      })
+      resources.signal.addEventListener('abort', () => {
+        store._disposed = true
+        try {
+          store.fontService.clear()
+        }
+        catch (cause) { invalidationFailure = { cause } }
+      }, { once: true })
+      store.setFontProvider(options.fontProvider)
+      for (const source of options.dataSources ?? [])
+        store.dataSourceRegistry.registerSource(deepClone(source))
+      store._rendererOperations = markRaw(createStoreRendererOperations(store, {
+        getMaterials: () => registry.materials.map(entry => entry.value),
+        t: resources.t,
+        executeCommand: (command, args) => store.executePluginCommand(command, args),
+      }))
+      return store._rendererOperations
+    })
+    store._assembly = markRaw(assembly)
+    return store
   }
 
   // ─── Schema access ────────────────────────────────────────────
@@ -168,11 +271,13 @@ export class DesignerStore {
   }
 
   setFontProvider(provider?: FontProvider): void {
+    this.assertActive()
     this.fontService.setProvider(provider)
     void this.preloadDocumentFonts()
   }
 
   setFontTarget(target?: Document | ShadowRoot): void {
+    this.assertActive()
     this.fontService.setTarget(target)
     void this.preloadDocumentFonts()
   }
@@ -189,10 +294,12 @@ export class DesignerStore {
     request: FontLoadRequest,
     options: { preloadGeneration?: number, reportDiagnostic?: boolean } = {},
   ): Promise<boolean> {
+    this.assertActive()
     return this.fontService.ensureLoaded(request, options)
   }
 
   async preloadDocumentFonts(): Promise<void> {
+    this.assertActive()
     await this.fontService.preloadDocumentFonts(this._schema)
   }
 
@@ -309,28 +416,20 @@ export class DesignerStore {
 
   // ─── Material registry ────────────────────────────────────────
 
-  registerMaterial(definition: MaterialDefinition): void {
-    this.materialRegistry.registerMaterial(definition)
+  getMaterial(type: string): MaterialPresentation | undefined {
+    return this._materialConsumer.getMaterial(type)
   }
 
-  getMaterial(type: string): MaterialDefinition | undefined {
-    return this.materialRegistry.getMaterial(type)
+  listMaterials(): MaterialPresentation[] {
+    return this._materialConsumer.listMaterials()
   }
 
-  listMaterials(): MaterialDefinition[] {
-    return this.materialRegistry.listMaterials()
+  getCatalog(): PaletteItem[] {
+    return this._materialConsumer.getCatalog()
   }
 
-  registerCatalogGroup(group: MaterialCatalogGroup): void {
-    this.materialRegistry.registerCatalogGroup(group)
-  }
-
-  getCatalog(): MaterialCatalogEntry[] {
-    return this.materialRegistry.getCatalog()
-  }
-
-  getCatalogGroups(): MaterialCatalogGroup[] {
-    return this.materialRegistry.getCatalogGroups()
+  getCatalogGroups(): PaletteGroup[] {
+    return this._materialConsumer.getCatalogGroups()
   }
 
   // ─── Paper registry ───────────────────────────────────────────
@@ -353,17 +452,42 @@ export class DesignerStore {
 
   // ─── Extension Factory Registry ─────────────────────────────────
 
-  registerDesignerFactory(type: string, factory: MaterialExtensionFactory): void {
-    this.materialRegistry.registerDesignerFactory(type, factory)
-  }
-
-  registerLazyDesignerFactory(type: string, loader: LazyMaterialExtensionFactory): void {
-    this.materialRegistry.registerLazyDesignerFactory(type, loader)
-  }
-
   /** Get or lazily instantiate an extension from its factory. */
-  getDesignerExtension(type: string): MaterialDesignerExtension | undefined {
-    return this.materialRegistry.getDesignerExtension(type, this)
+  getDesignerExtension(type: string): DesignerRenderInstance | undefined {
+    this.assertActive()
+    const cached = this._assembly.peekExtension(type)
+    if (cached)
+      return cached
+    const failed = this._failedExtensions.get(type)
+    if (failed)
+      return failed
+    if (!this._registry.getMaterial(type)?.value.loadRenderer)
+      return undefined
+    if (!this._loadingTypes.has(type)) {
+      this._loadingTypes.add(type)
+      void this._assembly.getExtension(type).then(() => {
+        if (this._disposed)
+          return
+        this._loadingTypes.delete(type)
+        this._failedExtensions.delete(type)
+        this.notifyMaterialExtensionLoaded()
+      }).catch((cause) => {
+        if (this._disposed)
+          return
+        this._loadingTypes.delete(type)
+        const failure = createFailedExtension(key => this.t(key), () => {
+          if (this._disposed || this._failedExtensions.get(type) !== failure)
+            return
+          this._failedExtensions.delete(type)
+          this.getDesignerExtension(type)
+          this.notifyMaterialExtensionLoaded()
+        }, this._consumerResources.signal)
+        this._failedExtensions.set(type, failure)
+        this.diagnostics.push({ source: 'material-extension', severity: 'error', message: `Lazy material failed: ${type}`, detail: { code: 'MATERIAL_LOAD_ERROR', type, cause } })
+        this.notifyMaterialExtensionLoaded()
+      })
+    }
+    return LOADING_EXTENSION
   }
 
   notifyMaterialExtensionLoaded(): void {
@@ -372,54 +496,140 @@ export class DesignerStore {
 
   // ─── Locale ───────────────────────────────────────────────────
 
-  setLocale(locale: LocaleMessages, code?: string): void {
-    this._locale = locale
-    this._localeCode = code
-  }
-
-  registerLocaleMessages(registration: LocaleMessageRegistration): () => void {
-    this._localeRegistrations.push(registration)
-    return () => {
-      const index = this._localeRegistrations.indexOf(registration)
-      if (index >= 0)
-        this._localeRegistrations.splice(index, 1)
-    }
+  setLocale(locale?: LocaleTree, code?: string): void {
+    this.assertActive()
+    this._assembly.host.setLocale(code, locale)
+    this.localeRevision++
   }
 
   t(key: string): string {
-    const own = this.lookupLocaleMessage(this._locale, key)
-    if (own)
-      return own
-
-    for (const registration of this._localeRegistrations) {
-      const registered = this.lookupLocaleMessage(this.resolveRegisteredLocaleMessages(registration), key)
-      if (registered)
-        return registered
-    }
-
-    return key
+    void this.localeRevision
+    this.assertActive()
+    return this._consumerResources.t(key)
   }
 
-  private resolveRegisteredLocaleMessages(registration: LocaleMessageRegistration): LocaleMessages | undefined {
-    if (this._localeCode) {
-      const current = registration.locales?.[this._localeCode]
-      if (current)
-        return current
-    }
-    return registration.messages
+  get localeDiagnostics() {
+    return this._assembly.host.localeDiagnostics
   }
 
-  private lookupLocaleMessage(locale: LocaleMessages | undefined, key: string): string | undefined {
-    if (!locale)
-      return undefined
-    const parts = key.split('.')
-    let current: unknown = locale
-    for (const part of parts) {
-      if (typeof current !== 'object' || current === null)
-        return undefined
-      current = (current as Record<string, unknown>)[part]
+  getMaterialDeclarations(): readonly DeepReadonly<DesignerMaterial>[] {
+    this.assertActive()
+    return this._registry.materials.map(entry => entry.value)
+  }
+
+  getContributions(point: CapabilityPoint) {
+    this.assertActive()
+    return this._registry.contributions(point)
+  }
+
+  getExtensionContext(owner: ContributionOwner): DesignerContext {
+    this.assertActive()
+    const key = `${owner.installationId}:${owner.pluginId}`
+    const cached = this._contexts.get(key)
+    if (cached)
+      return cached
+    const context = createDesignerContext(this._rendererOperations, this._consumerResources.resources(owner), this.contextToken(owner))
+    this._contexts.set(key, context)
+    return context
+  }
+
+  /** Framework UI consumers own a shorter context for each component mount. */
+  mountUIContext(owner: ContributionOwner) {
+    this.assertActive()
+    const scope = markRaw(new UIMountScope(this._consumerResources.resources(owner), owner, this._uiCleanupErrors))
+    this._uiMounts.add(scope)
+    const context = createDesignerContext(this._rendererOperations, scope.resources, this.contextToken(owner))
+    return {
+      context,
+      dispose: () => {
+        const result = scope.dispose()
+        void result.then(() => this._uiMounts.delete(scope))
+        return result
+      },
     }
-    return typeof current === 'string' ? current : undefined
+  }
+
+  mountPropertiesContext(owner: ContributionOwner, nodeId: string, getRoot: () => HTMLElement | null) {
+    const mount = this.mountUIContext(owner)
+    const node = this.getElementById(nodeId)
+    const session = this.editingSession.activeSession
+    const assertTarget = () => {
+      mount.context.signal.throwIfAborted()
+      if (!node || node !== this.getElementById(nodeId) || this.selection.ids.length !== 1 || this.selection.ids[0] !== nodeId || this.editingSession.activeSession !== session || node.locked || node.hidden)
+        throw new Error('Material properties target is no longer current')
+    }
+    const context: MaterialPropertiesContext = Object.freeze({
+      signal: mount.context.signal,
+      onDispose: mount.context.onDispose,
+      getSchema: mount.context.getSchema,
+      getNode: mount.context.getNode,
+      getSelection: mount.context.getSelection,
+      isEditing: mount.context.isEditing,
+      getDataSources: mount.context.getDataSources,
+      getMaterials: mount.context.getMaterials,
+      getBindingLabel: mount.context.getBindingLabel,
+      t: mount.context.t,
+      get node() {
+        assertTarget()
+        return mount.context.getNode(nodeId)!
+      },
+      tx: Object.freeze<MaterialPropertiesContext['tx']>({
+        run: <TNode extends MaterialNode>(id: string, mutator: (draft: TNode) => void, options?: import('@easyink/core').TxOptions) => {
+          assertTarget()
+          if (id !== nodeId)
+            throw new Error('Material properties may only edit their current node')
+          mount.context.tx.run<TNode>(id, (draft) => {
+            mutator(draft)
+            assertTarget()
+          }, options)
+          this.markDraftModified()
+        },
+        batch: (run) => {
+          assertTarget()
+          return mount.context.tx.batch(() => {
+            const result = run()
+            assertTarget()
+            return result
+          })
+        },
+      }),
+      flushPendingEdits: () => {
+        assertTarget()
+        const active = document.activeElement
+        if (active instanceof HTMLElement && (getRoot()?.contains(active) || this.getPageEl()?.contains(active)))
+          active.blur()
+      },
+    })
+    return { context, dispose: mount.dispose }
+  }
+
+  private async executePluginCommand<TArgs, TResult>(command: DesignerCommand<TArgs, TResult>, args: TArgs): Promise<TResult> {
+    this.assertActive()
+    const entry = this._registry.getCommand(command.id)
+    if (!entry || entry.value.handler !== command.handler)
+      throw new Error(`Command is not installed: ${command.id}`)
+    const context = this.getExtensionContext(entry.owner)
+    context.signal.throwIfAborted()
+    const installed = entry.value as DeepReadonly<DesignerCommand<TArgs, TResult>>
+    const result = await installed.handler(args, context)
+    this.assertActive()
+    context.signal.throwIfAborted()
+    return result
+  }
+
+  private assertActive(): void {
+    if (this._disposed)
+      throw new Error('Designer is disposed')
+  }
+
+  private contextToken(owner: ContributionOwner): object {
+    const key = `${owner.installationId}:${owner.pluginId}`
+    let token = this._contextTokens.get(key)
+    if (!token) {
+      token = {}
+      this._contextTokens.set(key, token)
+    }
+    return token
   }
 
   // ─── Element geometry ───────────────────────────────────────────
@@ -474,20 +684,17 @@ export class DesignerStore {
 
   // ─── Cleanup ──────────────────────────────────────────────────
 
-  destroy(): void {
-    this.commands.clear()
-    this.selection.clear()
-    this.dataSourceRegistry.clear()
-    this.fontService.clear()
-    this.materialRegistry.clear()
-    this.paperRegistry.clear()
-    this.clipboard = []
-    this._propertyOverlay = null
-    this._ephemeralPanel = null
-    this.setInteractionProvider(undefined)
-    this.interactions.setFallbackProvider(undefined)
-    this.refreshInteractionAvailability()
-    this.editingSession.exit()
+  destroy(): Promise<DisposeResult> {
+    if (this._destruction)
+      return this._destruction
+    const completion = Promise.withResolvers<DisposeResult>()
+    this._destruction = completion.promise
+    this._disposed = true
+    void this._assembly.destroy().then(
+      result => completion.resolve(Object.freeze({ errors: Object.freeze([...result.errors, ...this._uiCleanupErrors]) })),
+      completion.reject,
+    )
+    return this._destruction
   }
 }
 

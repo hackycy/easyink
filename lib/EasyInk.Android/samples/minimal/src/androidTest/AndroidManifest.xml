@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <instrumentation
+        android:name="com.easyink.android.sample.CutoverInstrumentation"
+        android:targetPackage="com.easyink.android.sample" />
+</manifest>

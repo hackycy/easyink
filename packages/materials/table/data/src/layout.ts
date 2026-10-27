@@ -1,5 +1,5 @@
 import type { MaterialNode, TableDataSchema, TableNode } from '@easyink/schema'
-import { computeRowScaleWithVirtualRows } from '@easyink/material-table-kernel'
+import { computeRowScaleWithVirtualRows } from '@easyink/material-table-kernel/viewer'
 import { isTableNode } from '@easyink/schema'
 
 export const TABLE_DATA_PLACEHOLDER_ROW_COUNT = 2

@@ -1,6 +1,6 @@
 import type { AssistantPatchOperation, AssistantResult } from '@easyink/assistant-capabilities'
 import { DesignerStore } from '@easyink/designer'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   applyAssistantDataSourceToDesigner,
   applyAssistantPatchToDesigner,
@@ -9,22 +9,33 @@ import {
   rollbackAssistantDesigner,
 } from './apply'
 
-describe('assistant designer bridge apply', () => {
-  it('applies patch operations and rolls back to the previous schema', () => {
-    const store = new DesignerStore(createSchema([{ id: 'title', props: { text: 'Old' } }]))
+const stores: DesignerStore[] = []
+async function fixture(schema: NonNullable<Parameters<typeof DesignerStore.create>[0]>['schema']) {
+  const store = await DesignerStore.create({ schema, extensions: [{ id: 'fixture', commands: [{ id: 'fixture.context', handler: () => {} }] }] })
+  stores.push(store)
+  const context = store.getExtensionContext(store.getContributions('designer.command')[0].owner)
+  return { store, context }
+}
+afterEach(async () => {
+  await Promise.all(stores.splice(0).map(store => store.destroy()))
+})
 
-    const applied = applyAssistantPatchToDesigner(store, [
+describe('assistant designer bridge apply', () => {
+  it('applies patch operations and rolls back to the previous schema', async () => {
+    const { store, context } = await fixture(createSchema([{ id: 'title', props: { text: 'Old' } }]))
+
+    const applied = applyAssistantPatchToDesigner(context, [
       { op: 'replace', path: '/elements/0/props/text', value: 'New' },
     ])
 
     expect(applied).toBe(true)
     expect(store.schema.elements[0]?.props).toMatchObject({ text: 'New' })
-    expect(rollbackAssistantDesigner(store)).toBe(true)
+    expect(rollbackAssistantDesigner(context)).toBe(true)
     expect(store.schema.elements[0]?.props).toMatchObject({ text: 'Old' })
   })
 
-  it('applies only operations targeting the current selection', () => {
-    const store = new DesignerStore(createSchema([
+  it('applies only operations targeting the current selection', async () => {
+    const { store, context } = await fixture(createSchema([
       { id: 'title', props: { text: 'Old' } },
       { id: 'total', props: { text: 'Old total' } },
     ]))
@@ -35,26 +46,26 @@ describe('assistant designer bridge apply', () => {
       { op: 'replace', path: '/elements/1/props/text', value: 'Selected' },
     ]
 
-    expect(applySelectedAssistantElementsToDesigner(store, operations)).toBe(true)
+    expect(applySelectedAssistantElementsToDesigner(context, operations)).toBe(true)
     expect(store.schema.elements[0]?.props).toMatchObject({ text: 'Old' })
     expect(store.schema.elements[1]?.props).toMatchObject({ text: 'Selected' })
   })
 
-  it('registers datasource-only results without replacing schema', () => {
-    const store = new DesignerStore(createSchema([{ id: 'title', props: { text: 'Old' } }]))
+  it('registers datasource-only results without replacing schema', async () => {
+    const { store, context } = await fixture(createSchema([{ id: 'title', props: { text: 'Old' } }]))
     const result = createResult()
 
-    applyAssistantDataSourceToDesigner(store, result.dataSource!)
+    applyAssistantDataSourceToDesigner(context, result.dataSource!)
 
     expect(store.schema.elements[0]?.props).toMatchObject({ text: 'Old' })
     expect(store.dataSourceRegistry.getSources()[0]?.id).toBe('orders')
   })
 
-  it('applies full results with datasource registration', () => {
-    const store = new DesignerStore(createSchema([]))
+  it('applies full results with datasource registration', async () => {
+    const { store, context } = await fixture(createSchema([]))
     const result = createResult()
 
-    applyAssistantResultToDesigner(store, result)
+    applyAssistantResultToDesigner(context, result)
 
     expect(store.schema.elements[0]?.id).toBe('title')
     expect(store.dataSourceRegistry.getSources()[0]?.id).toBe('orders')

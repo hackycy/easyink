@@ -1,6 +1,6 @@
 import type { ConditionalNodeState, ConditionDiagnostic } from '@easyink/core'
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
-import type { MaterialRendererRegistry } from './material-registry'
+import type { RenderSessionMaterials } from './render-session-materials'
 import type { ViewerDiagnosticEvent } from './types'
 import { resolveConditionalNode } from '@easyink/core'
 
@@ -13,7 +13,7 @@ export interface ConditionalSchemaResolution {
 export function resolveConditionalSchema(
   schema: DocumentSchema,
   data: Record<string, unknown>,
-  registry: MaterialRendererRegistry,
+  registry: RenderSessionMaterials,
 ): ConditionalSchemaResolution {
   const elements: MaterialNode[] = []
   const diagnostics: ViewerDiagnosticEvent[] = []

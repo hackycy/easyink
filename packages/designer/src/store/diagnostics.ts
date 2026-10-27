@@ -4,7 +4,7 @@
  * Audit/202605011431.md item 4 called out that recoverable errors were
  * spread across `console.error` calls in SelectionStore, behavior dispatcher
  * and transaction service, with no single place where the workbench (and a
- * host application via Contribution) could surface them. This module is
+ * host application) could surface them. This module is
  * that place.
  *
  * Design constraints
@@ -14,8 +14,8 @@
  * - Bounded buffer. We keep the most recent N entries reactively so the
  *   DebugPanel can render them without unbounded memory growth — older
  *   entries fall off silently.
- * - Push-only listener API. Hosts subscribe through the Contribution
- *   context (`ctx.onDiagnostic`) to forward into Sentry / toast etc.
+ * - Push-only listener API. Hosts subscribe through store.diagnostics
+ *   and dispose the returned unsubscribe with their own lifecycle.
  * - No throwing. Pushing a diagnostic must NEVER itself raise — that would
  *   re-create the half-failed UI state we are trying to avoid.
  */

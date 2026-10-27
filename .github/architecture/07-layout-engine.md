@@ -7,7 +7,7 @@ EasyInk 的布局引擎当前由三类纯规则组成：运行态测量回流、
 ViewerRuntime 不再直接按 `page.mode` 分支做布局，而是按以下入口编排：
 
 ```text
-MaterialViewerExtension.measure()
+ViewerSessionRenderer.measure()
   -> runLayoutPipeline(schema, { originalSchema, measured })
   -> runPagination(schema, layoutDocument, { originalSchema, resolveFragmentPaginator })
   -> resolve page overlays

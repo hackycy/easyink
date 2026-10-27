@@ -1,6 +1,7 @@
 import type { LocaleMessages } from './types'
 
 const enUS: LocaleMessages = {
+  materials: { catalog: { basic: 'Basic', data: 'Data', chart: 'Chart', svg: 'SVG', utility: 'Utility' } },
   designer: {
     ai: {
       title: 'AI Template Generator',
@@ -65,6 +66,7 @@ const enUS: LocaleMessages = {
       hideDivider: 'Hide Divider',
     },
     action: {
+      retry: 'Retry',
       pickImage: 'Pick Image',
       clearImage: 'Clear Image',
       importFile: 'Import File',
@@ -531,6 +533,7 @@ const enUS: LocaleMessages = {
       delete: 'Delete Draft',
     },
     diagnostic: {
+      materialLoadFailed: 'Material failed to load',
       missingMaterial: 'Unknown material type',
       missingFont: 'Missing font',
       missingData: 'Missing data',

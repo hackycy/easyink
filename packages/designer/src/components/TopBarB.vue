@@ -56,19 +56,17 @@ import {
 import { createDefaultSchema } from '@easyink/schema'
 import { generateId } from '@easyink/shared'
 import { EiNumberInput, EiPopover, EiSwitch } from '@easyink/ui'
-import { computed, inject, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useDesignerStore } from '../composables'
-import { CONTRIBUTION_REGISTRY_KEY } from '../contributions/injection'
+import { useDesignerActions } from '../composables/use-designer-actions'
 import { createClipboardActions } from '../interactions/clipboard-actions'
 import { hasGroupedElement, selectedLogicalGroupIds } from '../interactions/logical-groups'
 import { selectMany } from '../interactions/selection-api'
 import { filterRotatableElements } from '../materials/capabilities'
 import { getNextTopbarZoom } from './topbar-zoom'
 
-const contributionRegistry = inject(CONTRIBUTION_REGISTRY_KEY, undefined)
-const toolbarActions = computed(() => contributionRegistry?.registry.toolbarActions ?? [])
-
 const store = useDesignerStore()
+const { actions: toolbarActions, run: runExtensionAction } = useDesignerActions('designer.toolbar')
 
 // ─── Window Toggle Definitions ─────────────────────────────────
 
@@ -531,15 +529,6 @@ function toggleSnapMenu(ev: MouseEvent) {
       >
         <component :is="wt.icon" :size="16" :stroke-width="1.5" />
       </button>
-      <button
-        v-for="action in toolbarActions"
-        :key="action.id"
-        class="ei-topbar-b__btn ei-topbar-b__btn--contribution"
-        :title="store.t(action.label)"
-        @click="contributionRegistry && action.onClick(contributionRegistry.context)"
-      >
-        <component :is="action.icon" :size="16" :stroke-width="1.5" />
-      </button>
     </div>
 
     <div class="ei-topbar-b__divider" />
@@ -850,6 +839,21 @@ function toggleSnapMenu(ev: MouseEvent) {
           </EiPopover>
         </div>
       </template>
+      <div v-if="toolbarActions.length" class="ei-topbar-b__divider" />
+      <div v-if="toolbarActions.length" class="ei-topbar-b__group ei-topbar-b__extensions">
+        <button
+          v-for="entry in toolbarActions"
+          :key="entry.key"
+          class="ei-topbar-b__btn ei-topbar-b__btn--extension"
+          :title="entry.failed ? `${entry.label}: Extension unavailable.` : entry.label"
+          :disabled="entry.disabled"
+          @click="runExtensionAction(entry)"
+        >
+          <component :is="entry.action.icon" v-if="entry.action.icon" :size="16" :stroke-width="1.5" />
+          <span v-else>{{ entry.label }}</span>
+          <span v-if="entry.failed" role="status">Extension unavailable.</span>
+        </button>
+      </div>
     </div>
 
     <!-- Scroll right arrow -->

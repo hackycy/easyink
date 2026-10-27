@@ -1,10 +1,11 @@
-import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { ChartGaugeProps } from './schema'
 import { createChartDesignerRenderHost, mountECharts } from '@easyink/material-chart-kernel'
 import { getNodeProps } from '@easyink/schema'
 import { createChartGaugePreviewOption } from './options'
 
-export function createChartGaugeExtension(_context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createChartGaugeExtension(_context: DesignerRendererContext): DesignerRenderInstance {
   return {
     renderContent(nodeSignal, container) {
       container.replaceChildren()

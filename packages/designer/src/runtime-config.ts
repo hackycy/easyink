@@ -1,10 +1,5 @@
 import type { DocumentSchema, PageSchema } from '@easyink/schema'
 import type { PaperPreset } from '@easyink/shared'
-import type { DesignerMaterialBundle } from './materials/registry'
-
-export interface DesignerMaterialConfig {
-  bundles?: DesignerMaterialBundle[]
-}
 
 export interface DesignerPaperConfig {
   /**
@@ -23,7 +18,6 @@ export interface DesignerDefaultsConfig {
 }
 
 export interface DesignerRuntimeConfig {
-  materials?: DesignerMaterialConfig
   paper?: DesignerPaperConfig
   defaults?: DesignerDefaultsConfig
 }

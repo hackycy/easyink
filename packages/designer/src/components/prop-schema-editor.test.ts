@@ -16,7 +16,7 @@ afterEach(() => {
 
 describe('prop schema editor text file import', () => {
   it('limits string input by schema min and max character counts', async () => {
-    const store = createStore()
+    const store = await createStore()
     const events = {
       previews: [] as Array<[string, unknown]>,
       changes: [] as Array<[string, unknown]>,
@@ -53,15 +53,22 @@ describe('prop schema editor text file import', () => {
     input.dispatchEvent(new Event('blur', { bubbles: true }))
     await flush()
 
+    const supplementaryCharacter = String.fromCodePoint(0x20000)
+    input.focus()
+    input.value = `${supplementaryCharacter}A`
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    input.dispatchEvent(new Event('blur', { bubbles: true }))
+    await flush()
+
     expect(input.minLength).toBe(1)
-    expect(input.maxLength).toBe(1)
-    expect(events.previews).toEqual([['character', 'A'], ['character', '满']])
-    expect(events.changes).toEqual([['character', 'A'], ['character', '满']])
+    expect(input.hasAttribute('maxlength')).toBe(false)
+    expect(events.previews).toEqual([['character', 'A'], ['character', '满'], ['character', supplementaryCharacter]])
+    expect(events.changes).toEqual([['character', 'A'], ['character', '满'], ['character', supplementaryCharacter]])
     mounted.unmount()
   })
 
   it('imports text files into code props through the interaction bridge', async () => {
-    const store = createStore()
+    const store = await createStore()
     const pickFileText = vi.fn(() => ({ text: '<svg viewBox="0 0 1 1"></svg>', name: 'logo.svg' }))
     store.setInteractionProvider({ pickFileText })
     const events = {
@@ -110,8 +117,8 @@ describe('prop schema editor text file import', () => {
     mounted.unmount()
   })
 
-  it('disables the import action when no text file picker is available', () => {
-    const store = createStore()
+  it('disables the import action when no text file picker is available', async () => {
+    const store = await createStore()
     const schema: PropSchema = {
       key: 'content',
       label: 'designer.property.content',
@@ -137,8 +144,8 @@ describe('prop schema editor text file import', () => {
   })
 })
 
-function createStore() {
-  const store = new DesignerStore()
+async function createStore() {
+  const store = await DesignerStore.create({ })
   store.setLocale(enUS)
   return store
 }

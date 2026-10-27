@@ -1,4 +1,5 @@
-import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { MaterialNode } from '@easyink/schema'
 import type { LineProps } from './schema'
 import { getNodeProps } from '@easyink/schema'
@@ -18,7 +19,7 @@ function buildHtml(node: MaterialNode, unit: string): string {
   return `<div style="position:relative;width:100%;height:100%;overflow:visible;"><div style="position:absolute;inset:0;${fillStyle}"></div></div>`
 }
 
-export function createLineExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createLineExtension(context: DesignerRendererContext): DesignerRenderInstance {
   return {
     renderContent(nodeSignal, container) {
       function render() {

@@ -30,8 +30,8 @@ function mountShortcuts(store: DesignerStore, container: HTMLElement) {
   }
 }
 
-function makeStore(): DesignerStore {
-  const store = new DesignerStore()
+async function makeStore(): Promise<DesignerStore> {
+  const store = await DesignerStore.create({ })
   store.schema.unit = 'px'
   store.schema.elements.push({
     id: 'a',
@@ -60,8 +60,8 @@ afterEach(() => {
 })
 
 describe('useKeyboardShortcuts', () => {
-  it('nudges the current selection when canvas focus is active even if DOM focus fell back outside the workspace', () => {
-    const store = makeStore()
+  it('nudges the current selection when canvas focus is active even if DOM focus fell back outside the workspace', async () => {
+    const store = await makeStore()
     const container = document.createElement('div')
     const mounted = mountShortcuts(store, container)
     store.setFocusState('canvas')
@@ -72,8 +72,8 @@ describe('useKeyboardShortcuts', () => {
     mounted.unmount()
   })
 
-  it('does not nudge when panel focus owns the keyboard', () => {
-    const store = makeStore()
+  it('does not nudge when panel focus owns the keyboard', async () => {
+    const store = await makeStore()
     const container = document.createElement('div')
     const mounted = mountShortcuts(store, container)
     store.setFocusState('panel')

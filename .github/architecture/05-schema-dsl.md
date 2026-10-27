@@ -353,7 +353,7 @@ interface BindingCustomFormat {
 
 ### `DataContractBinding` 与目标数据模型
 
-结构化物料通过 `MaterialDefinition.binding.kind='data-contract'` 和其中的 `contract` 声明目标数据模型，节点上的 `binding` 保存 source 到目标字段的映射：
+结构化物料通过 `MaterialModel.binding.kind='data-contract'` 和其中的 `contract` 声明目标数据模型，节点上的 `binding` 保存 source 到目标字段的映射：
 
 ```typescript
 interface MaterialDataContract {

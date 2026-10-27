@@ -16,13 +16,13 @@
 - `table`、`chart`、`svg` 都是一级结构系统
 - 属性面板在同一窗口壳层中互斥展示"元素属性"与"页面属性"，支持 PropertyPanelOverlay 动态叠加层
 - 画布中的每个物料必须根据 props 展示近似真实的视觉效果（设计态渲染）
-- 设计态渲染（`MaterialDesignerExtension.renderContent`）与 Viewer 渲染（`MaterialViewerExtension.render / measure / getRenderSize / fragmentPaginator`）是两套独立实现
+- 设计态渲染（`DesignerRenderInstance.renderContent`）与 Viewer 渲染（`ViewerSessionRenderer.render / measure / getRenderSize / fragmentPaginator`）是两套独立实现
 - 页面属性面板区分"规范字段 / benchmark 兼容字段 / 派生 UI 字段"
 - 工作台状态、模板状态、运行时状态明确分层
 - `viewer` 的 `exportDocument()` 走 `ViewerExporter` 注册表，独立 `@easyink/export-runtime` 负责格式插件运行时；第三方导出依赖通过对应插件或导出器按需装载
 - 物料通过 `DatasourceDropHandler` 协议自定义拖拽绑定行为
 - 设计器坐标术语统一为 `screen / document / local / viewport`，其中 `document` 是 Schema 单位坐标；交互层坐标换算统一经由 GeometryService
-- 破坏性用户确认通过 `DesignerInteractionProvider` 交给宿主接管，designer 内部功能与 Contribution 统一走 `DesignerInteractionService`
+- 破坏性用户确认通过 `DesignerInteractionProvider` 交给宿主接管，designer 内部功能与独立 Designer 扩展统一走 `DesignerInteractionService`
 
 ## 目录
 
@@ -50,7 +50,7 @@
 | 20 | [性能策略](./20-performance.md) | 架构层预留、性能目标 |
 | 21 | [安全模型](./21-security.md) | 数据路径安全、富文本安全、渲染安全 |
 | 22 | [编辑行为架构](./22-editing-behavior.md) | EditingSession、类型化 Selection、Geometry 协议、Behavior 中间件、Surfaces 与 Transaction |
-| 23 | [Contribution 机制](./23-contribution.md) | ContributionRegistry、注入方式、响应式 Props、生命周期、命名空间 |
+| 23 | [Designer 独立扩展](./23-contribution.md) | 完整声明、五类 UI、受控 context、Scope 生命周期 |
 | 24 | [页面布局正交体系](./24-page-layout-orthogonal-system.md) | 页面模型、布局策略、分页策略、测量重排引擎四层解耦 |
 | 25 | [AI Assistant 平台](./25-ai-assistant.md) | 物料知识声明、数据流链路、Orchestrator 工作流、ComposerAgent、知识与推理层 |
 | 26 | [条件渲染系统](./26-conditional-rendering.md) | 组内 AND、组间 OR 的条件组、Dialog 编辑协议、集合判断与 Viewer 布局语义 |
@@ -66,7 +66,7 @@
 - 未识别物料、缺失数据、缺失字体、渲染失败都必须以可见诊断暴露，不允许静默吞掉
 - 对标产品的原始 JSON 字段命名存在历史噪音，EasyInk 提供无损兼容编解码层
 - `DocumentSchema.unit`、纸张预设、页面类型显示名称这类信息在属性面板中可见，但不固化进 `page` 规范字段
-- `@easyink/assistant-*` 是当前仓库中的 Assistant 平台包族，通过 Contribution 机制接入 Designer
+- `@easyink/assistant-*` 是当前仓库中的 Assistant 平台包族，通过 `DesignerExtension` 和受控 context 接入 Designer
 - 数据源系统支持运行时动态注册；核心设计器/Viewer 数据流不依赖具体 Assistant 实现
 
 ## 快速导航
@@ -79,5 +79,5 @@
 - **想了解设计器工作台?** -> [10-designer-interaction](./10-designer-interaction.md)
 - **想了解物料体系?** -> [11-element-system](./11-element-system.md)
 - **想了解命令与历史?** -> [12-command-undo-redo](./12-command-undo-redo.md)
-- **想了解 Contribution 机制?** -> [23-contribution](./23-contribution.md)
+- **想了解 Designer 扩展?** -> [23-contribution](./23-contribution.md)
 - **想了解 AI Agent 平台?** -> [25-ai-assistant](./25-ai-assistant.md)

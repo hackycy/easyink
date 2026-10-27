@@ -184,7 +184,6 @@ viewer.registerPrintDriver(driver)
 await viewer.print({
   driverId: 'remote-pdf-printer',
   pageSizeMode: 'fixed',
-  throwOnError: true,
   onPhase(event) {
     console.log(event.phase, event.message)
   },
@@ -200,7 +199,6 @@ await viewer.print({
 ```ts
 await viewer.print({
   driverId: 'remote-pdf-printer',
-  throwOnError: true,
   onProgress(event) {
     console.log(event.current, event.total)
   },
@@ -215,4 +213,4 @@ await viewer.print({
 - 连接断开时，是否能通过 `onDiagnostic` 或异常暴露原因。
 - 纸张方向、尺寸和 Viewer 渲染结果是否一致。
 
-Playground 现在使用高层打印器。业务接入可以参考 `playground/src/hooks/useEasyInkPrint.ts` 和 `playground/src/hooks/useHiPrint.ts`。
+Playground 使用高层打印器。业务接入可以参考 `playground/src/hooks/useEasyInkPrint.ts` 和 `playground/src/hooks/useHiPrint.ts`。

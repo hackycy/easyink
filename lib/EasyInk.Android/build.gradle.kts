@@ -36,10 +36,11 @@ val viewerRuntimeAssets = layout.projectDirectory.dir("src/main/assets/easyink-v
 val syncViewerRuntime by tasks.registering(Sync::class) {
     from(viewerRuntimeSource)
     into(viewerRuntimeAssets)
-    include("index.html", "assets/viewer.css", "assets/viewer.js")
+    include("index.html", "runtime-manifest.json", "assets/viewer.css", "assets/viewer.js")
     doFirst {
         val required = listOf(
             viewerRuntimeSource.file("index.html").asFile,
+            viewerRuntimeSource.file("runtime-manifest.json").asFile,
             viewerRuntimeSource.file("assets/viewer.css").asFile,
             viewerRuntimeSource.file("assets/viewer.js").asFile,
         )
@@ -64,11 +65,17 @@ tasks.register("verifyAarRuntimeAssets") {
         zipTree(aar).matching {
             include(
                 "assets/easyink-viewer/index.html",
+                "assets/easyink-viewer/runtime-manifest.json",
                 "assets/easyink-viewer/assets/viewer.css",
                 "assets/easyink-viewer/assets/viewer.js",
             )
         }.files.let { files ->
-            check(files.size == 3) { "AAR is missing EasyInk viewer runtime assets: ${files.map { it.path }}" }
+            check(files.size == 4) { "AAR is missing EasyInk viewer runtime assets: ${files.map { it.path }}" }
+            files.forEach { asset ->
+                val relative = if (asset.name == "index.html" || asset.name == "runtime-manifest.json") asset.name else "assets/${asset.name}"
+                val source = viewerRuntimeSource.file(relative).asFile
+                check(asset.readBytes().contentEquals(source.readBytes())) { "AAR runtime asset differs from current build: $relative" }
+            }
         }
         zipTree(aar).matching {
             include("classes.jar")

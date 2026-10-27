@@ -6,13 +6,13 @@ import { describe, expect, it } from 'vitest'
 import { DesignerStore } from '../store/designer-store'
 import { createGeometryService } from './geometry-service'
 
-function makeStore(): DesignerStore {
-  return new DesignerStore({
+async function makeStore(): Promise<DesignerStore> {
+  return await DesignerStore.create({ schema: {
     unit: 'px',
     page: { mode: 'fixed', width: 1000, height: 1000 },
     guides: { x: [], y: [] },
     elements: [],
-  })
+  } })
 }
 
 function makePageEl(rect: Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom' | 'width' | 'height' | 'x' | 'y'>): HTMLElement {
@@ -31,8 +31,8 @@ function expectPointClose(actual: { x: number, y: number }, expected: { x: numbe
 }
 
 describe('createGeometryService', () => {
-  it('uses one page geometry snapshot for screen/document conversion with scroll and zoom', () => {
-    const store = makeStore()
+  it('uses one page geometry snapshot for screen/document conversion with scroll and zoom', async () => {
+    const store = await makeStore()
     store.workbench.viewport.zoom = 2
     store.workbench.viewport.scrollLeft = 30
     store.workbench.viewport.scrollTop = 40
@@ -61,8 +61,8 @@ describe('createGeometryService', () => {
     expectPointClose(geometry.screenToDocument(screen), { x: 10, y: 20 })
   })
 
-  it('converts document/local coordinates through node rotation by default', () => {
-    const store = makeStore()
+  it('converts document/local coordinates through node rotation by default', async () => {
+    const store = await makeStore()
     const node: MaterialNode = {
       id: 'n1',
       type: 'rect',
@@ -84,8 +84,8 @@ describe('createGeometryService', () => {
     expectPointClose(geometry.documentToLocal(documentPoint, node), { x: 0, y: 0 })
   })
 
-  it('can opt out of node transform for axis-aligned translation', () => {
-    const store = makeStore()
+  it('can opt out of node transform for axis-aligned translation', async () => {
+    const store = await makeStore()
     const node: MaterialNode = {
       id: 'n1',
       type: 'rect',

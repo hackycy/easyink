@@ -1,6 +1,6 @@
 import type { DocumentSchema, MaterialNode } from '@easyink/schema'
 import type { PageMode } from '@easyink/shared'
-import type { LayoutDiagnostic } from './layout-plan'
+import type { LayoutDiagnostic, LayoutFragment } from './layout-plan'
 import { deepClone } from '@easyink/shared'
 import { readNodeRepeatScope } from './layout-plan'
 import { runLayoutPipeline } from './layout-strategy'
@@ -23,6 +23,8 @@ export interface PagePlanEntry {
   width: number
   height: number
   elements: MaterialNode[]
+  /** Transient inputs used by Viewer; never part of document Schema. */
+  fragments?: LayoutFragment[]
   isBlank?: boolean
   copyIndex?: number
   /** Y offset in document coordinates -- used by the render surface to position elements within the page. */

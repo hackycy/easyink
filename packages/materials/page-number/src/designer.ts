@@ -1,4 +1,6 @@
-import type { MaterialDesignerExtension, MaterialDesignerRenderContext, MaterialExtensionContext } from '@easyink/core'
+import type { MaterialDesignerRenderContext } from '@easyink/core'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { MaterialNode } from '@easyink/schema'
 import type { PageNumberProps } from './schema'
 import { getNodeProps } from '@easyink/schema'
@@ -32,7 +34,7 @@ function buildHtml(node: MaterialNode, unit: string, renderContext?: MaterialDes
   return `<div style="${style}"><span style="width:100%;text-align:${p.textAlign}">${display}</span></div>`
 }
 
-export function createPageNumberExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createPageNumberExtension(context: DesignerRendererContext): DesignerRenderInstance {
   return {
     renderContent(nodeSignal, container, renderContextSignal) {
       function render() {

@@ -4,7 +4,7 @@ description: 在 Designer 中接入 EasyInk Assistant：注册助手面板、部
 
 # AI模板生成 {#assistant}
 
-Assistant 是官方的 Designer 模板生成助手。你把一个 Contribution 接进 Designer，再把前端连到 `assistant-orchestrator` 服务，用户就可以在设计器里描述要生成的票据、标签或表单，并在确认后应用到当前模板。
+Assistant 是官方的 Designer 模板生成助手。你通过 `extensions` 把独立 Designer 扩展接进 Designer，再把前端连到 `assistant-orchestrator` 服务，用户就可以在设计器里描述要生成的票据、标签或表单，并在确认后应用到当前模板。
 
 ## 安装包 {#install-packages}
 
@@ -23,28 +23,31 @@ pnpm add @easyink/designer @easyink/assistant-designer-bridge
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue'
+import { materials } from '@easyink/builtin/all/designer'
 import { EasyInkDesigner, createLocalStoragePreferenceProvider } from '@easyink/designer'
 import { zhCN } from '@easyink/designer/locale'
 import { createAssistantContribution } from '@easyink/assistant-designer-bridge'
+import { normalizeDocumentSchema } from '@easyink/schema'
 import '@easyink/designer/index.css'
 import '@easyink/assistant-designer-bridge/index.css'
 
-const schema = ref({})
+const schema = ref(normalizeDocumentSchema({}))
 const preferenceProvider = createLocalStoragePreferenceProvider()
 
 const assistant = createAssistantContribution({
   endpoint: import.meta.env.VITE_EASYINK_ASSISTANT_ENDPOINT,
 })
 
-const contributions = [assistant]
+const extensions = [assistant]
 </script>
 
 <template>
   <EasyInkDesigner
     v-model:schema="schema"
     :locale="zhCN"
+    :materials="materials"
     :preference-provider="preferenceProvider"
-    :contributions="contributions"
+    :extensions="extensions"
   />
 </template>
 ```
@@ -70,7 +73,7 @@ pnpm add \
   @easyink/assistant-plugin-receipt-designer
 ```
 
-然后把插件传给 Assistant Contribution：
+然后把插件传给 Assistant 扩展工厂：
 
 ```ts
 import { createAssistantContribution } from '@easyink/assistant-designer-bridge'
@@ -90,7 +93,7 @@ const assistant = createAssistantContribution({
 
 传入 `plugins` 后，Assistant 面板里会出现插件中心入口。用户可以在插件中心里启用或停用插件；提交任务时，面板会把已启用插件的提示词和上下文结果一起发给 Assistant 服务。
 
-官方插件现在有三类：
+官方插件有三类：
 
 | 包 | 面板名称 | 作用 |
 |----|----------|------|
@@ -480,13 +483,13 @@ Assistant 不会在生成完成后自动改模板。用户需要先查看生成�
 
 **工具栏没有 Assistant 按钮**
 
-先确认 `contributions` 真的传给了 Designer：
+先确认 `extensions` 真的传给了 Designer：
 
 ```vue
-<EasyInkDesigner :contributions="contributions" />
+<EasyInkDesigner :materials="materials" :extensions="extensions" />
 ```
 
-如果你把 `contributions` 写在 `computed` 里，也要保证里面的 `createAssistantContribution()` 没有在每次渲染时重新创建。
+如果你把 `extensions` 写在 `computed` 里，也要保证里面的 `createAssistantContribution()` 没有在每次渲染时重新创建。
 
 **面板打开后请求失败**
 
@@ -506,4 +509,4 @@ Assistant 不会在生成完成后自动改模板。用户需要先查看生成�
 
 Assistant 只负责把结果应用到 Designer。你仍然需要配置 [自动保存](./auto-save)，或者监听 `update:schema` 后调用自己的保存接口。
 
-关于 Assistant，目前知道这些就能完成一次完整接入。下一步可以继续看 [Contribution 扩展](../advanced/contributions)，了解它是怎么把按钮、面板和命令挂进 Designer 的。
+关于 Assistant，目前知道这些就能完成一次完整接入。下一步可以继续看 [Designer 扩展](../advanced/contributions)，了解它是怎么把按钮、面板和命令挂进 Designer 的。

@@ -1,4 +1,5 @@
-import type { BehaviorEvent, MaterialDesignerExtension } from '@easyink/core'
+import type { BehaviorEvent } from '@easyink/core'
+import type { DesignerRenderInstance } from '@easyink/plugin-api/designer'
 import type { DesignerStore } from '../store/designer-store'
 import { shallowRef } from 'vue'
 import { applySelectionIntent } from '../interactions/selection-intent'
@@ -50,7 +51,7 @@ export class EditingSessionManager {
    * Exits any existing session first (mutual exclusion).
    * Returns the initial Selection from hitTest if a point is provided.
    */
-  enter(nodeId: string, extension: MaterialDesignerExtension, initialPoint?: { x: number, y: number }): EditingSession | null {
+  enter(nodeId: string, extension: DesignerRenderInstance, initialPoint?: { x: number, y: number }): EditingSession | null {
     if (!extension.geometry)
       return null
 

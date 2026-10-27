@@ -11,6 +11,8 @@
   "sideEffects": false,
   "exports": {
     ".": "./dist/index.mjs",
+    "./material-model": "./dist/material-model.mjs",
+    "./viewer": "./dist/viewer.mjs",
     "./package.json": "./package.json"
   },
   "types": "./dist/index.d.mts",
@@ -23,7 +25,9 @@
   },
   "dependencies": {
     "@easyink/core": "workspace:*",
+    "@easyink/icons": "workspace:*",
     "@easyink/material-table-kernel": "workspace:*",
+    "@easyink/plugin-api": "workspace:*",
     "@easyink/prop-schemas": "workspace:*",
     "@easyink/schema": "workspace:*",
     "@easyink/shared": "workspace:*"

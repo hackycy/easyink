@@ -1,11 +1,14 @@
+import { Buffer } from 'node:buffer'
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import {
   supermarketDemoData,
   supermarketReceiptTemplate,
 } from '@easyink/samples'
+import { loadRenderApiConfig } from '../src/config'
+import { createRenderApiServer } from '../src/server'
 
 interface RenderCliSummary {
   success: boolean
@@ -31,20 +34,69 @@ const outputDir = resolve(smokeRoot, 'output')
 const requestPath = resolve(smokeRoot, 'supermarket-request.json')
 const diagnosticsPath = resolve(smokeRoot, 'supermarket-diagnostics.json')
 const outputPath = resolve(outputDir, 'supermarket-receipt.pdf')
-const hostBinaryPath = resolve(hostRoot, 'easyink-render')
+const nativeHost = process.platform === 'win32' || process.platform === 'darwin'
+const hostBinaryPath = nativeHost
+  ? resolve(smokeRoot, process.platform === 'win32' ? 'easyink-render.exe' : 'easyink-render')
+  : resolve(hostRoot, 'easyink-render')
 
-main()
+void main().catch((error) => {
+  console.error(error)
+  process.exitCode = 1
+})
 
-function main(): void {
+async function main(): Promise<void> {
   try {
     resetSmokeRoot()
     writeSupermarketRequest()
-    buildLinuxHostBinary()
-    renderWithChromium()
+    if (nativeHost) {
+      buildNativeHostBinary()
+      renderWithNativeChromium()
+    }
+    else {
+      buildLinuxHostBinary()
+      renderWithChromium()
+    }
     assertSmokeResult()
+    if (nativeHost)
+      await renderWithActualApi()
   }
   finally {
     rmSync(hostBinaryPath, { force: true })
+  }
+}
+
+async function renderWithActualApi(): Promise<void> {
+  const workDir = resolve(smokeRoot, 'api-work')
+  const api = createRenderApiServer({ config: {
+    ...loadRenderApiConfig({}),
+    binary: hostBinaryPath,
+    workDir,
+    defaultRuntime: { noDaemon: true, disableSandbox: true, browserPath: nativeBrowserPath() },
+  } })
+  try {
+    const address = await api.listen(0, '127.0.0.1')
+    const response = await fetch(`http://127.0.0.1:${address.port}/v1/render/pdf`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requestId: 'actual-api-supermarket',
+        source: { type: 'easyink', schema: supermarketReceiptTemplate, data: supermarketDemoData },
+        response: { type: 'pdf' },
+      }),
+    })
+    const bytes = Buffer.from(await response.arrayBuffer())
+    if (!response.ok || bytes.subarray(0, 5).toString() !== '%PDF-' || bytes.length < 1000)
+      throw new Error(`Actual API PDF failed: ${response.status} ${bytes.subarray(0, 200).toString()}`)
+    if (Number(response.headers.get('x-easyink-page-count')) < 1)
+      throw new Error('Actual API did not expose rendered page metrics')
+    const remaining = readdirSync(workDir)
+    if (remaining.length)
+      throw new Error(`API returned before request cleanup: ${remaining.join(', ')}`)
+    writeFileSync(resolve(outputDir, 'api-supermarket.pdf'), bytes)
+    console.log(JSON.stringify({ actualApi: true, pdfBytes: bytes.length, requestDirectoriesAfterResponse: remaining.length }))
+  }
+  finally {
+    await api.close()
   }
 }
 
@@ -67,6 +119,44 @@ function writeSupermarketRequest(): void {
       includeScreenshot: true,
     },
   }, null, 2)}\n`)
+}
+
+function buildNativeHostBinary(): void {
+  run('go', ['build', '-C', hostRoot, '-trimpath', '-o', hostBinaryPath, './cmd/easyink-render'])
+}
+
+function nativeBrowserPath(): string {
+  const browserPath = process.env.EASYINK_RENDER_BROWSER_PATH ?? [
+    'C:/Program Files/Google/Chrome/Application/chrome.exe',
+    'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  ].find(path => existsSync(path))
+  if (!browserPath)
+    throw new Error('Set EASYINK_RENDER_BROWSER_PATH to a Chromium executable for the native smoke check')
+  return browserPath
+}
+
+function renderWithNativeChromium(): void {
+  run(hostBinaryPath, [
+    'render',
+    '--no-daemon',
+    '--disable-sandbox',
+    '--request',
+    requestPath,
+    '--out',
+    outputPath,
+    '--browser-path',
+    nativeBrowserPath(),
+    '--profile-root',
+    resolve(smokeRoot, 'profile'),
+    '--temp-dir',
+    resolve(smokeRoot, 'tmp'),
+    '--log-dir',
+    resolve(smokeRoot, 'logs'),
+    '--diagnostics-out',
+    diagnosticsPath,
+    '--json',
+  ])
 }
 
 function buildLinuxHostBinary(): void {
@@ -155,8 +245,10 @@ function run(command: string, args: string[]): void {
   if (result.stderr) {
     process.stderr.write(result.stderr)
   }
+  if (result.error)
+    throw new Error(`Could not start ${command}: ${result.error.message}`, { cause: result.error })
   if (result.status !== 0) {
-    const summary = parseRenderFailure(result.stdout)
+    const summary = parseRenderFailure(result.stdout ?? '')
     throw new Error(summary
       ? `${command} failed: ${summary.code ?? 'RENDER_FAILED'} ${summary.message ?? ''}`.trim()
       : `${command} failed with exit code ${result.status ?? 'unknown'}`)

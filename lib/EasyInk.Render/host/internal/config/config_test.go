@@ -26,6 +26,7 @@ func TestRuntimeConfigValidation(t *testing.T) {
 func TestLoadRuntimeRejectsUnknownFields(t *testing.T) {
 	configHome := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", configHome)
+	t.Setenv("APPDATA", configHome)
 	path := ConfigPath()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatalf("create config dir: %v", err)

@@ -1,16 +1,5 @@
-import type {
-  BehaviorEvent,
-  BehaviorRegistration,
-  EditingSessionRef,
-  EphemeralPanelDef,
-  GeometryService,
-  MaterialDesignerExtension,
-  MaterialGeometry,
-  Selection,
-  SelectionStore,
-  SurfacesAPI,
-  TransactionAPI,
-} from '@easyink/core'
+import type { BehaviorEvent, BehaviorRegistration, EditingSessionRef, EphemeralPanelDef, GeometryService, MaterialGeometry, Selection, SelectionStore, SurfacesAPI, TransactionAPI } from '@easyink/core'
+import type { DesignerRenderInstance } from '@easyink/plugin-api/designer'
 import type { MaterialNode } from '@easyink/schema'
 import type { DiagnosticsChannel } from '../store/diagnostics'
 import { reactive } from 'vue'
@@ -33,7 +22,7 @@ export class EditingSession implements EditingSessionRef {
   readonly surfaces: SurfacesAPI
   /** Shared reactive metadata (Vue reactive for decoration/toolbar reactivity). */
   readonly meta: Record<string, unknown>
-  readonly extension: MaterialDesignerExtension
+  readonly extension: DesignerRenderInstance
 
   private behaviors: BehaviorRegistration[]
   private getNode: () => MaterialNode | undefined
@@ -46,7 +35,7 @@ export class EditingSession implements EditingSessionRef {
 
   constructor(opts: {
     nodeId: string
-    extension: MaterialDesignerExtension
+    extension: DesignerRenderInstance
     selectionStore: SelectionStore
     geometry: GeometryService
     materialGeometry: MaterialGeometry

@@ -15,16 +15,22 @@ describe('decodeBenchmarkInput', () => {
     expect(schema.page.height).toBe(200)
   })
 
-  it('maps guides from x/y arrays', () => {
+  it('round-trips guide arrays and groups without mutating input', () => {
     const input: BenchmarkDocumentInput = {
       x: [10, 20],
       y: [30],
+      g: [{ id: 'guide', x: [5], y: [6] }],
       page: {},
       elements: [],
     }
+    const before = JSON.stringify(input)
     const schema = decodeBenchmarkInput(input)
     expect(schema.guides.x).toEqual([10, 20])
     expect(schema.guides.y).toEqual([30])
+    expect(schema.guides.groups).toEqual(input.g)
+    expect(schema.compat?.rawGuideGroupKey).toBe('g')
+    expect(encodeToBenchmark(schema)).toMatchObject({ x: input.x, y: input.y, g: input.g })
+    expect(JSON.stringify(input)).toBe(before)
   })
 
   it('maps element fields', () => {
@@ -68,40 +74,54 @@ describe('decodeBenchmarkInput', () => {
         },
       }],
     }
+    const before = JSON.stringify(input)
     const schema = decodeBenchmarkInput(input)
+    const canonicalBefore = JSON.stringify(schema)
     expect(schema.elements[0]?.renderCondition).toEqual(input.elements[0]?.renderCondition)
     expect(schema.elements[0]?.props).not.toHaveProperty('renderCondition')
     expect(encodeToBenchmark(schema).elements[0]?.renderCondition).toEqual(input.elements[0]?.renderCondition)
+    expect(JSON.stringify(input)).toBe(before)
+    expect(JSON.stringify(schema)).toBe(canonicalBefore)
   })
 
-  it('uses provided unit', () => {
-    const input: BenchmarkDocumentInput = { unit: 'pt', page: {}, elements: [] }
+  it.each(['mm', 'pt', 'px'])('round-trips the provided unit %s', (unit) => {
+    const input: BenchmarkDocumentInput = { unit, page: {}, elements: [] }
     const schema = decodeBenchmarkInput(input)
-    expect(schema.unit).toBe('pt')
+    expect(schema.unit).toBe(unit)
+    expect(encodeToBenchmark(schema).unit).toBe(unit)
   })
 
   it('keeps unknown element fields in props for round-trip encoding', () => {
     const input: BenchmarkDocumentInput = {
-      page: {},
+      customDocument: { keep: true },
+      page: { customPage: 'opaque' },
       elements: [
         {
           id: 'el1',
-          type: 'text',
+          type: 'custom/uninstalled',
           x: 5,
           y: 10,
           width: 50,
           height: 20,
           text: 'hello',
           fontSize: 14,
+          custom: { nested: ['keep', 42, false] },
         },
       ],
     }
 
+    const before = JSON.stringify(input)
     const schema = decodeBenchmarkInput(input)
-    expect(schema.elements[0]?.props).toEqual({ text: 'hello', fontSize: 14 })
+    const canonicalBefore = JSON.stringify(schema)
+    expect(schema.elements[0]?.type).toBe('custom/uninstalled')
+    expect(schema.elements[0]?.props).toEqual({ text: 'hello', fontSize: 14, custom: { nested: ['keep', 42, false] } })
+    expect(schema.compat?.passthrough).toEqual({ 'customDocument': { keep: true }, 'page.customPage': 'opaque' })
 
     const output = encodeToBenchmark(schema)
-    expect(output.elements[0]).toMatchObject({ text: 'hello', fontSize: 14 })
+    expect(output.elements[0]).toMatchObject(input.elements[0]!)
+    expect(output.customDocument).toEqual(input.customDocument)
+    expect(JSON.stringify(input)).toBe(before)
+    expect(JSON.stringify(schema)).toBe(canonicalBefore)
   })
 
   it('converts legacy table cell scalar content to text', () => {
@@ -134,6 +154,7 @@ describe('decodeBenchmarkInput', () => {
       ],
     }
 
+    const before = JSON.stringify(input)
     const schema = decodeBenchmarkInput(input)
     const tableNode = schema.elements[0]!
     expect(isTableNode(tableNode)).toBe(true)
@@ -142,6 +163,7 @@ describe('decodeBenchmarkInput', () => {
 
     expect(tableNode.table.topology.rows[0]?.cells[0]?.content).toEqual({ text: '123' })
     expect(tableNode.table.diagnostics).toBeUndefined()
+    expect(JSON.stringify(input)).toBe(before)
   })
 
   it('preserves unsupported legacy table cell content and emits a warning', () => {

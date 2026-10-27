@@ -1,10 +1,10 @@
+import type { DesignerRenderInstance } from '@easyink/plugin-api/designer'
 /**
  * @vitest-environment happy-dom
  */
 import type { MaterialNode } from '@easyink/schema'
-import type { MaterialDesignerExtension } from '../types'
 import { describe, expect, it } from 'vitest'
-import { createApp, defineComponent, h, nextTick, reactive } from 'vue'
+import { createApp, defineComponent, h, nextTick } from 'vue'
 import { provideDesignerStore } from '../composables'
 import { DesignerStore } from '../store/designer-store'
 import SelectionOverlay from './SelectionOverlay.vue'
@@ -30,13 +30,12 @@ function createDecorationComponent(layer: string) {
   })
 }
 
-function mountSelectionOverlay(extension: MaterialDesignerExtension) {
+async function mountSelectionOverlay(extension: DesignerRenderInstance) {
   const node = createNode()
-  const store = reactive(new DesignerStore({
-    elements: [node],
-  })) as DesignerStore
-  store.editingSession.setStore(store)
-  store.registerDesignerFactory('test', () => extension)
+  const store = await DesignerStore.create({
+    schema: { elements: [node] },
+    materials: [{ model: { type: 'test', binding: { kind: 'none' }, createDefaultNode: createNode }, renderer: () => extension }],
+  })
 
   const resolvedExtension = store.getDesignerExtension('test')
   if (!resolvedExtension)
@@ -63,9 +62,9 @@ function mountSelectionOverlay(extension: MaterialDesignerExtension) {
   return {
     host,
     store,
-    unmount() {
+    async unmount() {
       app.unmount()
-      store.destroy()
+      await store.destroy()
       host.remove()
     },
   }
@@ -73,7 +72,7 @@ function mountSelectionOverlay(extension: MaterialDesignerExtension) {
 
 describe('selection overlay', () => {
   it('renders deep-edit decorations into their declared overlay layers', async () => {
-    const mounted = mountSelectionOverlay({
+    const mounted = await mountSelectionOverlay({
       renderContent: () => () => {},
       geometry: {
         getContentLayout: node => ({ contentBox: { x: node.x, y: node.y, width: node.width, height: node.height } }),
@@ -94,6 +93,6 @@ describe('selection overlay', () => {
     expect(mounted.host.querySelector('.ei-selection-overlay__layer--above-content [data-decoration-layer="default"]')).not.toBeNull()
     expect(mounted.host.querySelector('.ei-selection-overlay__layer--above-handles [data-decoration-layer="above-handles"]')).not.toBeNull()
 
-    mounted.unmount()
+    await mounted.unmount()
   })
 })

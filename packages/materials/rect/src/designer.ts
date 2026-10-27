@@ -1,4 +1,5 @@
-import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { RectProps } from './schema'
 import { getNodeProps } from '@easyink/schema'
 
@@ -17,7 +18,7 @@ function buildHtml(props: RectProps, unit: string): string {
     + `"></div>`
 }
 
-export function createRectExtension(context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createRectExtension(context: DesignerRendererContext): DesignerRenderInstance {
   return {
     renderContent(nodeSignal, container) {
       function render() {

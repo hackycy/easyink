@@ -1,10 +1,11 @@
-import type { MaterialDesignerExtension, MaterialExtensionContext } from '@easyink/core'
+import type { DesignerRendererContext, DesignerRenderInstance } from '@easyink/plugin-api/designer'
+
 import type { SvgHeartProps } from './schema'
 import { getNodeProps } from '@easyink/schema'
 import { buildSvgHeartMarkup } from './rendering'
 import { SVG_HEART_DEFAULTS } from './schema'
 
-export function createSvgHeartExtension(_context: MaterialExtensionContext): MaterialDesignerExtension {
+export function createSvgHeartExtension(_context: DesignerRendererContext): DesignerRenderInstance {
   return {
     renderContent(nodeSignal, container) {
       function render() {

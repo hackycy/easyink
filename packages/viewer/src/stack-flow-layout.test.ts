@@ -1,7 +1,7 @@
 import type { DocumentSchema, MaterialNode, TableNode } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
-import { createViewer } from './index'
 import { applyStackFlowLayout } from './stack-flow-layout'
+import { createBuiltinViewer as createViewer } from './test-fixtures/builtin-viewer'
 
 function makeNode(id: string, overrides: Partial<MaterialNode> = {}): MaterialNode {
   return {
@@ -160,7 +160,7 @@ describe('applyStackFlowLayout', () => {
 describe('viewer runtime stack-flow reflow', () => {
   it('repositions elements below table-data after measure', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
 
     const schema: DocumentSchema = {
       version: '1.0.0',
@@ -199,7 +199,7 @@ describe('viewer runtime stack-flow reflow', () => {
 
   it('repositions elements below bound auto-height text after measure', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
 
     const schema: DocumentSchema = {
       version: '1.0.0',
@@ -249,7 +249,7 @@ describe('viewer runtime stack-flow reflow', () => {
 
   it('keeps the original template trailing gap after continuous page height recompute', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
 
     const pageHeight = 100
     const trailingGap = 30
@@ -289,7 +289,7 @@ describe('viewer runtime stack-flow reflow', () => {
 
   it('keeps legacy line templates visible by promoting lineWidth into render height', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
 
     const schema: DocumentSchema = {
       version: '1.0.0',

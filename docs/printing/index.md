@@ -9,17 +9,13 @@ description: EasyInk 打印方案选型指南：Render PDF 渲染、EasyInk Prin
 先看几个最短调用：
 
 ```ts
-import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+import { materials as viewerMaterials } from '@easyink/builtin/all/viewer'
 import { createEasyInkPrinter } from '@easyink/print-integration-easyink-printer'
 
 const printer = createEasyInkPrinter({
   serviceUrl: 'http://localhost:18080',
   viewer: 'iframe',
-  setupViewer(viewer) {
-    registerBuiltinViewerMaterials((type, binding, extension) => {
-      viewer.registerMaterial(type, binding, extension)
-    })
-  },
+  viewerOptions: { materials: viewerMaterials },
 })
 
 await printer.ready()
@@ -29,7 +25,7 @@ await printer.print({ schema, data })
 这里的 `printer.ready()` 是可选预检，用来提前确认本地服务和打印机列表。实际打印 API 会按需连接，所以你也可以直接调用 `printer.print()`。
 
 ```ts
-import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+import { materials as viewerMaterials } from '@easyink/builtin/all/viewer'
 import { createHiPrintClient, createHiPrintPrinter } from '@easyink/print-integration-hiprint'
 
 const client = createHiPrintClient({
@@ -39,11 +35,7 @@ const client = createHiPrintClient({
 const printer = createHiPrintPrinter({
   client,
   viewer: 'iframe',
-  setupViewer(viewer) {
-    registerBuiltinViewerMaterials((type, binding, extension) => {
-      viewer.registerMaterial(type, binding, extension)
-    })
-  },
+  viewerOptions: { materials: viewerMaterials },
 })
 
 await client.useDefaultPrinter()
@@ -52,12 +44,12 @@ await printer.print({ schema, data })
 
 两段代码都做了同一件事：用托管 Viewer 渲染 `schema + data`，再交给对应的本地打印链路。区别在于最后提交给谁，以及用什么格式提交。
 
-`setupViewer` 是托管 Viewer 打开模板前的配置入口。示例里用它注册官方内置物料；如果你只使用自定义物料，就在这里调用自己的 `viewer.registerMaterial()`。
+托管打印器通过 `viewerOptions.materials` 在创建 Viewer 前选择物料。打印器不会自动加载 builtin；自定义物料也要在同一个数组中显式选择。
 
 LODOP 路径也类似：
 
 ```ts
-import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+import { materials as viewerMaterials } from '@easyink/builtin/all/viewer'
 import { createLodopClient, createLodopPrinter } from '@easyink/print-integration-lodop'
 
 const client = createLodopClient({
@@ -69,11 +61,7 @@ const client = createLodopClient({
 const printer = createLodopPrinter({
   client,
   viewer: 'iframe',
-  setupViewer(viewer) {
-    registerBuiltinViewerMaterials((type, binding, extension) => {
-      viewer.registerMaterial(type, binding, extension)
-    })
-  },
+  viewerOptions: { materials: viewerMaterials },
 })
 
 await client.useDefaultPrinter()
@@ -110,11 +98,7 @@ EasyInk Printer 的高层打印器默认会先在浏览器端生成 PDF，再通
 const printer = createEasyInkPrinter({
   serviceUrl: 'http://localhost:18080',
   viewer: 'iframe',
-  setupViewer(viewer) {
-    registerBuiltinViewerMaterials((type, binding, extension) => {
-      viewer.registerMaterial(type, binding, extension)
-    })
-  },
+  viewerOptions: { materials: viewerMaterials },
 })
 
 await printer.print({
@@ -162,11 +146,7 @@ HiPrint 的高层打印器默认会把 Viewer 页面序列化成 HTML，再交�
 const printer = createHiPrintPrinter({
   client,
   viewer: 'iframe',
-  setupViewer(viewer) {
-    registerBuiltinViewerMaterials((type, binding, extension) => {
-      viewer.registerMaterial(type, binding, extension)
-    })
-  },
+  viewerOptions: { materials: viewerMaterials },
 })
 
 await printer.print({
@@ -188,11 +168,7 @@ LODOP 的高层打印器默认会把 Viewer 页面序列化成 HTML，再交给 
 const printer = createLodopPrinter({
   client,
   viewer: 'iframe',
-  setupViewer(viewer) {
-    registerBuiltinViewerMaterials((type, binding, extension) => {
-      viewer.registerMaterial(type, binding, extension)
-    })
-  },
+  viewerOptions: { materials: viewerMaterials },
 })
 
 await printer.print({

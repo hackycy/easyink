@@ -1,5 +1,13 @@
 # 18. 构建与产物
 
+## 完整物料与集合生成
+
+25 个物料分别构建 Designer 根入口和纯 `/viewer` 入口；两端导出同名完整物料以及适用的工厂、默认值、类型和 helper。最小 Viewer 消费夹具从真实 package exports 检查 JavaScript 与声明图，排除 Designer、Vue 和 Assistant UI，并确认只引入选中的 text/image 包。
+
+builtin 的 `src/collection-source.ts` 是 all/basic 成员和顺序的维护源。`tsdown.config.ts` 在构建阶段生成 `all/designer`、`all/viewer`、`basic/designer`、`basic/viewer` 四个静态入口；消费者无需运行生成器。all 两端的历史 chart 顺序各自保留，basic 为 17 项，none 为空。
+
+产物检查同时追踪 Designer 入口 chunk 的静态依赖；`node packages/designer/src/test-fixtures/check-consumption.mjs --check-lazy` 验证 chart-custom 的完整 ECharts 实现不在初始路径。builtin 不再提供旧 bundle、sets 或 registrar。发布前由维护者按实际发布流程生成并核对 0.1.0 制品；仓库测试持续覆盖新旧类型、JS/声明隔离和惰性图。
+
 ## 18.1 构建工具链
 
 | 工具 | 用途 |
@@ -62,7 +70,7 @@ packages/materials/chart/kernel/dist/
 - `@easyink/locales` 与 `@easyink/prop-schemas` 只发布 ESM 主入口和类型声明；designer 的 `./locale` 子路径是 facade，编译产物应保持轻量 re-export。
 - `@easyink/export-runtime` 只发布 ESM 主入口，仅含运行时内核，不绑定第三方导出库。
 - `@easyink/export-plugin-dom-pdf` 只发布 ESM 主入口；`html2canvas` / `jspdf` 在 plugin 内部动态 import 按需装载。
-- 物料包可以按需暴露 `./designer`、`./viewer`、`./schema`、`./prop-schemas`、`./locale`、`./ai` 等子入口，便于内置注册同步读取元数据，同时让 Designer 重型渲染器通过动态 import 懒加载。
+- 物料包可以按需暴露 `./designer`、`./viewer`、`./schema`、`./prop-schemas`、`./locale`、`./ai` 等子入口，用于纯 helper 消费和框架按需加载，同时让 Designer 重型渲染器通过动态 import 懒加载。
 - `@easyink/material-chart-kernel` 默认入口保持轻量 chart helper；`./full` 子入口导出完整 ECharts 包和 full renderer，仅供自定义 ECharts 等确实需要完整 option 能力的物料使用。
 
 ## 18.3 Package.json 导出配置

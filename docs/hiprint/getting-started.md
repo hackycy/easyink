@@ -52,7 +52,7 @@ console.log(printers)
 打印器创建后，业务侧只需要传 `schema + data`：
 
 ```ts
-import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+import { materials as viewerMaterials } from '@easyink/builtin/all/viewer'
 import { createHiPrintClient, createHiPrintPrinter } from '@easyink/print-integration-hiprint'
 
 const client = createHiPrintClient({
@@ -62,11 +62,7 @@ const client = createHiPrintClient({
 const printer = createHiPrintPrinter({
   client,
   viewer: 'iframe',
-  setupViewer(viewer) {
-    registerBuiltinViewerMaterials((type, binding, extension) => {
-      viewer.registerMaterial(type, binding, extension)
-    })
-  },
+  viewerOptions: { materials: viewerMaterials },
 })
 
 await client.useDefaultPrinter()
@@ -160,7 +156,7 @@ await client.printHtml({
 如果项目已经自己管理 `vue-plugin-hiprint`，就让 EasyInk 只接管模板渲染和提交：
 
 ```ts
-import { registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+import { materials as viewerMaterials } from '@easyink/builtin/all/viewer'
 import { hiprint } from 'vue-plugin-hiprint'
 import {
   createHiPrintPrinter,
@@ -177,11 +173,7 @@ const client = createHiPrintRuntimeClient({
 const printer = createHiPrintPrinter({
   client,
   viewer: 'iframe',
-  setupViewer(viewer) {
-    registerBuiltinViewerMaterials((type, binding, extension) => {
-      viewer.registerMaterial(type, binding, extension)
-    })
-  },
+  viewerOptions: { materials: viewerMaterials },
 })
 
 await printer.print({ schema, data })
@@ -208,7 +200,7 @@ await client.printHtml({
 打印完成后按职责清理：
 
 ```ts
-printer.destroy()
+await printer.destroy()
 client.disconnect()
 ```
 

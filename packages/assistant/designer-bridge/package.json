@@ -34,6 +34,7 @@
     "@easyink/assistant-ui": "workspace:*",
     "@easyink/designer": "workspace:*",
     "@easyink/icons": "workspace:*",
+    "@easyink/plugin-api": "workspace:*",
     "@easyink/schema": "workspace:*",
     "vue": "catalog:framework"
   }

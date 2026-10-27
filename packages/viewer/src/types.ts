@@ -1,4 +1,6 @@
-import type { BindingFormatDiagnostic, FontProvider, FragmentPaginateInput, FragmentPaginateResult, FragmentPaginator, MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from '@easyink/core'
+import type { BindingFormatDiagnostic, FontProvider, FragmentPaginateInput, FragmentPaginateResult, FragmentPaginator, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize } from '@easyink/core'
+import type { LocaleTree } from '@easyink/plugin-api/material'
+import type { ViewerMaterial } from '@easyink/plugin-api/viewer'
 import type { DocumentSchema } from '@easyink/schema'
 import type { DiagnosticCategory, DiagnosticSeverity, ExportEntry, ExportFormat, ExportPhase } from '@easyink/shared'
 import type { ViewerHost } from './viewer-host'
@@ -6,13 +8,15 @@ import type { ViewerHost } from './viewer-host'
 export * from '@easyink/schema'
 
 // Re-export viewer-material contract types from core so host code can import from one place.
-export type { FragmentPaginateInput, FragmentPaginateResult, FragmentPaginator, MaterialViewerExtension, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize }
+export type { FragmentPaginateInput, FragmentPaginateResult, FragmentPaginator, ViewerMeasureContext, ViewerMeasureResult, ViewerRenderContext, ViewerRenderOutput, ViewerRenderSize }
 
 // ---------------------------------------------------------------------------
 // Viewer options & input
 // ---------------------------------------------------------------------------
 
 export interface ViewerOptions {
+  materials?: readonly ViewerMaterial[]
+  locale?: { code?: string, messages?: LocaleTree }
   mode?: DocumentSchema['page']['mode']
   container?: HTMLElement
   host?: ViewerHost
@@ -47,9 +51,33 @@ export interface ViewerDiagnosticEvent {
 // Render result
 // ---------------------------------------------------------------------------
 
-export interface ViewerRenderResult {
+export type ViewerRenderResult = ViewerRenderCompleted | ViewerTaskCancelled
+
+export interface ViewerTaskCancelled {
+  status: 'cancelled'
+  requestId: number
+  reason: 'superseded' | 'document-changed' | 'destroyed'
+}
+
+export type ViewerRenderState
+  = | { status: 'idle' | 'disposed' }
+    | { status: 'updating' | 'completed', requestId: number }
+    | { status: 'failed', requestId: number, cause: unknown }
+
+export interface ViewerRenderCompleted {
+  status: 'completed'
+  requestId: number
   pages: ViewerPageResult[]
   thumbnails: ThumbnailResult[]
+  diagnostics: ViewerDiagnosticEvent[]
+}
+
+export type ViewerPrintResult = ViewerOutputCompleted | ViewerTaskCancelled
+export type ViewerExportResult = (ViewerOutputCompleted & { file?: Blob }) | ViewerTaskCancelled
+
+export interface ViewerOutputCompleted {
+  status: 'completed'
+  requestId: number
   diagnostics: ViewerDiagnosticEvent[]
 }
 
@@ -90,6 +118,8 @@ export interface ViewerExportContext {
   entry: ExportEntry
   renderedPages?: ViewerPageMetrics[]
   container?: HTMLElement
+  /** Destroy invalidates library-owned work; already delivered jobs cannot be recalled. */
+  signal?: AbortSignal
   onPhase?: (event: ViewerTaskPhaseEvent) => void
   onProgress?: (event: ViewerTaskProgressEvent) => void
   onDiagnostic?: (event: ViewerDiagnosticEvent) => void
@@ -119,7 +149,6 @@ export interface ViewerTaskCallbacks {
   onPhase?: (event: ViewerTaskPhaseEvent) => void
   onProgress?: (event: ViewerTaskProgressEvent) => void
   onDiagnostic?: (event: ViewerDiagnosticEvent) => void
-  throwOnError?: boolean
 }
 
 export interface ViewerPrintOptions extends ViewerTaskCallbacks {

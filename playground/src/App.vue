@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import type { DataSourceDescriptor, DesignerRuntimeConfig, DocumentSchema } from '@easyink/designer'
+import type { DataSourceDescriptor, DocumentSchema } from '@easyink/designer'
 import type { SampleTemplateEntry } from '@easyink/samples'
 import type { StoredTemplate } from './storage/template-store'
 import { createAssistantContribution, createBrowserAssistantLLMConfigService } from '@easyink/assistant-designer-bridge'
 import { placeholderImagesPlugin } from '@easyink/assistant-plugin-placeholder-images'
 import { prototypeDesignerPlugin } from '@easyink/assistant-plugin-prototype-designer'
 import { receiptDesignerPlugin } from '@easyink/assistant-plugin-receipt-designer'
-import { builtinDesignerMaterialBundle } from '@easyink/builtin/all'
+import { materials } from '@easyink/builtin/all/designer'
 import { createLocalStoragePreferenceProvider, EasyInkDesigner } from '@easyink/designer'
 import { enUS, zhCN } from '@easyink/designer/locale'
 import { blankA4Template, flowInvoiceTemplate, invoiceDemoData, sampleDataSources } from '@easyink/samples'
 import { BookOpen, ChevronDown, Database, Eye, Github, Languages, LayoutTemplate, Save } from 'lucide-vue-next'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import DataEditorModal from './components/DataEditor.vue'
 import TemplateGallery from './components/TemplateGallery.vue'
@@ -24,11 +24,6 @@ import { jsonToDataSource } from './utils/json-to-datasource'
 
 const schema = ref<DocumentSchema>(blankA4Template)
 const preferenceProvider = createLocalStoragePreferenceProvider()
-const runtimeConfig = {
-  materials: {
-    bundles: [builtinDesignerMaterialBundle],
-  },
-} satisfies DesignerRuntimeConfig
 
 // Workspace state
 // Either editing a stored template OR previewing a sample (not both).
@@ -39,6 +34,17 @@ const showTemplateGallery = ref(false)
 const showPreview = ref(false)
 const previewSchema = ref<DocumentSchema>()
 const showDataEditor = ref(false)
+const designer = ref<InstanceType<typeof EasyInkDesigner>>()
+const preview = ref<InstanceType<typeof PreviewOverlay>>()
+let disposal: Promise<void> | undefined
+function destroy(): Promise<void> {
+  disposal ??= Promise.all([preview.value?.destroy(), designer.value?.destroy()]).then(() => {})
+  return disposal
+}
+defineExpose({ destroy })
+onBeforeUnmount(() => {
+  void destroy()
+})
 
 const customData = ref<Record<string, unknown>>({})
 const customDataSources = ref<DataSourceDescriptor[]>([])
@@ -259,14 +265,15 @@ const contributions = [createAssistantContribution({
 
 <template>
   <EasyInkDesigner
+    ref="designer"
     v-model:schema="schema"
     :data-sources="mergedDataSources"
     :font-provider="playgroundFontProvider"
     :locale="designerLocale"
     :preference-provider="preferenceProvider"
-    :runtime-config="runtimeConfig"
+    :materials="materials"
     :auto-save="autoSaveOptions"
-    :contributions="contributions"
+    :extensions="contributions"
   >
     <template #topbar>
       <div data-easyink-topbar class="flex h-12 items-center gap-2 overflow-x-auto bg-background px-3 shadow-[0_1px_18px_rgba(15,23,42,0.08)]">
@@ -334,6 +341,7 @@ const contributions = [createAssistantContribution({
 
   <PreviewOverlay
     v-if="showPreview && previewSchema"
+    ref="preview"
     :schema="previewSchema"
     :data="previewData"
     @close="showPreview = false"

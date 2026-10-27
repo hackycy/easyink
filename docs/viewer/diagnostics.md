@@ -145,10 +145,16 @@ await viewer.open({
 物料测量和物料渲染有不同处理。
 
 ```ts
-viewer.registerMaterial('my-widget', { kind: 'none' }, {
-  render() {
-    throw new Error('render failed')
-  },
+const viewer = await createViewer({
+  container,
+  materials: [{
+    model: myWidgetModel,
+    renderer: {
+      render() {
+        throw new Error('render failed')
+      },
+    },
+  }],
 })
 ```
 
@@ -156,7 +162,7 @@ viewer.registerMaterial('my-widget', { kind: 'none' }, {
 
 `measure()` 抛错时，Viewer 会发出 `MATERIAL_MEASURE_ERROR`，并跳过这个节点的运行时测量结果。
 
-如果某个物料类型没有注册，当前注册表会渲染一个 `[Unknown: type]` 占位内容。这个路径不会自动发诊断事件。
+如果某个物料类型没有出现在创建时的 `materials` 集合，Viewer 会渲染一个 `[Unknown: type]` 占位内容并保留诊断上下文。应用应在创建前选择完整集合。
 
 ## 打印与导出 {#print-export}
 
@@ -179,7 +185,7 @@ await viewer.exportDocument({
 - `NO_EXPORTER`：没有找到匹配导出器。
 - `EXPORTER_ERROR`：导出器执行失败。
 
-这些错误默认会通过诊断暴露。传 `throwOnError: true` 时，对应调用会继续抛出错误。
+这些整体任务错误会通过诊断暴露，并拒绝 Promise。局部问题可在 completed 结果的 diagnostics 中查看；正常取消返回 cancelled 结果，不抛错。
 
 ## Hook 错误 {#hook-errors}
 

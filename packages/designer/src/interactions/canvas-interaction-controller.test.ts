@@ -1,3 +1,4 @@
+import type { DesignerRenderInstance } from '@easyink/plugin-api/designer'
 /**
  * @vitest-environment happy-dom
  *
@@ -24,18 +25,17 @@
  * than mocking, which would re-introduce the divergence the audit warned
  * against.
  */
-import type { MaterialDesignerExtension } from '@easyink/core'
 import { describe, expect, it, vi } from 'vitest'
 import { DesignerStore } from '../store/designer-store'
 import { useCanvasInteractionController } from './canvas-interaction-controller'
 
-function plainExtension(): MaterialDesignerExtension {
+function plainExtension(): DesignerRenderInstance {
   return {
     renderContent: () => () => {},
   }
 }
 
-function geometryExtension(): MaterialDesignerExtension {
+function geometryExtension(): DesignerRenderInstance {
   return {
     renderContent: () => () => {},
     geometry: {
@@ -90,9 +90,13 @@ function dblClickEvent(x: number, y: number): MouseEvent {
   return new MouseEvent('dblclick', { clientX: x, clientY: y, bubbles: true })
 }
 
-function setup(opts: { onBgPointerDown?: (e: PointerEvent) => void } = {}) {
-  const store = new DesignerStore()
-  store.registerDesignerFactory('rect', () => plainExtension())
+async function setup(opts: { onBgPointerDown?: (e: PointerEvent) => void } = {}) {
+  const store = await DesignerStore.create({
+    materials: ['rect', 'cell-table'].map(type => ({
+      model: { type, binding: { kind: 'none' as const }, createDefaultNode: () => ({ id: 'fixture', type, x: 0, y: 0, width: 10, height: 10, props: {} }) },
+      renderer: () => type === 'rect' ? plainExtension() : geometryExtension(),
+    })),
+  })
   store.schema.elements.push(
     { id: 'a', type: 'rect', x: 0, y: 0, width: 50, height: 50, rotation: 0, props: {} } as never,
     { id: 'b', type: 'rect', x: 100, y: 0, width: 50, height: 50, rotation: 0, props: {} } as never,
@@ -114,8 +118,8 @@ function setup(opts: { onBgPointerDown?: (e: PointerEvent) => void } = {}) {
 }
 
 describe('useCanvasInteractionController', () => {
-  it('cmd-click on unselected element ADDs and the follow-up click does not toggle off', () => {
-    const { store, controller, pdOn } = setup()
+  it('cmd-click on unselected element ADDs and the follow-up click does not toggle off', async () => {
+    const { store, controller, pdOn } = await setup()
     store.selection.select('a')
 
     pdOn('b', pdEvent('pointerdown', 110, 10, { meta: true }))
@@ -125,8 +129,8 @@ describe('useCanvasInteractionController', () => {
     expect(store.selection.ids.sort()).toEqual(['a', 'b'])
   })
 
-  it('cmd-click on already-selected element toggles it off', () => {
-    const { store, controller, pdOn } = setup()
+  it('cmd-click on already-selected element toggles it off', async () => {
+    const { store, controller, pdOn } = await setup()
     store.selection.selectMultiple(['a', 'b'])
 
     pdOn('b', pdEvent('pointerdown', 110, 10, { meta: true }))
@@ -136,8 +140,8 @@ describe('useCanvasInteractionController', () => {
     expect(store.selection.ids).toEqual(['a'])
   })
 
-  it('a click that follows a moved drag does not collapse multi-selection', () => {
-    const { store, controller, pdOn } = setup()
+  it('a click that follows a moved drag does not collapse multi-selection', async () => {
+    const { store, controller, pdOn } = await setup()
     store.selection.selectMultiple(['a', 'b'])
 
     pdOn('a', pdEvent('pointerdown', 10, 10))
@@ -149,8 +153,8 @@ describe('useCanvasInteractionController', () => {
     expect(store.selection.ids.sort()).toEqual(['a', 'b'])
   })
 
-  it('right-click preserves an existing multi-selection', () => {
-    const { store, pdOn } = setup()
+  it('right-click preserves an existing multi-selection', async () => {
+    const { store, pdOn } = await setup()
     store.selection.selectMultiple(['a', 'b'])
 
     pdOn('a', pdEvent('pointerdown', 10, 10, { button: 2 }))
@@ -158,8 +162,8 @@ describe('useCanvasInteractionController', () => {
     expect(store.selection.ids.sort()).toEqual(['a', 'b'])
   })
 
-  it('right-click on an unselected element collapses to that element', () => {
-    const { store, pdOn } = setup()
+  it('right-click on an unselected element collapses to that element', async () => {
+    const { store, pdOn } = await setup()
     store.selection.select('a')
 
     pdOn('b', pdEvent('pointerdown', 110, 10, { button: 2 }))
@@ -167,8 +171,8 @@ describe('useCanvasInteractionController', () => {
     expect(store.selection.ids).toEqual(['b'])
   })
 
-  it('selects every logical group member when one member is clicked', () => {
-    const { store, controller, pdOn } = setup()
+  it('selects every logical group member when one member is clicked', async () => {
+    const { store, controller, pdOn } = await setup()
     store.schema.groups = [{ id: 'grp_1', memberIds: ['a', 'b'] }]
 
     pdOn('a', pdEvent('pointerdown', 10, 10))
@@ -178,8 +182,8 @@ describe('useCanvasInteractionController', () => {
     expect(store.selection.ids.sort()).toEqual(['a', 'b'])
   })
 
-  it('drags every logical group member through existing multi-selection move', () => {
-    const { store, pdOn } = setup()
+  it('drags every logical group member through existing multi-selection move', async () => {
+    const { store, pdOn } = await setup()
     store.schema.unit = 'px'
     store.schema.groups = [{ id: 'grp_1', memberIds: ['a', 'b'] }]
     const a = store.getElementById('a')!
@@ -196,8 +200,8 @@ describe('useCanvasInteractionController', () => {
     window.dispatchEvent(pdEvent('pointerup', 30, 40))
   })
 
-  it('cmd-click toggles an entire logical group off', () => {
-    const { store, controller, pdOn } = setup()
+  it('cmd-click toggles an entire logical group off', async () => {
+    const { store, controller, pdOn } = await setup()
     store.schema.groups = [{ id: 'grp_1', memberIds: ['a', 'b'] }]
     store.selection.selectMultiple(['a', 'b'])
 
@@ -208,8 +212,8 @@ describe('useCanvasInteractionController', () => {
     expect(store.selection.ids).toEqual([])
   })
 
-  it('element pointerdown prevents the browser default drag or text-selection behavior', () => {
-    const { pdOn } = setup()
+  it('element pointerdown prevents the browser default drag or text-selection behavior', async () => {
+    const { pdOn } = await setup()
     const event = pdEvent('pointerdown', 10, 10)
     const preventDefault = vi.spyOn(event, 'preventDefault')
 
@@ -219,9 +223,8 @@ describe('useCanvasInteractionController', () => {
     expect(event.defaultPrevented).toBe(true)
   })
 
-  it('pointerdown on a material with geometry does NOT enter editing-session (dblclick is uniform entry)', () => {
-    const { store, pdOn } = setup()
-    store.registerDesignerFactory('cell-table', () => geometryExtension())
+  it('pointerdown on a material with geometry does NOT enter editing-session (dblclick is uniform entry)', async () => {
+    const { store, pdOn } = await setup()
     store.schema.elements.push(
       { id: 't', type: 'cell-table', x: 200, y: 0, width: 80, height: 80, rotation: 0, props: {} } as never,
     )
@@ -232,9 +235,8 @@ describe('useCanvasInteractionController', () => {
     expect(store.selection.ids).toEqual(['t'])
   })
 
-  it('dblclick on a material with geometry opens the editing-session and selects the hit sub-element', () => {
-    const { store, controller } = setup()
-    store.registerDesignerFactory('cell-table', () => geometryExtension())
+  it('dblclick on a material with geometry opens the editing-session and selects the hit sub-element', async () => {
+    const { store, controller } = await setup()
     store.schema.elements.push(
       { id: 't', type: 'cell-table', x: 200, y: 0, width: 80, height: 80, rotation: 0, props: {} } as never,
     )
@@ -252,9 +254,8 @@ describe('useCanvasInteractionController', () => {
     expect(dispatchSpy).not.toHaveBeenCalledWith({ kind: 'command', command: 'enter-edit' })
   })
 
-  it('second dblclick inside an active editing-session explicitly enters sub-element edit mode', () => {
-    const { store, controller } = setup()
-    store.registerDesignerFactory('cell-table', () => geometryExtension())
+  it('second dblclick inside an active editing-session explicitly enters sub-element edit mode', async () => {
+    const { store, controller } = await setup()
     store.schema.elements.push(
       { id: 't', type: 'cell-table', x: 200, y: 0, width: 80, height: 80, rotation: 0, props: {} } as never,
     )
@@ -267,9 +268,8 @@ describe('useCanvasInteractionController', () => {
     expect(dispatchSpy).toHaveBeenCalledWith({ kind: 'command', command: 'enter-edit' })
   })
 
-  it('within an active session, pointerdown on the active element routes into session and does NOT start a drag', () => {
-    const { store, controller, pdOn } = setup()
-    store.registerDesignerFactory('cell-table', () => geometryExtension())
+  it('within an active session, pointerdown on the active element routes into session and does NOT start a drag', async () => {
+    const { store, controller, pdOn } = await setup()
     store.schema.elements.push(
       { id: 't', type: 'cell-table', x: 200, y: 0, width: 80, height: 80, rotation: 0, props: {} } as never,
     )
@@ -285,12 +285,11 @@ describe('useCanvasInteractionController', () => {
     )
   })
 
-  it('background pointerdown exits an active editing-session before the marquee hook fires', () => {
+  it('background pointerdown exits an active editing-session before the marquee hook fires', async () => {
     const calls: string[] = []
-    const { store, controller, pageEl } = setup({
+    const { store, controller, pageEl } = await setup({
       onBgPointerDown: () => calls.push(`bg|active=${store.editingSession.isActive}`),
     })
-    store.registerDesignerFactory('cell-table', () => geometryExtension())
     store.schema.elements.push(
       { id: 't', type: 'cell-table', x: 200, y: 0, width: 80, height: 80, rotation: 0, props: {} } as never,
     )

@@ -1,18 +1,19 @@
-import type { DesignerStore } from '@easyink/designer'
+import type { DesignerContext } from '@easyink/plugin-api/designer'
 import { describe, expect, it } from 'vitest'
 import { createAssistantMaterialManifest } from './material-manifest'
 
 describe('assistant material manifest bridge', () => {
   it('serializes active designer materials without function props', () => {
     const store = {
-      listMaterials: () => [
+      getMaterials: () => [
         {
-          type: 'text',
-          name: 'Text',
-          category: 'basic',
-          capabilities: { bindable: true, resizable: true },
-          binding: { kind: 'ordinary', primaryProp: 'content', formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' } },
-          props: [
+          model: {
+            type: 'text',
+            capabilities: { resizable: true },
+            binding: { kind: 'ordinary', primaryProp: 'content', formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' } },
+          },
+          ui: { palette: [{ label: 'Text' }] },
+          properties: [
             {
               key: 'content',
               label: 'Content',
@@ -21,7 +22,7 @@ describe('assistant material manifest bridge', () => {
               default: 'Hello',
             },
           ],
-          aiDescriptor: {
+          ai: {
             type: 'text',
             description: 'Text material',
             properties: ['content'],
@@ -29,7 +30,7 @@ describe('assistant material manifest bridge', () => {
           },
         },
       ],
-    } as unknown as DesignerStore
+    } as unknown as DesignerContext
 
     const manifest = createAssistantMaterialManifest(store)
 
@@ -37,7 +38,7 @@ describe('assistant material manifest bridge', () => {
       {
         type: 'text',
         name: 'Text',
-        capabilities: { bindable: true, resizable: true },
+        capabilities: { resizable: true },
         binding: { kind: 'ordinary', primaryProp: 'content', formatEditor: { tabs: ['preset', 'custom'], defaultTab: 'preset' } },
         props: [{
           key: 'content',

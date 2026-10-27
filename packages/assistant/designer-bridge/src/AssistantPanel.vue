@@ -3,12 +3,14 @@ import type { AssistantMaterialManifest, AssistantPatchOperation, AssistantResul
 import type { AssistantPlugin } from '@easyink/assistant-plugins'
 import type { AssistantConversationStatus, AssistantStore } from '@easyink/assistant-store'
 import type { AssistantApiClient, AssistantLLMConfigService } from '@easyink/assistant-ui'
+import type { DesignerContext } from '@easyink/plugin-api/designer'
 import { AssistantWorkbench } from '@easyink/assistant-ui'
 import '@easyink/assistant-ui/index.css'
 
 type AssistantTranslate = (key: string) => string
 
 const props = defineProps<{
+  context: DesignerContext
   open: boolean
   endpoint?: string
   apiClient?: AssistantApiClient
@@ -45,43 +47,41 @@ function tr(key: string): string {
 </script>
 
 <template>
-  <Teleport to="body">
-    <Transition name="easyink-assistant-drawer">
-      <div v-if="open" class="easyink-assistant-drawer" role="dialog" aria-modal="true" :aria-label="tr('designer.assistant.dialog.label')">
-        <div class="easyink-assistant-drawer__scrim" @click="$emit('requestClose')" />
-        <aside class="easyink-assistant-drawer__panel">
-          <button
-            type="button"
-            class="easyink-assistant-drawer__close"
-            :aria-label="tr('designer.assistant.action.close')"
-            @click="$emit('requestClose')"
-          >
-            <svg viewBox="0 0 16 16" width="16" height="16">
-              <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-            </svg>
-          </button>
-          <AssistantWorkbench
-            class="easyink-assistant-drawer__workbench"
-            :endpoint="endpoint"
-            :api-client="apiClient"
-            :current-schema="currentSchema"
-            :material-manifest="materialManifest"
-            :store="store"
-            :conversation-id="conversationId"
-            :llm-config="llmConfig"
-            :plugins="plugins"
-            :t="t"
-            @apply="$emit('apply', $event)"
-            @apply-patch="$emit('applyPatch', $event)"
-            @apply-selected-patch="$emit('applySelectedPatch', $event)"
-            @apply-data-source="$emit('applyDataSource', $event)"
-            @rollback="$emit('rollback')"
-            @status-change="$emit('statusChange', $event)"
-          />
-        </aside>
-      </div>
-    </Transition>
-  </Teleport>
+  <Transition name="easyink-assistant-drawer">
+    <div v-if="open" class="easyink-assistant-drawer" role="dialog" aria-modal="true" :aria-label="tr('designer.assistant.dialog.label')">
+      <div class="easyink-assistant-drawer__scrim" @click="$emit('requestClose')" />
+      <aside class="easyink-assistant-drawer__panel">
+        <button
+          type="button"
+          class="easyink-assistant-drawer__close"
+          :aria-label="tr('designer.assistant.action.close')"
+          @click="$emit('requestClose')"
+        >
+          <svg viewBox="0 0 16 16" width="16" height="16">
+            <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+        </button>
+        <AssistantWorkbench
+          class="easyink-assistant-drawer__workbench"
+          :endpoint="endpoint"
+          :api-client="apiClient"
+          :current-schema="currentSchema"
+          :material-manifest="materialManifest"
+          :store="store"
+          :conversation-id="conversationId"
+          :llm-config="llmConfig"
+          :plugins="plugins"
+          :t="t"
+          @apply="$emit('apply', $event)"
+          @apply-patch="$emit('applyPatch', $event)"
+          @apply-selected-patch="$emit('applySelectedPatch', $event)"
+          @apply-data-source="$emit('applyDataSource', $event)"
+          @rollback="$emit('rollback')"
+          @status-change="$emit('statusChange', $event)"
+        />
+      </aside>
+    </div>
+  </Transition>
 </template>
 
 <style scoped lang="scss">

@@ -29,7 +29,7 @@ export interface LodopPrinter {
   readonly client: LodopClientLike
   readonly viewer: ManagedPrintViewer
   print: (input: LodopPrintRequest) => Promise<void>
-  destroy: () => void
+  destroy: ManagedPrintViewer['destroy']
 }
 
 /**
@@ -62,7 +62,7 @@ export function createLodopPrinter(options: LodopPrinterOptions): LodopPrinter {
       }))
     },
     destroy() {
-      viewer.destroy()
+      return viewer.destroy()
     },
   }
 }

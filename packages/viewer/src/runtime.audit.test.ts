@@ -1,9 +1,9 @@
 import type { DocumentSchema, MaterialNode, TableNode } from '@easyink/schema'
-import type { ViewerRuntime } from './runtime'
 import type { ViewerDiagnosticEvent } from './types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyBindingsToProps, projectBindings } from './binding-projector'
-import { createIframeViewerHost, createViewer } from './index'
+import { createIframeViewerHost } from './index'
+import { createBuiltinViewer as createViewer } from './test-fixtures/builtin-viewer'
 
 function textNode(id: string, binding?: MaterialNode['binding'], props: Record<string, unknown> = {}): MaterialNode {
   return {
@@ -97,7 +97,7 @@ describe('viewer audit risk regressions', () => {
       value: printSpy,
     })
 
-    const viewer = createViewer({ iframe })
+    const viewer = await createViewer({ iframe })
     await viewer.open({ schema: fixedSchema([textNode('title', undefined, { content: 'Iframe' })]) })
 
     expect(iframe.contentDocument!.querySelector('.ei-viewer-page')).not.toBeNull()
@@ -113,7 +113,10 @@ describe('viewer audit risk regressions', () => {
   it('injects loaded fonts into an iframe host document', async () => {
     const iframe = document.createElement('iframe')
     document.body.appendChild(iframe)
-    const viewer = createViewer({
+    // Structural target selection only; actual FontFace readiness is checked in Chromium.
+    const load = vi.fn(async () => [{ status: 'loaded' } as FontFace])
+    Object.defineProperty(iframe.contentDocument!, 'fonts', { configurable: true, value: { load } })
+    const viewer = await createViewer({
       iframe,
       fontProvider: {
         async listFonts() {
@@ -125,27 +128,35 @@ describe('viewer audit risk regressions', () => {
       },
     })
 
-    await viewer.open({ schema: fixedSchema([textNode('fonted', undefined, { content: 'Fonted', fontFamily: 'IframeFont' })]) })
-
-    expect(iframe.contentDocument!.head.querySelector('style')?.textContent).toContain('IframeFont')
-    expect(document.head.textContent).not.toContain('IframeFont')
+    try {
+      await viewer.open({ schema: fixedSchema([textNode('fonted', undefined, { content: 'Fonted', fontFamily: 'IframeFont' })]) })
+      const rule = iframe.contentDocument!.head.querySelector('[data-easyink-font]')
+      expect(rule?.textContent).toContain('IframeFont')
+      expect(rule?.textContent).toContain('ei-viewer-font-')
+      expect(load.mock.contexts).toEqual([iframe.contentDocument!.fonts])
+      expect(document.head.textContent).not.toContain('IframeFont')
+    }
+    finally {
+      await viewer.destroy()
+    }
+    expect(iframe.contentDocument!.head.querySelector('[data-easyink-font]')).toBeNull()
   })
 
   it('accepts an explicit iframe host adapter', async () => {
     const iframe = document.createElement('iframe')
     document.body.appendChild(iframe)
     const host = createIframeViewerHost(iframe)
-    const viewer = createViewer({ host })
+    const viewer = await createViewer({ host })
 
     const result = await viewer.open({ schema: fixedSchema([textNode('hosted', undefined, { content: 'Host' })]) })
 
-    expect(result).toBeUndefined()
+    expect(result.status).toBe('completed')
     expect(host.document.querySelector('[data-element-id="hosted"]')).not.toBeNull()
   })
 
   it('resolves bindings from runtime data without data source descriptors', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
     const schema = fixedSchema([
       textNode('customer', { sourceId: 'customer', fieldPath: 'customer/name' }),
       textNode('total', { sourceId: 'order', sourceTag: 'order-tag', fieldPath: 'order/total' }),
@@ -165,9 +176,10 @@ describe('viewer audit risk regressions', () => {
 
   it('projects bound remote svg urls into the custom svg renderer', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
+    const replacements = vi.spyOn(Element.prototype, 'replaceWith')
 
-    await viewer.open({
+    const result = await viewer.open({
       schema: fixedSchema([
         svgNode('logo', { sourceId: 'brand', fieldPath: 'logoSvgUrl' }),
       ]),
@@ -176,15 +188,18 @@ describe('viewer audit risk regressions', () => {
       },
     })
 
-    const image = container.querySelector('[data-element-id="logo"] img')
-
-    expect(image).not.toBeNull()
-    expect(image?.getAttribute('src')).toBe('https://cdn.example.com/logo.svg?version=1&theme=dark')
+    const originalImage = replacements.mock.contexts.find((element): element is Element => element instanceof Element && element.tagName === 'IMG')
+    expect(originalImage?.getAttribute('src')).toBe('https://cdn.example.com/logo.svg?version=1&theme=dark')
+    if (result.status !== 'completed')
+      throw new Error('Expected completed resource fallback')
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'IMAGE_LOAD_FAILED', nodeId: 'logo' }))
+    expect(container.querySelector('[data-element-id="logo"] [data-resource-placeholder="image"]')).not.toBeNull()
+    await viewer.destroy()
   })
 
   it('projects bound svg text into the sanitized custom svg renderer', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
 
     await viewer.open({
       schema: fixedSchema([
@@ -204,7 +219,7 @@ describe('viewer audit risk regressions', () => {
 
   it('keeps root-shaped payloads when sourceId collides with a field name', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
 
     await viewer.open({
       schema: fixedSchema([
@@ -226,7 +241,7 @@ describe('viewer audit risk regressions', () => {
 
   it('renders unwrapped root payloads without descriptor field matching', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
 
     await viewer.open({
       schema: fixedSchema([
@@ -245,7 +260,7 @@ describe('viewer audit risk regressions', () => {
 
   it('resolves table-data collections from the runtime data root', async () => {
     const container = document.createElement('div')
-    const viewer = createViewer({ container })
+    const viewer = await createViewer({ container })
 
     await viewer.open({
       schema: fixedSchema([tableNode()]),
@@ -296,11 +311,13 @@ describe('viewer audit risk regressions', () => {
   })
 
   it('returns one thumbnail entry per rendered page', async () => {
-    const viewer = createViewer()
+    const viewer = await createViewer()
     await viewer.open({ schema: fixedSchema([textNode('title', undefined, { content: 'Thumb' })]) })
 
     const result = await viewer.render()
 
+    if (result.status !== 'completed')
+      throw new Error('Expected completed render')
     expect(result.thumbnails).toHaveLength(result.pages.length)
     expect(result.thumbnails[0]!.dataUrl).toMatch(/^data:image\/svg\+xml/)
   })
@@ -308,23 +325,17 @@ describe('viewer audit risk regressions', () => {
   it('emits diagnostics for font, export, print, and diagnostics hook failures', async () => {
     const container = document.createElement('div')
     const { diagnostics, onDiagnostic } = collectDiagnostics()
-    const viewer = createViewer({
+    const viewer = await createViewer({
       container,
       fontProvider: {
         async listFonts() {
           return []
         },
         async loadFont() {
-          return ''
+          throw new Error('font boom')
         },
       },
     })
-    const fontManager = viewer.fontManager as unknown as {
-      ensureFontLoaded: ViewerRuntime['fontManager']['ensureFontLoaded']
-    }
-    fontManager.ensureFontLoaded = async () => {
-      throw new Error('font boom')
-    }
 
     viewer.registerExporter({
       id: 'boom-export',
@@ -348,8 +359,8 @@ describe('viewer audit risk regressions', () => {
       schema: fixedSchema([textNode('fonted', undefined, { content: 'Fonted', fontFamily: 'MissingFont' })]),
       onDiagnostic,
     })
-    await viewer.exportDocument('pdf')
-    await viewer.print({ driverId: 'boom-print' })
+    await expect(viewer.exportDocument('pdf')).rejects.toThrow('prepare boom')
+    await expect(viewer.print({ driverId: 'boom-print' })).rejects.toThrow('print boom')
     await Promise.resolve()
 
     expect(diagnostics.some(d => d.code === 'FONT_LOAD_FAILED')).toBe(true)

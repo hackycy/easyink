@@ -1,4 +1,4 @@
-import type { ChartScatterPoint } from '@easyink/material-chart-kernel'
+import type { ChartScatterPoint } from '@easyink/material-chart-kernel/viewer'
 import type { MaterialNode } from '@easyink/schema'
 import type { ChartScatterProps } from './schema'
 import { resolveMaterialDataContract } from '@easyink/core'

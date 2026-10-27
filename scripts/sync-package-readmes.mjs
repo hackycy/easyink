@@ -16,6 +16,7 @@ async function main() {
   const runtimeOptions = parseRuntimeOptions(process.argv.slice(2))
 
   const rootPackageJson = await readJson(resolve(repoRoot, 'package.json'))
+  const docsSeries = (await readJson(resolve(repoRoot, 'docs/.vitepress/series.json'))).id
   const repositoryUrl = resolveRepositoryUrl(rootPackageJson)
   const packageJsonFiles = await collectPackageJsonFiles(packagesRoot)
 
@@ -44,6 +45,7 @@ async function main() {
     const readmePath = resolve(packageDir, 'README.md')
     const readmeContent = buildReadme({
       description: packageJson.description,
+      docsSeries,
       packageName: packageJson.name,
       repositoryUrl,
     })
@@ -158,12 +160,12 @@ function escapeRegExp(value) {
   return value.replace(/[|\\{}()[\]^$+?.]/g, '\\$&')
 }
 
-function buildReadme({ packageName, description, repositoryUrl }) {
+function buildReadme({ packageName, description, repositoryUrl, docsSeries }) {
   const npmPackageName = encodeURIComponent(packageName)
   const npmUrl = `https://www.npmjs.com/package/${npmPackageName}`
   const versionBadgeUrl = `https://img.shields.io/npm/v/${npmPackageName}?logo=npm`
   const downloadsBadgeUrl = `https://img.shields.io/npm/dm/${npmPackageName}?logo=npm`
-  const documentationUrl = `https://hackycy.github.io/easyink/docs/`
+  const documentationUrl = `https://hackycy.github.io/easyink/docs/${docsSeries}/`
 
   return [
     `# ${packageName}`,
@@ -172,6 +174,7 @@ function buildReadme({ packageName, description, repositoryUrl }) {
     '',
     description.trim(),
     '',
+    ...buildUsage(packageName),
     '## Documentation',
     '',
     `- [Docs](${documentationUrl})`,
@@ -181,6 +184,34 @@ function buildReadme({ packageName, description, repositoryUrl }) {
     `[MIT](${repositoryUrl}/blob/main/LICENSE) © 2025-present hackycy`,
     '',
   ].join('\n')
+}
+
+function buildUsage(packageName) {
+  if (packageName !== '@easyink/builtin')
+    return []
+
+  return [
+    '## Usage',
+    '',
+    'Choose a complete material set by host and subpath:',
+    '',
+    '```ts',
+    'import { materials as designerMaterials } from \'@easyink/builtin/all/designer\'',
+    'import { materials as viewerMaterials } from \'@easyink/builtin/all/viewer\'',
+    'import { DesignerStore } from \'@easyink/designer\'',
+    'import { createViewer } from \'@easyink/viewer\'',
+    '',
+    'const designer = await DesignerStore.create({ materials: designerMaterials })',
+    'const viewer = await createViewer({ container, materials: viewerMaterials })',
+    '',
+    'await Promise.all([designer.destroy(), viewer.destroy()])',
+    '```',
+    '',
+    'Available subpaths: `@easyink/builtin/all/designer`, `@easyink/builtin/basic/designer`, `@easyink/builtin/all/viewer`, `@easyink/builtin/basic/viewer`, and `@easyink/builtin/none`.',
+    '',
+    'Every public entry exports only `materials`. Choose the array while creating the host; there is no post-creation registration API.',
+    '',
+  ]
 }
 
 function resolveRepositoryUrl(rootPackageJson) {

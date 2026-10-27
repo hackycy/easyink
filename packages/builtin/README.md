@@ -6,27 +6,27 @@ Internal built-in material registry for EasyInk runtimes
 
 ## Usage
 
-Choose a material set by subpath:
+Choose a complete material set by host and subpath:
 
 ```ts
-import { builtinDesignerMaterialBundle, registerBuiltinViewerMaterials } from '@easyink/builtin/all'
+import { materials as designerMaterials } from '@easyink/builtin/all/designer'
+import { materials as viewerMaterials } from '@easyink/builtin/all/viewer'
+import { DesignerStore } from '@easyink/designer'
+import { createViewer } from '@easyink/viewer'
 
-const runtimeConfig = {
-  materials: {
-    bundles: [builtinDesignerMaterialBundle],
-  },
-}
+const designer = await DesignerStore.create({ materials: designerMaterials })
+const viewer = await createViewer({ container, materials: viewerMaterials })
 
-registerBuiltinViewerMaterials((type, binding, extension) => {
-  viewer.registerMaterial(type, binding, extension)
-})
+await Promise.all([designer.destroy(), viewer.destroy()])
 ```
 
-Available subpaths: `@easyink/builtin/all`, `@easyink/builtin/basic`, `@easyink/builtin/none`.
+Available subpaths: `@easyink/builtin/all/designer`, `@easyink/builtin/basic/designer`, `@easyink/builtin/all/viewer`, `@easyink/builtin/basic/viewer`, and `@easyink/builtin/none`.
+
+Every public entry exports only `materials`. Choose the array while creating the host; there is no post-creation registration API.
 
 ## Documentation
 
-- [Docs](https://hackycy.github.io/easyink/docs/)
+- [Docs](https://hackycy.github.io/easyink/docs/0.1/)
 
 ## License
 

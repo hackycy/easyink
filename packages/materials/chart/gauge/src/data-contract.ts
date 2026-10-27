@@ -1,4 +1,4 @@
-import type { ChartGaugeValuePoint } from '@easyink/material-chart-kernel'
+import type { ChartGaugeValuePoint } from '@easyink/material-chart-kernel/viewer'
 import type { MaterialNode } from '@easyink/schema'
 import type { ChartGaugeProps } from './schema'
 import { resolveMaterialDataContract } from '@easyink/core'

@@ -12,6 +12,8 @@
   "exports": {
     ".": "./dist/index.mjs",
     "./full": "./dist/full.mjs",
+    "./full-viewer": "./dist/full-viewer.mjs",
+    "./viewer": "./dist/viewer.mjs",
     "./package.json": "./package.json"
   },
   "types": "./dist/index.d.mts",

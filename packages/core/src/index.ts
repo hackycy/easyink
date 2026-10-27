@@ -139,7 +139,7 @@ export type { CommandRecord, InternalHooks, MaterialRenderPayload, PagePlanningC
 
 export { createFragmentFromNode, readNodeFlowConstraints, readNodeRepeatScope } from './layout-plan'
 
-export type { FlowBreakConstraints, LayoutDiagnostic, LayoutDocument, LayoutFragment, OutputPagePlan } from './layout-plan'
+export type { FlowBreakConstraints, LayoutDiagnostic, LayoutDocument, LayoutFragment, LayoutRuntimeRef, OutputPagePlan } from './layout-plan'
 export { runLayoutPipeline } from './layout-strategy'
 
 export type { RunLayoutPipelineOptions } from './layout-strategy'
@@ -184,17 +184,13 @@ export type {
   DatasourceDropHandler,
   DatasourceDropZone,
   DatasourceFieldInfo,
-  LazyMaterialExtensionFactory,
   MaterialControlPolicy,
   MaterialControlPolicyContext,
   MaterialControlState,
   MaterialControlStateKind,
-  MaterialDesignerExtension,
   MaterialDesignerRenderContext,
   MaterialDesignerRenderContextSignal,
   MaterialDesignerRenderPageContext,
-  MaterialExtensionContext,
-  MaterialExtensionFactory,
   MaterialGeometryControlKey,
   MaterialPropsControlPolicy,
   MaterialResizeAdapter,
@@ -219,7 +215,6 @@ export type {
   FragmentPaginateInput,
   FragmentPaginateResult,
   FragmentPaginator,
-  MaterialViewerExtension,
   TrustedViewerHtml,
   TrustedViewerHtmlSource,
   ViewerMeasureContext,

@@ -1,0 +1,165 @@
+<script setup lang="ts">
+import type { FontProvider } from '@easyink/core'
+import type { DataSourceDescriptor } from '@easyink/datasource'
+import type { DocumentSchema, DocumentSchemaInput } from '@easyink/schema'
+import type { DesignerRuntimeConfig } from '../runtime-config'
+import type { DesignerStore } from '../store/designer-store'
+import type { DesignerInteractionProvider, LocaleMessages, PreferenceProvider, StatusBarState, TemplateAutoSaveOptions } from '../types'
+import { builtinLocales } from '@easyink/locales'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { provideDesignerStore } from '../composables'
+import { useTemplateAutoSave } from '../composables/use-template-autosave'
+import { useWorkbenchPersistence } from '../composables/use-workbench-persistence'
+import CanvasWorkspace from './CanvasWorkspace.vue'
+import DesignerConfirmHost from './DesignerConfirmHost.vue'
+import DesignerExtensionOverlays from './DesignerExtensionOverlays.vue'
+import StatusBar from './StatusBar.vue'
+import TopBarB from './TopBarB.vue'
+
+const props = defineProps<{
+  schema?: DocumentSchemaInput
+  dataSources?: DataSourceDescriptor[]
+  fontProvider?: FontProvider
+  preferenceProvider?: PreferenceProvider
+  autoSave?: TemplateAutoSaveOptions
+  locale?: LocaleMessages
+  localeCode?: string
+  store: DesignerStore
+  interactionProvider?: DesignerInteractionProvider
+  runtimeConfig?: DesignerRuntimeConfig
+}>()
+
+const emit = defineEmits<{
+  'update:schema': [schema: DocumentSchema]
+}>()
+
+const designerRootRef = ref<HTMLElement | null>(null)
+const store = props.store
+if (store.schema !== props.schema)
+  emit('update:schema', store.schema)
+provideDesignerStore(store)
+
+// Wire workbench persistence (debounced save on state changes + flush on unmount)
+if (props.preferenceProvider) {
+  useWorkbenchPersistence(store.workbench, props.preferenceProvider)
+}
+
+const templateAutoSave = useTemplateAutoSave(store, () => props.autoSave)
+
+watch(() => props.schema, (newSchema) => {
+  if (newSchema !== store.schema) {
+    store.setSchema(newSchema)
+    templateAutoSave.markSchemaLoaded()
+  }
+})
+
+// Sync schema replacement back to the parent so `v-model:schema` reflects
+// programmatic mutations (e.g. AI generation calling `store.setSchema`).
+// In-place mutations of the same object reach the parent automatically
+// because props are passed by reference; this watcher only fires when the
+// internal _schema is reassigned to a new object identity.
+watch(() => store.schema, (newSchema) => {
+  if (newSchema !== props.schema) {
+    emit('update:schema', newSchema)
+  }
+})
+
+watch([() => props.locale, () => props.localeCode], ([newLocale]) => {
+  store.setLocale(newLocale, resolveLocaleCode(newLocale))
+})
+
+function resolveLocaleCode(locale?: LocaleMessages): string | undefined {
+  if (props.localeCode)
+    return props.localeCode
+  for (const [code, messages] of Object.entries(builtinLocales)) {
+    if (messages === locale)
+      return code
+  }
+  return undefined
+}
+
+watch(() => props.interactionProvider, (newProvider) => {
+  store.setInteractionProvider(newProvider)
+})
+
+watch(() => props.fontProvider, (newProvider) => {
+  store.setFontProvider(newProvider)
+})
+
+function getFocusStateFromTarget(target: EventTarget | null): StatusBarState['focus'] {
+  if (!(target instanceof Element))
+    return 'none'
+
+  if (target.closest('.ei-dialog, .ei-dialog-overlay'))
+    return 'dialog'
+
+  const root = designerRootRef.value
+  if (!root || !root.contains(target))
+    return 'none'
+
+  if (target.closest('.ei-workspace-window, .ei-topbar-b'))
+    return 'panel'
+
+  if (target.closest('.ei-canvas-scroll, .ei-canvas-page, .ei-canvas-rulers'))
+    return 'canvas'
+
+  return 'none'
+}
+
+function syncFocusState(target: EventTarget | null): void {
+  store.setFocusState(getFocusStateFromTarget(target))
+}
+
+function handleGlobalPointerDown(event: PointerEvent): void {
+  syncFocusState(event.target)
+}
+
+function handleGlobalFocusIn(event: FocusEvent): void {
+  const focusState = getFocusStateFromTarget(event.target)
+  if (focusState !== 'none')
+    store.setFocusState(focusState)
+}
+
+function handleWindowBlur(): void {
+  store.setFocusState('none')
+}
+
+onMounted(() => {
+  store.setFontTarget(designerRootRef.value?.ownerDocument ?? document)
+  window.addEventListener('pointerdown', handleGlobalPointerDown, true)
+  window.addEventListener('focusin', handleGlobalFocusIn, true)
+  window.addEventListener('blur', handleWindowBlur)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pointerdown', handleGlobalPointerDown, true)
+  window.removeEventListener('focusin', handleGlobalFocusIn, true)
+  window.removeEventListener('blur', handleWindowBlur)
+})
+</script>
+
+<template>
+  <div ref="designerRootRef" class="ei-designer">
+    <slot name="topbar" />
+    <TopBarB />
+    <CanvasWorkspace />
+    <StatusBar />
+    <DesignerConfirmHost />
+
+    <DesignerExtensionOverlays />
+  </div>
+</template>
+
+<style scoped lang="scss">
+.ei-designer {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: var(--ei-bg, #fff);
+  color: var(--ei-text, #333);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden;
+  position: relative;
+}
+</style>

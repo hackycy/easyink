@@ -1,5 +1,5 @@
 ---
-description: '@easyink/designer 提供完整的 Vue 设计工作台组件，支持画布编辑、物料拖放、数据绑定、撤销重做、自动保存和 Contribution 扩展。'
+description: '@easyink/designer 提供完整的 Vue 设计工作台组件，支持画布编辑、物料拖放、数据绑定、撤销重做、自动保存和独立 Designer 扩展。'
 ---
 
 # Designer {#designer}
@@ -11,31 +11,29 @@ description: '@easyink/designer 提供完整的 Vue 设计工作台组件，支�
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue'
-import { builtinDesignerMaterialBundle } from '@easyink/builtin/all'
+import { materials } from '@easyink/builtin/all/designer'
 import { EasyInkDesigner, createLocalStoragePreferenceProvider } from '@easyink/designer'
 import { zhCN } from '@easyink/designer/locale'
 import '@easyink/designer/index.css'
 
 const schema = ref({})
 const preferenceProvider = createLocalStoragePreferenceProvider()
-const runtimeConfig = {
-  materials: {
-    bundles: [builtinDesignerMaterialBundle],
-  },
-}
+const designerMaterials = materials
 </script>
 
 <template>
   <EasyInkDesigner
     v-model:schema="schema"
     :locale="zhCN"
+    :materials="designerMaterials"
     :preference-provider="preferenceProvider"
-    :runtime-config="runtimeConfig"
   />
 </template>
 ```
 
 这段代码已经能让 Designer 跑起来，并注册全部内置设计态物料。`schema` 可以先传空对象，组件内部会在进入 `DesignerStore` 前把它归一化成完整模板。
+
+组件 ref 提供 `destroy()`，返回可等待且重复调用共享的清理 Promise。卸载会触发同一清理流程；需要确认资源已经释放的宿主，在卸载前保留该 Promise 并等待它。
 
 ## 常用输入 {#common-props}
 
@@ -49,27 +47,24 @@ const runtimeConfig = {
 | `preferenceProvider` | 工作台偏好持久化 |
 | `autoSave` | 模板自动保存 |
 | `fontProvider` | 字体目录和字体加载器 |
-| `runtimeConfig` | 配置物料包、纸张预设和新建模板默认值 |
-| `setupStore` | 初始化 store 后做自定义注册 |
-| `contributions` | 注册面板、工具栏动作和命令扩展 |
+| `materials` | 创建时选择的完整 Designer 物料声明 |
+| `runtimeConfig` | 配置纸张预设和新建模板默认值 |
+| `extensions` | 创建时选择的独立 Designer 命令和 UI 扩展 |
 | `interactionProvider` | 接管确认、资产选择、上传和文件读取这类交互 |
 
 如果你只是做业务接入，`schema`、`dataSources`、`locale`、`preferenceProvider` 和 `autoSave` 最常用。剩下几项通常在你开始做二次开发时才会用到。
 
 ## 运行时配置 {#runtime-config}
 
-如果你想注册物料包，或者给纸张下拉框加企业纸张，用 `runtimeConfig`。
+如果你想选择物料，或者给纸张下拉框加企业纸张，分别使用 `materials` 和 `runtimeConfig`。
 
 先看一个常见配置：
 
 ```ts
 import type { DesignerRuntimeConfig } from '@easyink/designer'
-import { builtinDesignerMaterialBundle } from '@easyink/builtin/basic'
+import { materials } from '@easyink/builtin/basic/designer'
 
 const runtimeConfig: DesignerRuntimeConfig = {
-  materials: {
-    bundles: [builtinDesignerMaterialBundle],
-  },
   paper: {
     mode: 'append',
     presets: [
@@ -79,91 +74,66 @@ const runtimeConfig: DesignerRuntimeConfig = {
     defaultPreset: '企业标签 80x50',
   },
 }
+const designerMaterials = materials
 ```
 
 ```vue
 <EasyInkDesigner
   v-model:schema="schema"
+  :materials="designerMaterials"
   :runtime-config="runtimeConfig"
 />
 ```
 
 上面这段配置做了两件事：
 
-- 物料栏注册内置基础物料。
+- 物料栏选择内置基础物料。
 - 在页面属性的纸张预设里追加两种企业纸张，并把新建空模板的默认纸张设为 `企业标签 80x50`。
 
 你可能已经有疑问了：`defaultPreset` 会不会覆盖已有模板？不会。它只在输入 schema 没有显式 `page.width` / `page.height` 时生效。如果你打开的是已有模板，模板自己的页面尺寸优先。
 
 ## 内置物料范围 {#builtin-material-set}
 
-内置物料由 `@easyink/builtin` 提供。Designer 不会自动内置它；推荐从公开子路径选择一个集合，再把它作为普通 `DesignerMaterialBundle` 传给 `runtimeConfig.materials.bundles`。根入口 `@easyink/builtin` 保留 all 集合兼容导出，也提供 all/basic/none 的显式别名，但业务接入通常直接用下面的子路径更清晰。
+内置物料由 `@easyink/builtin` 提供。Designer 不会自动内置它；在组件创建时通过 `materials` 选择完整 Designer 物料集合。业务接入直接使用宿主对应的公开子路径。
 
 ```ts
-import { builtinDesignerMaterialBundle } from '@easyink/builtin/all'
+import { materials } from '@easyink/builtin/all/designer'
 
-const runtimeConfig = {
-  materials: {
-    bundles: [builtinDesignerMaterialBundle],
-  },
-}
+const designerMaterials = materials
 ```
 
 可选子路径有三个：
 
 | 子路径 | 注册内容 | 适合场景 |
 | --- | --- | --- |
-| `@easyink/builtin/all` | 全部内置物料 | 需要完整设计能力 |
-| `@easyink/builtin/basic` | 内置基础集合：排除图表和签名，保留文本、图片、线条、矩形、数据表格、SVG 等常用物料 | 需要常用编辑能力，但不想引入图表和签名 |
-| `@easyink/builtin/none` | 空集合 | 你要完全使用自己的物料包，同时保留统一接入形态 |
+| `@easyink/builtin/all/designer` | 全部内置 Designer 物料 | 需要完整设计能力 |
+| `@easyink/builtin/basic/designer` | 内置基础集合：排除图表和签名，保留文本、图片、线条、矩形、数据表格、SVG 等常用物料 | 需要常用编辑能力，但不想引入图表和签名 |
+| `@easyink/builtin/none` | 空集合 | 你要完全使用自己的物料，同时保留统一接入形态 |
 
 这里有两个概念容易混在一起：
 
-- `@easyink/builtin/basic` 控制的是“注册哪些内置物料能力”。
-- 物料栏里的“基础”“数据”“图表”等分组，来自物料 bundle 里的 `catalogs`。
+- `@easyink/builtin/basic/designer` 控制的是“选择哪些内置 Designer 物料能力”。
+- 物料栏里的“基础”“数据”“图表”等分组，来自每个物料的 `ui.palette` 声明。
 
-也就是说，`basic` 不是物料面板分类 API。它只是一个内置物料范围枚举；真正决定物料出现在哪个分类、分类标题怎么翻译、以及分类顺序的，是 `catalogs`。
+也就是说，`basic/designer` 不是物料面板分类 API。它只是一个内置物料范围；真正决定物料出现在哪个分类、分类标题怎么翻译、以及分类顺序的，是 `ui.palette`。
 
-如果你不传内置 bundle，画布仍然能打开，但没有可拖拽的内置物料。这个模式通常要配合自定义物料 bundle 使用：
-
-```ts
-const runtimeConfig = {
-  materials: {
-    bundles: [enterpriseMaterialBundle],
-  },
-}
-```
-
-关于自定义物料 bundle 怎么写，可以继续看 [自定义物料开发](/advanced/custom-materials)。
-
-如果你要新增企业自己的分类，也是在自定义 bundle 里追加 `catalogs`：
+如果你传入空数组，画布仍然能打开，但没有可拖拽的内置物料。这个模式通常要配合自定义物料使用：
 
 ```ts
-const enterpriseMaterialBundle = {
-  materials: [
-    // 你的物料定义
-  ],
-  catalogs: [
-    {
-      id: 'enterprise',
-      label: 'materials.catalog.enterprise',
-      order: 60,
-      items: [{ type: 'price-tag' }],
-    },
-  ],
-  localeMessages: {
-    messages: {
-      materials: {
-        catalog: {
-          enterprise: '企业物料',
-        },
-      },
-    },
-  },
-}
+const designerMaterials = [...enterpriseMaterials]
 ```
 
-`id` 是分类的稳定标识，`label` 是翻译 key，`order` 决定分类顺序。你可以复用内置的 `basic`、`data`、`chart`、`svg`、`utility` 来扩展已有分类，也可以用自己的 `enterprise`、`label`、`ticket` 这类业务分类。
+关于自定义物料怎么写，可以继续看 [自定义物料开发](/advanced/custom-materials)。
+
+物料自己的 `ui.palette` 声明会进入对应分类：
+
+```ts
+import { priceTagDesigner } from './materials/price-tag/designer'
+
+const enterpriseMaterials = [priceTagDesigner]
+```
+
+`ui.palette[].group` 是分类的稳定标识，`label` 是翻译 key，`order` 决定分类顺序。你可以复用内置的 `basic`、`data`、`chart`、`svg`、`utility`，也可以使用自己的业务分类。
 
 ## 纸张预设 {#paper-presets}
 
@@ -306,43 +276,21 @@ const fontProvider: FontProvider = {
 
 Designer 会自己负责加载字体和注入 `@font-face`。宿主不用再手写一套重复的注入逻辑。
 
-## `setupStore` 用途 {#setup-store}
+## 独立 Designer 扩展 {#contributions}
 
-当你需要在初始化时做一次注册或定制，就可以用 `setupStore`。
-
-最常见的场景是注册自定义物料，或者在 store 初始化后接入自己的扩展逻辑。这个回调会在内置物料注册、`fontProvider` 设置之后执行。
-
-```ts
-import type { DesignerStore } from '@easyink/designer'
-
-function setupStore(store: DesignerStore) {
-  console.log(store.schema.unit)
-}
-```
+如果你要挂 overlay、工具栏按钮或命令，用 `extensions`。扩展声明通过 `@easyink/plugin-api/ui` 的 `DesignerExtension` 提供；物料选择使用 `materials`，纸张与模板默认值使用 `runtimeConfig`。
 
 ```vue
 <EasyInkDesigner
   v-model:schema="schema"
-  :setup-store="setupStore"
+  :materials="designerMaterials"
+  :extensions="extensions"
 />
 ```
 
-这已经属于进阶能力了。如果你还没到这一层，先把 Designer 跑顺就好。
+框架在创建时安装声明，并为每个命令和 UI 挂载提供受控 context。组件以 `ready` / `error` 反馈创建结果；更换物料或扩展集合需要重新创建宿主。
 
-## Contribution 扩展 {#contributions}
-
-如果你要挂面板、工具栏按钮或命令，用 `contributions`。
-
-```vue
-<EasyInkDesigner
-  v-model:schema="schema"
-  :contributions="contributions"
-/>
-```
-
-`contributions` 会交给内部的 `ContributionRegistry` 激活。它和 `setupStore` 的边界不一样：`setupStore` 适合直接操作 store 做注册，`contributions` 适合把面板、工具栏动作和命令作为一组扩展交给 Designer。
-
-完整写法可以继续看 [贡献扩展开发](/advanced/contributions)。
+完整写法可以继续看 [Designer 扩展开发](/advanced/contributions)。
 
 ## 宿主交互接管 {#interaction-provider}
 
@@ -474,7 +422,7 @@ Designer 还提供一个顶栏插槽：
 </EasyInkDesigner>
 ```
 
-如果你需要的不是简单插槽，而是按钮、面板、命令和诊断订阅，那就继续往 [贡献扩展开发](/advanced/contributions) 看。
+如果你需要按钮、面板、命令和诊断上报，可以继续看 [Designer 扩展开发](/advanced/contributions)。
 
 ## 样式导入 {#styles}
 

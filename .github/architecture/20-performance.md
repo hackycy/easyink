@@ -9,7 +9,7 @@ v1 不做激进的性能优化，但在架构层面为以下优化预留口子�
 | **渲染缓存** | Viewer 渲染管线的 `beforeMaterialRender` 等 Hook 可插入缓存层 | 大量静态元素 |
 | **Web Worker** | 布局测量或大数据预处理可移入 Worker | 大模板测量、业务侧装配 |
 | **DOM 复用** | Viewer 页面层支持增量刷新而非全量替换 | 频繁数据变化 |
-| **Designer 物料懒加载** | `DesignerMaterialRegistration.lazyFactory` 只延迟加载 `MaterialDesignerExtension` | 重型设计态渲染器、全量图表库、复杂代码编辑器 |
+| **Designer 物料懒加载** | `DesignerMaterial.loadRenderer` 只延迟加载 `DesignerRenderInstance` | 重型设计态渲染器、全量图表库、复杂代码编辑器 |
 
 ## 20.2 基本性能目标
 
@@ -35,16 +35,9 @@ v1 不做激进的性能优化，但在架构层面为以下优化预留口子�
 
 ## 20.4 设计器物料懒加载
 
-Designer 允许物料注册 `lazyFactory?: LazyMaterialExtensionFactory`。它只延迟加载设计态 `MaterialDesignerExtension` 本体；物料元数据仍必须同步注册，包括 `type`、`name`、`icon`、`category`、`capabilities`、`binding`、`createDefaultNode`、`propSchemas`、`localeMessages` 和 `aiDescriptor`。
+Designer 完整物料的 `loadRenderer` 只延迟重型设计态实现。共享模型、属性、palette、locale 和 AI 在创建时完整可用，目录和 Assistant 不依赖 renderer chunk。
 
-这样物料面板、属性面板、数据绑定面板和 Assistant manifest 可以在初始加载时完整工作，而 ECharts 全量包等重型设计态代码只在画布真正需要渲染该物料时加载。
-
-运行时规则：
-
-- `MaterialRegistry.getDesignerExtension(type)` 遇到懒加载物料时立即返回内置 loading extension，并异步执行 loader。
-- loader 成功后 registry 缓存同步 factory，DesignerStore 递增 `materialExtensionRevision`，画布内容重新 mount。
-- loader 失败时写入 Designer diagnostics；Schema 和目录注册不回滚。
-- 内置 Viewer 不采用同一路懒加载策略，Viewer 注册仍应在 `viewer.registerMaterial()` 阶段同步完成，以保证预览、打印和导出路径可预测。
+Store 的 `getDesignerExtension(type)` 在加载时返回 loading 实例。Host consumer 执行受管 loader，并只缓存有效代次的 renderer 实例；成功后更新 `materialExtensionRevision` 使画布重挂载。运行加载失败记录局部诊断，保留 Schema 和声明；销毁后迟到结果不发布。Viewer 的内置实现按所选完整集合静态引用；声明同样允许受管 loader，应用创建后不补注册。
 
 使用边界：
 

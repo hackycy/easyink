@@ -435,6 +435,9 @@ importers:
       '@easyink/icons':
         specifier: workspace:*
         version: link:../../icons
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../plugin-api
       '@easyink/schema':
         specifier: workspace:*
         version: link:../../schema
@@ -746,6 +749,9 @@ importers:
       '@easyink/material-text':
         specifier: workspace:*
         version: link:../materials/text
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
       '@easyink/schema':
         specifier: workspace:*
         version: link:../schema
@@ -788,6 +794,12 @@ importers:
       '@easyink/locales':
         specifier: workspace:*
         version: link:../locales
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
+      '@easyink/plugin-runtime':
+        specifier: workspace:*
+        version: link:../plugin-runtime
       '@easyink/prop-schemas':
         specifier: workspace:*
         version: link:../prop-schemas
@@ -806,6 +818,16 @@ importers:
       vue:
         specifier: catalog:framework
         version: 3.5.31(typescript@6.0.2)
+    devDependencies:
+      '@easyink/builtin':
+        specifier: workspace:*
+        version: link:../builtin
+      '@easyink/material-image':
+        specifier: workspace:*
+        version: link:../materials/image
+      '@easyink/material-text':
+        specifier: workspace:*
+        version: link:../materials/text
 
   packages/export/dom-capture:
     dependencies:
@@ -868,6 +890,12 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../icons
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../plugin-api
       '@easyink/prop-schemas':
         specifier: workspace:*
         version: link:../../prop-schemas
@@ -890,9 +918,15 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../../icons
       '@easyink/material-chart-kernel':
         specifier: workspace:*
         version: link:../kernel
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../../plugin-api
       '@easyink/schema':
         specifier: workspace:*
         version: link:../../../schema
@@ -905,9 +939,15 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../../icons
       '@easyink/material-chart-kernel':
         specifier: workspace:*
         version: link:../kernel
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../../plugin-api
       '@easyink/schema':
         specifier: workspace:*
         version: link:../../../schema
@@ -920,9 +960,15 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../../icons
       '@easyink/material-chart-kernel':
         specifier: workspace:*
         version: link:../kernel
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../../plugin-api
       '@easyink/schema':
         specifier: workspace:*
         version: link:../../../schema
@@ -941,9 +987,15 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../../icons
       '@easyink/material-chart-kernel':
         specifier: workspace:*
         version: link:../kernel
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../../plugin-api
       '@easyink/schema':
         specifier: workspace:*
         version: link:../../../schema
@@ -956,9 +1008,15 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../../icons
       '@easyink/material-chart-kernel':
         specifier: workspace:*
         version: link:../kernel
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../../plugin-api
       '@easyink/schema':
         specifier: workspace:*
         version: link:../../../schema
@@ -971,9 +1029,15 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../../icons
       '@easyink/material-chart-kernel':
         specifier: workspace:*
         version: link:../kernel
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../../plugin-api
       '@easyink/schema':
         specifier: workspace:*
         version: link:../../../schema
@@ -986,9 +1050,15 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../../icons
       '@easyink/material-chart-kernel':
         specifier: workspace:*
         version: link:../kernel
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../../plugin-api
       '@easyink/schema':
         specifier: workspace:*
         version: link:../../../schema
@@ -1001,6 +1071,12 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../icons
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../plugin-api
       '@easyink/prop-schemas':
         specifier: workspace:*
         version: link:../../prop-schemas
@@ -1019,6 +1095,9 @@ importers:
       '@easyink/icons':
         specifier: workspace:*
         version: link:../../icons
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../plugin-api
       '@easyink/prop-schemas':
         specifier: workspace:*
         version: link:../../prop-schemas
@@ -1037,6 +1116,12 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../icons
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../plugin-api
       '@easyink/prop-schemas':
         specifier: workspace:*
         version: link:../../prop-schemas
@@ -1052,6 +1137,12 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../icons
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../plugin-api
       '@easyink/prop-schemas':
         specifier: workspace:*
         version: link:../../prop-schemas
@@ -1067,6 +1158,12 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../icons
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../plugin-api
       '@easyink/prop-schemas':
         specifier: workspace:*
         version: link:../../prop-schemas
@@ -1082,6 +1179,12 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../icons
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../plugin-api
       '@easyink/prop-schemas':
         specifier: workspace:*
         version: link:../../prop-schemas
@@ -1097,6 +1200,12 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../icons
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../plugin-api
       '@easyink/prop-schemas':
         specifier: workspace:*
         version: link:../../prop-schemas
@@ -1115,6 +1224,12 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../icons
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../plugin-api
       '@easyink/schema':
         specifier: workspace:*
         version: link:../../schema
@@ -1127,6 +1242,12 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../icons
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../plugin-api
       '@easyink/prop-schemas':
         specifier: workspace:*
         version: link:../../prop-schemas
@@ -1142,6 +1263,12 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../icons
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../plugin-api
       '@easyink/prop-schemas':
         specifier: workspace:*
         version: link:../../prop-schemas
@@ -1160,6 +1287,9 @@ importers:
       '@easyink/icons':
         specifier: workspace:*
         version: link:../../icons
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../plugin-api
       '@easyink/prop-schemas':
         specifier: workspace:*
         version: link:../../prop-schemas
@@ -1181,6 +1311,12 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../../icons
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../../plugin-api
       '@easyink/schema':
         specifier: workspace:*
         version: link:../../../schema
@@ -1193,6 +1329,12 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../../icons
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../../plugin-api
       '@easyink/schema':
         specifier: workspace:*
         version: link:../../../schema
@@ -1205,6 +1347,12 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../../icons
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../../plugin-api
       '@easyink/schema':
         specifier: workspace:*
         version: link:../../../schema
@@ -1220,9 +1368,15 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../../icons
       '@easyink/material-table-kernel':
         specifier: workspace:*
         version: link:../kernel
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../../plugin-api
       '@easyink/prop-schemas':
         specifier: workspace:*
         version: link:../../../prop-schemas
@@ -1259,9 +1413,15 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../../icons
       '@easyink/material-table-kernel':
         specifier: workspace:*
         version: link:../kernel
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../../plugin-api
       '@easyink/prop-schemas':
         specifier: workspace:*
         version: link:../../../prop-schemas
@@ -1277,6 +1437,12 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../../core
+      '@easyink/icons':
+        specifier: workspace:*
+        version: link:../../icons
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../../plugin-api
       '@easyink/prop-schemas':
         specifier: workspace:*
         version: link:../../prop-schemas
@@ -1286,6 +1452,30 @@ importers:
       '@easyink/shared':
         specifier: workspace:*
         version: link:../../shared
+
+  packages/plugin-api:
+    dependencies:
+      '@easyink/core':
+        specifier: workspace:*
+        version: link:../core
+      '@easyink/datasource':
+        specifier: workspace:*
+        version: link:../datasource
+      '@easyink/schema':
+        specifier: workspace:*
+        version: link:../schema
+      '@easyink/shared':
+        specifier: workspace:*
+        version: link:../shared
+      vue:
+        specifier: catalog:framework
+        version: 3.5.31(typescript@6.0.2)
+
+  packages/plugin-runtime:
+    dependencies:
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
 
   packages/print/core:
     dependencies:
@@ -1422,12 +1612,28 @@ importers:
       '@easyink/core':
         specifier: workspace:*
         version: link:../core
+      '@easyink/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
+      '@easyink/plugin-runtime':
+        specifier: workspace:*
+        version: link:../plugin-runtime
       '@easyink/schema':
         specifier: workspace:*
         version: link:../schema
       '@easyink/shared':
         specifier: workspace:*
         version: link:../shared
+    devDependencies:
+      '@easyink/builtin':
+        specifier: workspace:*
+        version: link:../builtin
+      '@easyink/material-image':
+        specifier: workspace:*
+        version: link:../materials/image
+      '@easyink/material-text':
+        specifier: workspace:*
+        version: link:../materials/text
 
   playground:
     dependencies:

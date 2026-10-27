@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -77,6 +79,38 @@ func TestRenderPrintPDFHTMLAndEasyInkWithBrowser(t *testing.T) {
 	}
 }
 
+func TestRenderAwaitsRuntimeCleanupWithBrowser(t *testing.T) {
+	browserPath := os.Getenv("EASYINK_RENDER_BROWSER_PATH")
+	if browserPath == "" {
+		t.Fatal("EASYINK_RENDER_BROWSER_PATH is required for runtime cleanup acceptance")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	manager, err := browser.New(ctx, browserPath, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Shutdown()
+	result, err := render.NewService(manager).RenderPrintPDF(ctx, protocol.PrintPDFRequest{
+		RequestID: "runtime-cleanup",
+		Source: protocol.Source{Type: "html", HTML: `<!doctype html><html><body>Cleanup output<script>
+		window.__easyinkDestroy = () => new Promise(resolve => setTimeout(() => {
+		  console.error('cleanup-completed-marker'); resolve();
+		}, 150));
+		</script></body></html>`},
+		Wait: protocol.WaitOptions{Until: "load", TimeoutMs: 10000},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasPrefix(result.PDF, []byte("%PDF-")) {
+		t.Fatal("missing actual PDF output")
+	}
+	if !strings.Contains(strings.Join(result.Diagnostics.ConsoleErrors, "\n"), "cleanup-completed-marker") {
+		t.Fatalf("host returned before runtime cleanup settled: %+v", result.Diagnostics)
+	}
+}
+
 func TestRenderPrintPDFCapturesBrowserDiagnostics(t *testing.T) {
 	browserPath := os.Getenv("EASYINK_RENDER_BROWSER_PATH")
 	if browserPath == "" {
@@ -114,6 +148,62 @@ func TestRenderPrintPDFCapturesBrowserDiagnostics(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(result.Diagnostics.FailedRequests, "\n"), "localhost") {
 		t.Fatalf("expected localhost blocked request, got %#v", result.Diagnostics.FailedRequests)
+	}
+}
+
+func TestRenderPrintPDFLoadsLargeHTMLWithOfflineResources(t *testing.T) {
+	browserPath := os.Getenv("EASYINK_RENDER_BROWSER_PATH")
+	if browserPath == "" {
+		t.Skip("EASYINK_RENDER_BROWSER_PATH is not set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	manager, err := browser.New(ctx, browserPath, t.TempDir())
+	if err != nil {
+		t.Fatalf("start browser: %v", err)
+	}
+	defer manager.Shutdown()
+	service := render.NewService(manager)
+
+	result, err := service.RenderPrintPDF(ctx, protocol.PrintPDFRequest{
+		RequestID: "req-large-html",
+		Source: protocol.Source{
+			Type:    "html",
+			BaseURL: "https://easyink.local/resources/",
+			// The captured load marker verifies the default load wait, script execution and image decoding.
+			HTML: `<!doctype html><html><head></head><body onload="document.querySelector('main').textContent = 'Loaded 中文 ' + window.offlineMessage + ' ' + document.querySelector('img').naturalWidth + ' ' + window.isSecureContext + ' ' + typeof crypto.randomUUID; console.error(document.querySelector('main').textContent)">
+				<main>Still loading</main><img src="pixel.svg"><!--` + strings.Repeat("x", 3*1024*1024) + `-->
+				<script src="message.js"></script></body></html>`,
+			Resources: []protocol.Resource{
+				{
+					URL:         "https://easyink.local/resources/pixel.svg",
+					ContentType: "image/svg+xml",
+					Base64:      base64.StdEncoding.EncodeToString([]byte(`<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><rect width="1" height="1" fill="black"/></svg>`)),
+				},
+				{
+					URL:         "https://easyink.local/resources/message.js",
+					ContentType: "application/javascript",
+					Base64:      base64.StdEncoding.EncodeToString([]byte(`window.offlineMessage = "transport"`)),
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("render large HTML: %v", err)
+	}
+	if len(result.Diagnostics.FailedRequests) != 0 {
+		t.Fatalf("unexpected diagnostics: %#v", result.Diagnostics)
+	}
+	logs := result.Diagnostics.ConsoleErrors
+	var loadMarker string
+	if len(logs) != 1 || json.Unmarshal([]byte(logs[0]), &loadMarker) != nil || loadMarker != "Loaded 中文 transport 1 true function" {
+		t.Fatalf("expected secure load event with UTF-8 text and loaded script/image, got %#v", logs)
+	}
+	if result.Diagnostics.FinalURL != "data:<redacted>" {
+		t.Fatalf("final URL = %q", result.Diagnostics.FinalURL)
+	}
+	if !bytes.HasPrefix(result.PDF, []byte("%PDF-")) || result.PageCount != 1 {
+		t.Fatalf("expected single-page PDF, got %d pages", result.PageCount)
 	}
 }
 
@@ -173,12 +263,17 @@ func TestRenderPrintPDFPreservesCJKTextWithoutMetaCharset(t *testing.T) {
 	}
 	defer manager.Shutdown()
 	service := render.NewService(manager)
+	font, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "playground", "public", "fonts", "站酷快乐体.ttf"))
+	if err != nil {
+		t.Fatalf("read CJK fixture font: %v", err)
+	}
 
 	result, err := service.RenderPrintPDF(ctx, protocol.PrintPDFRequest{
 		RequestID: "req-cjk-html-no-meta",
 		Source: protocol.Source{
-			Type: "html",
-			HTML: `<!doctype html><html><head><title>中文打印测试</title><style>body{font-family:sans-serif;font-size:22px}</style></head><body><main class="easyink-ready">中文打印测试：商品名称 墨水 数量 价格 合计 ¥123.45</main></body></html>`,
+			Type:  "html",
+			HTML:  `<!doctype html><html><head><title>中文打印测试</title><style>body{font-family:FixtureCJK;font-size:22px}</style></head><body><main class="easyink-ready">中文打印测试：商品名称 墨水 数量 价格 合计 ¥123.45</main></body></html>`,
+			Fonts: []protocol.FontResource{{Family: "FixtureCJK", URL: "https://easyink.local/fonts/cjk.ttf", ContentType: "font/ttf", Base64: base64.StdEncoding.EncodeToString(font)}},
 		},
 		PDF: protocol.PDFOptions{
 			PaperWidthMm:  80,

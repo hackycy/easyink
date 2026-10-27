@@ -113,7 +113,12 @@ export class FontManager {
       return this._fontList
     if (!this._provider)
       return []
-    this._fontList = await this._provider.listFonts()
+    const provider = this._provider
+    const generation = this._generation
+    const fonts = await provider.listFonts()
+    if (this._generation !== generation || this._provider !== provider)
+      throw new Error('Font provider changed while listing fonts')
+    this._fontList = fonts
     return this._fontList
   }
 

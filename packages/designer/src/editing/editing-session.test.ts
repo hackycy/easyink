@@ -1,4 +1,5 @@
-import type { GeometryService, MaterialDesignerExtension, MaterialGeometry, TransactionAPI } from '@easyink/core'
+import type { GeometryService, MaterialGeometry, TransactionAPI } from '@easyink/core'
+import type { DesignerRenderInstance } from '@easyink/plugin-api/designer'
 import type { MaterialNode } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
 import { EditingSession } from './editing-session'
@@ -21,7 +22,7 @@ function makeSession() {
     hitTest: () => null,
   }
 
-  const extension: MaterialDesignerExtension = {
+  const extension: DesignerRenderInstance = {
     renderContent: () => () => {},
     geometry: materialGeometry,
   }

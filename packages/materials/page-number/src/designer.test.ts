@@ -1,4 +1,5 @@
-import type { MaterialDesignerRenderContext, MaterialDesignerRenderContextSignal, MaterialExtensionContext, NodeSignal } from '@easyink/core'
+import type { MaterialDesignerRenderContext, MaterialDesignerRenderContextSignal, NodeSignal } from '@easyink/core'
+import type { DesignerRendererContext } from '@easyink/plugin-api/designer'
 import type { MaterialNode } from '@easyink/schema'
 import { createDefaultSchema } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
@@ -34,9 +35,23 @@ function createRenderContextSignal(initial: MaterialDesignerRenderContext): Mate
   }
 }
 
-function createContext(overrides: Partial<MaterialExtensionContext> = {}): MaterialExtensionContext {
+function createContext(overrides: Partial<DesignerRendererContext> = {}): DesignerRendererContext {
   const schema = createDefaultSchema()
   return {
+    signal: new AbortController().signal,
+    onDispose: () => {},
+    getDataSources: () => [],
+    getMaterials: () => [],
+    isEditing: () => false,
+    replaceDocument: () => {},
+    readDocumentExtension: () => undefined,
+    writeDocumentExtension: () => {},
+    registerDataSource: () => {},
+    confirm: async () => false,
+    pickAsset: async () => null,
+    pickFileText: async () => null,
+    executeCommand: async () => { throw new Error('No commands installed') },
+    reportDiagnostic: () => {},
     getSchema: () => schema,
     getNode: () => undefined,
     getSelection: () => ({ ids: [], count: 0, isEmpty: true }),

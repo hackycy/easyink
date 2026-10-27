@@ -1,6 +1,7 @@
 import type { LocaleMessages } from './types'
 
 const zhCN: LocaleMessages = {
+  materials: { catalog: { basic: '基础', data: '数据', chart: '图表', svg: 'SVG', utility: '工具' } },
   designer: {
     ai: {
       title: 'AI 模板生成',
@@ -65,6 +66,7 @@ const zhCN: LocaleMessages = {
       hideDivider: '隐藏分隔线',
     },
     action: {
+      retry: '重试',
       pickImage: '选择图片',
       clearImage: '清空图片',
       importFile: '导入文件',
@@ -531,6 +533,7 @@ const zhCN: LocaleMessages = {
       delete: '删除草稿',
     },
     diagnostic: {
+      materialLoadFailed: '物料加载失败',
       missingMaterial: '未识别的物料类型',
       missingFont: '缺失字体',
       missingData: '数据缺失',

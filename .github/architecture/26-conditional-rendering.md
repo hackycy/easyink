@@ -49,11 +49,7 @@ const DEFAULT_MATERIAL_CONDITION: MaterialConditionDefinition = {
 物料只在需要收窄或禁用条件能力时声明覆盖：
 
 ```ts
-interface DesignerMaterialRegistration {
-  condition?: MaterialConditionDefinition | false
-}
-
-interface MaterialViewerExtension {
+interface MaterialModel {
   condition?: MaterialConditionDefinition | false
 }
 ```

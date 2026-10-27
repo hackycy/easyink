@@ -1,9 +1,12 @@
-import type { FragmentPaginator, LayoutFragment } from '@easyink/core'
+import type { LayoutFragment, LayoutRuntimeRef } from '@easyink/core'
+import type { ResourceContext } from '@easyink/plugin-api'
+import type { ViewerSessionRenderer } from '@easyink/plugin-api/viewer'
 import type { BindingRef, MaterialNode, TableCellSchema, TableDataSchema, TableRowSchema } from '@easyink/schema'
 import type { TableDataProps } from './schema'
-import { createFragmentFromNode, extractCollectionPath, formatBindingDisplayValue, resolveBindingValue, resolveFieldFromRecord, trustedViewerHtml } from '@easyink/core'
-import { computeAutoRowHeights, computeRowScaleWithVirtualRows, renderPlainTextCell, renderTableHtml } from '@easyink/material-table-kernel'
+import { extractCollectionPath, formatBindingDisplayValue, resolveBindingValue, resolveFieldFromRecord, trustedViewerHtml } from '@easyink/core'
+import { computeAutoRowHeights, computeRowScaleWithVirtualRows, renderPlainTextCell, renderTableHtml } from '@easyink/material-table-kernel/viewer'
 import { getNodeProps, isTableNode } from '@easyink/schema'
+import { deepClone } from '@easyink/shared'
 import { TABLE_DATA_PLACEHOLDER_ROW_COUNT } from './layout'
 
 interface ViewerRenderContext {
@@ -45,22 +48,11 @@ function filterVisibleRows(rows: TableRowSchema[], showHeader: boolean, showFoot
   })
 }
 
-/**
- * Cache resolved runtime layout per table-data schema instance, keyed by
- * `node.table` (object identity). Render needs the same per-row heights
- * the measure pass produced, but ViewerRuntime overwrites `node.height`
- * after measure — so re-deriving the baseline scale from the post-measure
- * `node.height` would multiply the heights again. The runtime preserves
- * `node.table` by reference across the spread, so this WeakMap survives
- * the measure→render hop with zero schema mutation.
- */
 interface ResolvedRuntimeLayout {
   rows: TableRowSchema[]
   rowHeights: number[]
   totalHeight: number
 }
-
-const runtimeLayoutCache = new WeakMap<TableDataSchema, ResolvedRuntimeLayout>()
 
 /**
  * Resolve the visible row sequence + per-row heights for a data table
@@ -124,54 +116,82 @@ export function measureTableData(node: MaterialNode, context: ViewerMeasureConte
   const data = context.data ?? {}
   const tableNode = node as MaterialNode & { table: TableDataSchema }
   const layout = resolveRuntimeLayout(tableNode, data, node.height, context.reportDiagnostic)
-  // Cache so render() reuses the exact same per-row heights without
-  // re-deriving baseline scale from the (about to be overwritten) node.height.
-  runtimeLayoutCache.set(tableNode.table, layout)
   return { width: node.width, height: layout.totalHeight }
 }
 
-export const tableDataFragmentPaginator: FragmentPaginator = {
-  canPaginate(node) {
-    return isTableNode(node) && node.type === 'table-data'
-  },
-  paginateFragment(input) {
-    const node = input.fragment.node
-    if (!isTableNode(node) || node.type !== 'table-data') {
-      return { currentPage: input.fragment, diagnostics: [] }
-    }
-    const tableNode = node as MaterialNode & { table: TableDataSchema }
+/** Each computation owns its prepared sources and all derived content fragments. */
+export function createTableDataSession(resources: ResourceContext): ViewerSessionRenderer {
+  const layouts = new Map<LayoutRuntimeRef, ResolvedRuntimeLayout>()
+  resources.onDispose(() => {
+    layouts.clear()
+  })
 
-    const cached = runtimeLayoutCache.get(tableNode.table)
-    if (!cached || input.availableHeight >= cached.totalHeight) {
-      return { currentPage: input.fragment, diagnostics: [] }
-    }
+  function read(ref: LayoutRuntimeRef | undefined): ResolvedRuntimeLayout {
+    const layout = ref ? layouts.get(ref) : undefined
+    if (!layout)
+      throw new Error('Table fragment has no prepared state in this session')
+    return layout
+  }
 
-    const split = splitRuntimeRows(cached.rows, cached.rowHeights, input.availableHeight)
-    if (!split) {
-      return {
-        currentPage: input.fragment,
-        diagnostics: [{
-          code: 'TABLE_DATA_FRAGMENT_OVERFLOW',
-          severity: 'warning',
-          message: `Table ${tableNode.id} cannot fit even one body row into the available page height.`,
-          stage: 'pagination',
-          sourceNodeId: input.fragment.sourceNodeId,
-        }],
-      }
-    }
-
-    const current = createVirtualTableFragment(input.fragment, tableNode, split.currentRows, split.currentHeights, split.currentHeight, `p${input.pageContext.pageIndex}`)
-    const next = createVirtualTableFragment(input.fragment, tableNode, split.nextRows, split.nextHeights, split.nextHeight, `p${input.pageContext.pageIndex + 1}`)
-
-    return {
-      currentPage: current,
-      nextPage: next,
-      diagnostics: [],
-    }
-  },
+  return {
+    prepare(node, context) {
+      if (!isTableNode(node as MaterialNode))
+        throw new Error('Data table requires table topology')
+      const tableNode = deepClone(node) as MaterialNode & { table: TableDataSchema }
+      layouts.set(context.runtimeRef, resolveRuntimeLayout(tableNode, context.data as Record<string, unknown>, node.height, diagnostic => context.reportDiagnostic(diagnostic)))
+    },
+    measure(node, context) {
+      return { width: node.width, height: read(context.runtimeRef).totalHeight }
+    },
+    render(node, context) {
+      return renderTableLayout(node as MaterialNode, context as ViewerRenderContext, read(context.runtimeRef))
+    },
+    fragmentPaginator: {
+      canPaginate: node => isTableNode(node) && node.type === 'table-data',
+      getRemainingContent: fragment => read(fragment.runtimeRef).rows.filter(row => row.role !== 'header' && row.role !== 'footer').length,
+      paginateFragment(input) {
+        const tableNode = input.fragment.node as MaterialNode & { table: TableDataSchema }
+        const layout = read(input.fragment.runtimeRef)
+        if (input.availableHeight >= layout.totalHeight)
+          return { currentPage: input.fragment, diagnostics: [] }
+        const split = splitRuntimeRows(layout.rows, layout.rowHeights, input.availableHeight)
+        if (!split) {
+          return {
+            currentPage: input.fragment,
+            diagnostics: [{
+              code: 'TABLE_DATA_FRAGMENT_OVERFLOW',
+              severity: 'warning',
+              message: `Table ${tableNode.id} cannot fit even one body row into the available page height.`,
+              stage: 'pagination',
+              sourceNodeId: input.fragment.sourceNodeId,
+            }],
+          }
+        }
+        function derive(rows: TableRowSchema[], rowHeights: number[], height: number, suffix: string): LayoutFragment {
+          const child = input.createFragment(createVirtualTableNode(tableNode, rows, rowHeights, height, suffix))
+          if (!child.runtimeRef)
+            throw new Error('Framework did not assign a table fragment reference')
+          layouts.set(child.runtimeRef, { rows: [...rows], rowHeights: [...rowHeights], totalHeight: height })
+          return child
+        }
+        return {
+          currentPage: derive(split.currentRows, split.currentHeights, split.currentHeight, `p${input.pageContext.pageIndex}`),
+          nextPage: derive(split.nextRows, split.nextHeights, split.nextHeight, `p${input.pageContext.pageIndex + 1}`),
+          diagnostics: [],
+        }
+      },
+    },
+  }
 }
 
 export function renderTableData(node: MaterialNode, context?: ViewerRenderContext): ViewerRenderOutput {
+  const layout = isTableNode(node)
+    ? resolveRuntimeLayout(node as MaterialNode & { table: TableDataSchema }, context?.data ?? {}, node.height, context?.reportDiagnostic)
+    : undefined
+  return renderTableLayout(node, context, layout)
+}
+
+function renderTableLayout(node: MaterialNode, context: ViewerRenderContext | undefined, layout: ResolvedRuntimeLayout | undefined): ViewerRenderOutput {
   if (!isTableNode(node)) {
     return {
       html: trustedViewerHtml('<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#f9f9f9;color:#999;font-size:12px;">[Data Table]</div>'),
@@ -179,16 +199,7 @@ export function renderTableData(node: MaterialNode, context?: ViewerRenderContex
   }
 
   const props = getNodeProps<TableDataProps>(node)
-  const data = context?.data ?? {}
-  const tableNode = node as MaterialNode & { table: TableDataSchema }
-
-  // Prefer the layout produced by measure() — `node.height` has been
-  // overwritten by ViewerRuntime, so we cannot recompute baseline scale
-  // from it here. Fall back to a direct compute when render is called
-  // without a prior measure (e.g. unit tests).
-  const cached = runtimeLayoutCache.get(tableNode.table)
-  const { rows: visibleRows, rowHeights, totalHeight } = cached
-    ?? resolveRuntimeLayout(tableNode, data, node.height, context?.reportDiagnostic)
+  const { rows: visibleRows, rowHeights, totalHeight } = layout!
 
   const sizedRows: TableRowSchema[] = visibleRows.map((row, i) => ({
     ...row,
@@ -335,14 +346,13 @@ function splitRuntimeRows(
   }
 }
 
-function createVirtualTableFragment(
-  source: LayoutFragment,
+function createVirtualTableNode(
   node: MaterialNode & { table: TableDataSchema },
   rows: TableRowSchema[],
   rowHeights: number[],
   height: number,
   suffix: string,
-): LayoutFragment {
+): MaterialNode {
   const virtualTable: TableDataSchema = {
     ...node.table,
     topology: {
@@ -356,12 +366,7 @@ function createVirtualTableFragment(
     height,
     table: virtualTable,
   }
-  runtimeLayoutCache.set(virtualTable, { rows, rowHeights, totalHeight: height })
-  return {
-    ...createFragmentFromNode(virtualNode),
-    sourceNodeId: source.sourceNodeId,
-    flow: source.flow,
-  }
+  return virtualNode
 }
 
 function sumHeights(entries: Array<{ height: number }>): number {

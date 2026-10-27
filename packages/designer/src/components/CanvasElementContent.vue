@@ -13,6 +13,7 @@ const store = useDesignerStore()
 const containerRef = ref<HTMLElement | null>(null)
 
 let cleanup: (() => void) | null = null
+const reportedUnknownTypes = new Set<string>()
 const renderContextSubscribers = new Set<(context: MaterialDesignerRenderContext) => void>()
 
 const renderContextSignal: MaterialDesignerRenderContextSignal = {
@@ -38,8 +39,19 @@ function mount() {
     return
 
   const ext = store.getDesignerExtension(node.type)
-  if (!ext)
+  if (!ext) {
+    container.textContent = `[Unknown: ${node.type}]`
+    container.dataset.materialDiagnostic = 'UNKNOWN_MATERIAL'
+    if (!reportedUnknownTypes.has(node.type)) {
+      reportedUnknownTypes.add(node.type)
+      store.diagnostics.push({ source: 'material-extension', severity: 'warn', message: `Material is not installed: ${node.type}`, detail: { code: 'UNKNOWN_MATERIAL', nodeId: node.id, type: node.type } })
+    }
+    cleanup = () => {
+      container.replaceChildren()
+      delete container.dataset.materialDiagnostic
+    }
     return
+  }
 
   const nodeSignal = createNodeSignal(store, props.nodeId)
   cleanup = ext.renderContent(nodeSignal, container, renderContextSignal)
