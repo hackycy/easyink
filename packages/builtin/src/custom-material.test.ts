@@ -2,7 +2,6 @@ import type { DesignerMaterial } from '@easyink/plugin-api/ui'
 import type { ViewerMaterial } from '@easyink/plugin-api/viewer'
 import { normalizeDocumentSchema } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
-import { createAssistantMaterialManifest } from '../../assistant/designer-bridge/src/material-manifest'
 import { DesignerStore } from '../../designer/src/store/designer-store'
 import { createViewer } from '../../viewer/src/index'
 import { materials as none } from './none'
@@ -10,14 +9,13 @@ import { badge } from './test-fixtures/custom-material/designer'
 import { badge as viewerBadge } from './test-fixtures/custom-material/viewer'
 
 describe('a custom package with explicit complete material selections', () => {
-  it('provides presets, properties, locale, AI and bound output without framework changes', async () => {
+  it('provides presets, properties, locale and bound output without framework changes', async () => {
     const designerSelection: readonly DesignerMaterial[] = [...none, badge]
     const viewerSelection: readonly ViewerMaterial[] = [...none, viewerBadge]
     const node = badge.model.createDefaultNode({ binding: { sourceId: 'customer', fieldPath: 'name' } })
     const store = await DesignerStore.create({
       materials: designerSelection,
       schema: { elements: [node] },
-      extensions: [{ id: 'inspect', commands: [{ id: 'manifest', handler: (_args, context) => createAssistantMaterialManifest(context) }] }],
     })
     const container = document.createElement('div')
     const viewer = await createViewer({ materials: viewerSelection, container })
@@ -31,8 +29,6 @@ describe('a custom package with explicit complete material selections', () => {
       expect(presets.map(preset => preset.id)).toEqual(['priority-badge', 'badge'])
       expect(presets[0]!.createDefaultNode!().props.label).toBe('Priority')
       expect(store.getMaterial('vendor/badge')?.props).toEqual(badge.properties)
-      const manifest = createAssistantMaterialManifest(store.getExtensionContext(store.getContributions('designer.command')[0]!.owner))
-      expect(manifest.materials.map(material => material.ai)).toEqual([badge.ai])
       unmount = store.getDesignerExtension('vendor/badge')!.renderContent({ get: () => node, subscribe: () => () => {} }, designerContainer)
       expect(designerContainer.textContent).toBe('Badge: Badge')
       const result = await viewer.open({ schema: normalizeDocumentSchema({ elements: [node] }), data: { name: 'Ada' } })

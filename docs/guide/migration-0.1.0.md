@@ -56,7 +56,7 @@ Vue 应用继续使用组件，由组件管理启动和销毁：
 
 不提供兼容包、旧 registry 转发或运行中补装。重复物料 type、扩展 id、命令 id 或核心能力争用使创建整体失败，已取得资源清理后返回错误。locale 缺失/冲突是非阻断诊断，同值共享、异值稳定选择，宿主显式覆盖优先。
 
-完整自定义物料见[物料开发](../advanced/custom-materials)，独立工具栏/命令/overlay 见[Designer 扩展](../advanced/contributions)。`createAssistantContribution()` 保留业务工厂名称，其返回值是新的 DesignerExtension。
+完整自定义物料见[物料开发](../advanced/custom-materials)，独立工具栏/命令/overlay 见[Designer 扩展](../advanced/contributions)。
 
 ## 输出和资源
 

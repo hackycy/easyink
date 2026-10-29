@@ -3,7 +3,7 @@ import { DEFAULT_NAMESPACE, setSourceNamespace } from './namespace'
 
 /**
  * Factory for async data source resolution.
- * Used for dynamically registered data sources (e.g., MCP-generated).
+ * Used for dynamically registered data sources (e.g., remote API sources).
  */
 export interface DataSourceProviderFactory {
   readonly namespace: string
@@ -29,7 +29,7 @@ export type DataSourceChangeCallback = (sources: DataSourceDescriptor[]) => void
 /**
  * DataSourceRegistry manages data source descriptors for the designer.
  * Supports both synchronous registration (built-in sources) and
- * asynchronous Provider Factory registration (external/MCP sources).
+ * asynchronous Provider Factory registration (external sources).
  */
 export class DataSourceRegistry {
   private _sources = new Map<string, DataSourceDescriptor>()

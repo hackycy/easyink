@@ -32,7 +32,6 @@ const legacyValues = [
   'registerBuiltinViewerMaterials',
   'createBuiltinDesignerMaterialBundle',
   'builtinDesignerMaterialSets',
-  'builtinAIMaterialDescriptors',
 ]
 const legacyTypes = [
   'BuiltinDesignerMaterialBundle',
@@ -145,11 +144,11 @@ async function runRuntimeChecks() {
   }
   const pkg = JSON.parse(readFileSync(resolve('packages/builtin/package.json'), 'utf8'))
   const exports = new Set(Object.keys(pkg.exports))
-  for (const subpath of ['designer', 'viewer', 'ai', 'bindings', 'types']) {
+  for (const subpath of ['designer', 'viewer', 'bindings', 'types']) {
     assert.equal(exports.has(`./${subpath}`), false)
     await assert.rejects(import(`@easyink/builtin/${subpath}`), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' })
   }
-  return { rejectedHostExports, rejectedMaterialFactories, entries: entries.length, materialEntries: materialImports.length, rejectedIncompleteMaterials: incomplete.length, rejectedLegacyImports: negative.length, rejectedSubpaths: 5 }
+  return { rejectedHostExports, rejectedMaterialFactories, entries: entries.length, materialEntries: materialImports.length, rejectedIncompleteMaterials: incomplete.length, rejectedLegacyImports: negative.length, rejectedSubpaths: 4 }
 }
 
 runRuntimeChecks().then(result => process.stdout.write(`${JSON.stringify(result)}\n`)).catch((error) => {

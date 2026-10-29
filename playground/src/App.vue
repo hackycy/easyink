@@ -2,16 +2,12 @@
 import type { DataSourceDescriptor, DocumentSchema } from '@easyink/designer'
 import type { SampleTemplateEntry } from '@easyink/samples'
 import type { StoredTemplate } from './storage/template-store'
-import { createAssistantContribution, createBrowserAssistantLLMConfigService } from '@easyink/assistant-designer-bridge'
-import { placeholderImagesPlugin } from '@easyink/assistant-plugin-placeholder-images'
-import { prototypeDesignerPlugin } from '@easyink/assistant-plugin-prototype-designer'
-import { receiptDesignerPlugin } from '@easyink/assistant-plugin-receipt-designer'
 import { materials } from '@easyink/builtin/all/designer'
 import { createLocalStoragePreferenceProvider, EasyInkDesigner } from '@easyink/designer'
 import { enUS, zhCN } from '@easyink/designer/locale'
 import { blankA4Template, flowInvoiceTemplate, invoiceDemoData, sampleDataSources } from '@easyink/samples'
 import { BookOpen, ChevronDown, Database, Eye, Github, Languages, LayoutTemplate, Save } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import DataEditorModal from './components/DataEditor.vue'
 import TemplateGallery from './components/TemplateGallery.vue'
@@ -92,18 +88,6 @@ async function saveCurrentTemplate(schemaSnapshot: DocumentSchema): Promise<void
   currentTemplate.value = savedTemplate
   await Promise.all([saveTemplate(savedTemplate), wait(260)])
 }
-
-// Bridge AI panel sample data to preview
-watch(() => {
-  const ai = (schema.value.extensions as { ai?: { latestSampleData?: Record<string, unknown>, latestSampleDataAt?: number } } | undefined)?.ai
-  return ai?.latestSampleDataAt ?? 0
-}, (ts) => {
-  if (!ts)
-    return
-  const ai = (schema.value.extensions as { ai?: { latestSampleData?: Record<string, unknown> } } | undefined)?.ai
-  if (ai?.latestSampleData)
-    applyDemoData(ai.latestSampleData)
-})
 
 function applyDemoData(data: Record<string, unknown>) {
   customData.value = data
@@ -250,17 +234,6 @@ function openGitHub() {
 function handleDataUpdate(data: Record<string, unknown>) {
   applyDemoData(data)
 }
-
-const assistantEndpoint = import.meta.env.VITE_EASYINK_ASSISTANT_ENDPOINT || 'http://127.0.0.1:3010'
-const contributions = [createAssistantContribution({
-  endpoint: assistantEndpoint,
-  llmConfig: createBrowserAssistantLLMConfigService({ persistence: 'local' }),
-  plugins: [
-    placeholderImagesPlugin,
-    prototypeDesignerPlugin,
-    receiptDesignerPlugin,
-  ],
-})]
 </script>
 
 <template>
@@ -273,7 +246,6 @@ const contributions = [createAssistantContribution({
     :preference-provider="preferenceProvider"
     :materials="materials"
     :auto-save="autoSaveOptions"
-    :extensions="contributions"
   >
     <template #topbar>
       <div data-easyink-topbar class="flex h-12 items-center gap-2 overflow-x-auto bg-background px-3 shadow-[0_1px_18px_rgba(15,23,42,0.08)]">

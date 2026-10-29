@@ -119,13 +119,3 @@ const subscribe: DesignerCommand = {
   },
 }
 ```
-
-## Assistant 参考 {#assistant-contribution}
-
-`createAssistantContribution()` 是 `@easyink/assistant-designer-bridge` 的业务工厂名，返回值是 `DesignerExtension`。将返回值放进 `extensions`；Assistant manifest 从当前 context 的完整物料声明生成，应用结果和回退通过声明命令执行。AI UI 由异步 overlay 加载，Viewer 入口不会引入它。
-
-```ts
-import { createAssistantContribution } from '@easyink/assistant-designer-bridge'
-
-const extensions = [createAssistantContribution({ endpoint: '/api/assistant' })]
-```

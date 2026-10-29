@@ -14,7 +14,7 @@ import type { MaterialModel } from '@easyink/plugin-api/material'
 import type { ViewerMaterial, ViewerSessionRenderer } from '@easyink/plugin-api/viewer'
 ```
 
-Designer 完整声明使用 `properties`、`sectionFilter`、`ui.palette`、`locale` 和 `ai`。目录分组来源为 `@easyink/shared` 的 `paletteGroups`，框架从最终声明投影工作台目录，不维护第二注册表。没有 palette、properties 或 AI 只影响对应可选功能；迁移已有物料须保留其现有功能。
+Designer 完整声明使用 `properties`、`sectionFilter`、`ui.palette`、`locale`。目录分组来源为 `@easyink/shared` 的 `paletteGroups`，框架从最终声明投影工作台目录，不维护第二注册表。没有 palette 或 properties 只影响对应可选功能；迁移已有物料须保留其现有功能。
 
 `capabilities.rotatable` 的语义是“设计器是否允许用户主动编辑元素级旋转”。设计器所有旋转入口必须共享同一个判断源：属性面板 rotation 输入、顶部工具栏旋转按钮、画布 rotate handle、拖拽旋转 composable。缺省值按可旋转处理，只有显式 `rotatable=false` 才禁用。
 
@@ -22,7 +22,7 @@ Designer 完整声明使用 `properties`、`sectionFilter`、`ui.palette`、`loc
 
 物料包拥有自己的 props 类型，例如 `TextProps`、`TableDataProps`。通用注册表仍以 `MaterialNode` 接收节点；物料内部读取 props 时使用 `getNodeProps<TProps>(node)` 或返回 `MaterialNode<TProps>` 的工厂函数。`props` 是 schema 的开放扩展点，不在通用 PropertiesPanel / Viewer / codec 中硬编码具体物料 props 类型。
 
-Designer 的 `renderer` 接收受控 `DesignerRendererContext` 并同步返回 `DesignerRenderInstance`；重型代码通过 `loadRenderer` 按需获取。模型、属性、palette、locale 和 AI 在创建时已可查询。Viewer 完整声明提供 `renderer` 或受管 `loadRenderer`；会话实现通过 `createSession` 和可选 `prepare` 管理计算资源，render/measure/paginate 保持同步。
+Designer 的 `renderer` 接收受控 `DesignerRendererContext` 并同步返回 `DesignerRenderInstance`；重型代码通过 `loadRenderer` 按需获取。模型、属性、palette、locale 在创建时已可查询。Viewer 完整声明提供 `renderer` 或受管 `loadRenderer`；会话实现通过 `createSession` 和可选 `prepare` 管理计算资源，render/measure/paginate 保持同步。
 
 ## 11.2 目录层级
 
@@ -145,7 +145,7 @@ Designer 的 `renderer` 接收受控 `DesignerRendererContext` 并同步返回 `
 - 支持运行时数据源直接返回完整 ECharts option。绑定结果可为对象，也可为 JSON 字符串；Viewer 在普通绑定投影后从 `context.resolvedProps.option` 读取。
 - 支持设计器属性面板直接编辑 `props.optionCode`。这段代码是可信模板代码，只保存源码字符串，不把函数对象写入 Schema。
 - 支持 `return { ... }`、对象表达式、返回函数或声明 `function option(ctx) { ... }` 等写法。执行上下文提供运行时 `data`、绑定 option、节点、尺寸、单位和完整 `echarts` 包。
-- 默认设计态渲染器必须通过 `loadRenderer` 加载，避免把完整 ECharts 包拉进 Designer 初始路径；物料元数据、属性 schema、locale 和 AI 声明仍在创建时同步可用。
+- 默认设计态渲染器必须通过 `loadRenderer` 加载，避免把完整 ECharts 包拉进 Designer 初始路径；物料元数据、属性 schema、locale 声明仍在创建时同步可用。
 - Viewer 端直接使用 `@easyink/material-chart-kernel/full` 渲染完整 ECharts SVG，优先保证输出路径稳定，不为内置 Viewer 做懒加载。
 
 ### `table-data`

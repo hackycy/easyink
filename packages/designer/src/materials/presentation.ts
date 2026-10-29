@@ -2,7 +2,7 @@ import type { MaterialBindingDefinition, MaterialConditionCapability, PropSchema
 import type { MaterialModel } from '@easyink/plugin-api/material'
 import type { DesignerMaterial } from '@easyink/plugin-api/ui'
 import type { MaterialNode } from '@easyink/schema'
-import type { AIMaterialDescriptor, MaterialCategory } from '@easyink/shared'
+import type { MaterialCategory } from '@easyink/shared'
 import type { Component } from 'vue'
 
 type MaterialIcon = Component
@@ -17,7 +17,6 @@ export interface MaterialPresentation {
   condition?: MaterialConditionCapability
   props: PropSchema[]
   binding: MaterialBindingDefinition
-  aiDescriptor?: AIMaterialDescriptor
   createDefaultNode: (input?: Partial<MaterialNode>, unit?: string) => MaterialNode
   /**
    * Dynamic filter for PropertiesPanel sections.

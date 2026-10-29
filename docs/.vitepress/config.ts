@@ -70,7 +70,6 @@ export default defineConfig<DefaultTheme.Config & { versioning: VersionConfig }>
             { text: '自动保存', link: '/designer/auto-save' },
             { text: '字体管理', link: '/designer/fonts' },
             { text: '样式自定义', link: '/designer/styling' },
-            { text: 'AI模板生成', link: '/designer/assistant' },
           ],
         },
       ],

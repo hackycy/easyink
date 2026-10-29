@@ -3,9 +3,6 @@ import type { LocaleMessages } from './types'
 const enUS: LocaleMessages = {
   materials: { catalog: { basic: 'Basic', data: 'Data', chart: 'Chart', svg: 'SVG', utility: 'Utility' } },
   designer: {
-    ai: {
-      title: 'AI Template Generator',
-    },
     toolbar: {
       data: 'Data',
       chart: 'Chart',

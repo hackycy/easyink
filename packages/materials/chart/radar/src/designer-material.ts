@@ -1,7 +1,6 @@
 import type { DesignerMaterial } from '@easyink/plugin-api/ui'
 import { IconChartRadar } from '@easyink/icons'
 import { paletteGroups } from '@easyink/shared'
-import { chartRadarAIMaterialDescriptor } from './ai'
 import { createChartRadarExtension } from './designer'
 import { chartRadarLocaleMessages } from './locale'
 import { chartRadarModel } from './material-model'
@@ -11,7 +10,6 @@ export const chartRadar: DesignerMaterial = {
   model: chartRadarModel,
   renderer: createChartRadarExtension,
   properties: chartRadarDesignerPropSchemas,
-  ai: chartRadarAIMaterialDescriptor,
   locale: chartRadarLocaleMessages,
   ui: { palette: [{ id: 'chartRadar', label: 'materials.chartRadar.name', icon: IconChartRadar, group: paletteGroups.chart, order: 3 }] },
 }

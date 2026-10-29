@@ -1,4 +1,3 @@
-export * from './ai'
 export * from './data-contract'
 
 export { chartBar } from './designer-material'

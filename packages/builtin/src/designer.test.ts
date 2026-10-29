@@ -110,7 +110,6 @@ describe('builtin complete Designer materials', () => {
       formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
     })
     expect(material?.model.binding.kind).not.toBe('none')
-    expect(material?.ai?.binding).toBe('single')
     expect(material?.ui?.palette?.[0]?.icon).toBeDefined()
     expect(materials.filter(item => item.model.type !== 'rating').map(item => item.ui?.palette?.[0]?.icon)).not.toContain(material?.ui?.palette?.[0]?.icon)
   })
@@ -136,7 +135,6 @@ describe('builtin complete Designer materials', () => {
       primaryProp: 'content',
       formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
     })
-    expect(material?.ai?.binding).toBe('single')
   })
 
   it('limits structured chart material data formatting to custom formatters', () => {
@@ -165,6 +163,5 @@ describe('builtin complete Designer materials', () => {
       formatEditor: { tabs: ['custom'], defaultTab: 'custom' },
     })
     expect(material?.loadRenderer).toEqual(expect.any(Function))
-    expect(material?.ai?.binding).toBe('single')
   })
 })

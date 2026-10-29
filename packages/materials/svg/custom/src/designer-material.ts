@@ -1,7 +1,6 @@
 import type { DesignerMaterial } from '@easyink/plugin-api/ui'
 import { IconSvg } from '@easyink/icons'
 import { paletteGroups } from '@easyink/shared'
-import { svgCustomAIMaterialDescriptor } from './ai'
 import { createSvgCustomExtension } from './designer'
 import { svgCustomLocaleMessages } from './locale'
 import { svgCustomModel } from './material-model'
@@ -11,7 +10,6 @@ export const svgCustom: DesignerMaterial = {
   model: svgCustomModel,
   renderer: createSvgCustomExtension,
   properties: svgCustomDesignerPropSchemas,
-  ai: svgCustomAIMaterialDescriptor,
   locale: svgCustomLocaleMessages,
   ui: { palette: [{ id: 'svgCustom', label: 'materials.svgCustom.name', icon: IconSvg, group: paletteGroups.svg, order: 2 }] },
 }

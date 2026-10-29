@@ -1,35 +1,5 @@
 # Contribution Case Studies
 
-## Assistant Contribution
-
-Source file:
-
-- `packages/assistant/designer-bridge/src/contribution.ts`
-
-Key structure:
-
-- `createAssistantContribution(options)` returns a `Contribution`.
-- `open` is a Vue `ref` owned by the contribution closure.
-- `AssistantPanel` is loaded with `defineAsyncComponent()`.
-- A namespaced toggle command is registered by the contribution.
-- The toolbar action only calls `ctx.executeCommand()`.
-- The panel receives `open`, `onUpdate:open`, and Assistant service props.
-- `ctx.onDispose()` resets `open` on unmount.
-
-What to copy:
-
-- Use a factory function when the host needs options.
-- Keep panel state outside Schema.
-- Route toolbar clicks through commands.
-- Pass host configuration as contribution options and panel props.
-- Clean up or reset temporary state on dispose.
-
-What not to copy blindly:
-
-- Do not reuse Assistant contribution ids for unrelated features.
-- Do not assume every panel should be globally fixed; choose layout in the panel component.
-- Do not use material AI descriptors here. Material descriptors belong to `$easyink-material-dev`.
-
 ## Review Panel Shape
 
 Use this shape for template review, compliance, or preflight features:

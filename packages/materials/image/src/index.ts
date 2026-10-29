@@ -1,5 +1,3 @@
-export * from './ai'
-
 export { image } from './designer-material'
 export * from './locale'
 export * from './prop-schemas'

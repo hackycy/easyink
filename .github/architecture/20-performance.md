@@ -35,7 +35,7 @@ v1 不做激进的性能优化，但在架构层面为以下优化预留口子�
 
 ## 20.4 设计器物料懒加载
 
-Designer 完整物料的 `loadRenderer` 只延迟重型设计态实现。共享模型、属性、palette、locale 和 AI 在创建时完整可用，目录和 Assistant 不依赖 renderer chunk。
+Designer 完整物料的 `loadRenderer` 只延迟重型设计态实现。共享模型、属性、palette、locale 在创建时完整可用，目录不依赖 renderer chunk。
 
 Store 的 `getDesignerExtension(type)` 在加载时返回 loading 实例。Host consumer 执行受管 loader，并只缓存有效代次的 renderer 实例；成功后更新 `materialExtensionRevision` 使画布重挂载。运行加载失败记录局部诊断，保留 Schema 和声明；销毁后迟到结果不发布。Viewer 的内置实现按所选完整集合静态引用；声明同样允许受管 loader，应用创建后不补注册。
 

@@ -35,7 +35,7 @@
 | 5 | [Schema DSL 设计](./05-schema-dsl.md) | 规范模型、兼容编解码、页面字段、结构物料与绑定 |
 | 6 | [渲染管线](./06-render-pipeline.md) | 统一 DOM 渲染、溢出诊断、输出边界 |
 | 7 | [布局引擎](./07-layout-engine.md) | 坐标推移布局模型、计算流程 |
-| 8 | [数据源系统](./08-datasource.md) | 字段树协议、推荐物料、union、bindIndex、显示格式模板、Provider Factory、MCP 集成 |
+| 8 | [数据源系统](./08-datasource.md) | 字段树协议、推荐物料、union、bindIndex、显示格式模板、Provider Factory |
 | 9 | [内部扩展机制](./09-plugin-system.md) | 仓库内扩展点、上下文 API、钩子体系 |
 | 10 | [设计器交互层](./10-designer-interaction.md) | 工作台布局、工具组带、窗口系统、结构树、属性壳层、PropertyPanelOverlay、sectionFilter |
 | 11 | [物料体系](./11-element-system.md) | 物料目录、属性矩阵、Designer/Viewer 合约、DatasourceDropHandler 协议、分阶段交付 |
@@ -52,7 +52,6 @@
 | 22 | [编辑行为架构](./22-editing-behavior.md) | EditingSession、类型化 Selection、Geometry 协议、Behavior 中间件、Surfaces 与 Transaction |
 | 23 | [Designer 独立扩展](./23-contribution.md) | 完整声明、五类 UI、受控 context、Scope 生命周期 |
 | 24 | [页面布局正交体系](./24-page-layout-orthogonal-system.md) | 页面模型、布局策略、分页策略、测量重排引擎四层解耦 |
-| 25 | [AI Assistant 平台](./25-ai-assistant.md) | 物料知识声明、数据流链路、Orchestrator 工作流、ComposerAgent、知识与推理层 |
 | 26 | [条件渲染系统](./26-conditional-rendering.md) | 组内 AND、组间 OR 的条件组、Dialog 编辑协议、集合判断与 Viewer 布局语义 |
 
 ## 补充说明
@@ -66,8 +65,7 @@
 - 未识别物料、缺失数据、缺失字体、渲染失败都必须以可见诊断暴露，不允许静默吞掉
 - 对标产品的原始 JSON 字段命名存在历史噪音，EasyInk 提供无损兼容编解码层
 - `DocumentSchema.unit`、纸张预设、页面类型显示名称这类信息在属性面板中可见，但不固化进 `page` 规范字段
-- `@easyink/assistant-*` 是当前仓库中的 Assistant 平台包族，通过 `DesignerExtension` 和受控 context 接入 Designer
-- 数据源系统支持运行时动态注册；核心设计器/Viewer 数据流不依赖具体 Assistant 实现
+- 数据源系统支持运行时动态注册
 
 ## 快速导航
 
@@ -80,4 +78,3 @@
 - **想了解物料体系?** -> [11-element-system](./11-element-system.md)
 - **想了解命令与历史?** -> [12-command-undo-redo](./12-command-undo-redo.md)
 - **想了解 Designer 扩展?** -> [23-contribution](./23-contribution.md)
-- **想了解 AI Agent 平台?** -> [25-ai-assistant](./25-ai-assistant.md)

@@ -1,5 +1,5 @@
 ---
-description: 自定义物料开发：用一份共享 model 和两个宿主声明接入 Designer、Viewer、绑定、属性、目录和 AI。
+description: 自定义物料开发：用一份共享 model 和两个宿主声明接入 Designer、Viewer、绑定、属性、目录。
 ---
 
 # 自定义物料开发 {#custom-materials}
@@ -11,7 +11,7 @@ EasyInk 的物料以 `model` 为共享契约。应用在创建宿主时选择完
 下面这些能力适合放在物料声明里：
 
 - 节点类型、默认节点、绑定定义和条件行为；
-- Designer 画布渲染、属性编辑器、调色板预设、文案和 AI 描述；
+- Designer 画布渲染、属性编辑器、调色板预设、文案；
 - Viewer 的测量、分页、DOM 渲染和资源生命周期；
 - 只属于该物料的协议适配、数据解析和诊断。
 
@@ -52,7 +52,7 @@ export const priceTagModel: MaterialModel = {
 
 ## Designer 声明 {#designer-material}
 
-Designer 声明包含编辑器渲染器、属性 schema、目录预设、locale 和可选 AI 描述。以下示例使用最小的 DOM 内容；真实项目可以在 `renderContent` 中挂载自己的编辑器组件。
+Designer 声明包含编辑器渲染器、属性 schema、目录预设、locale。以下示例使用最小的 DOM 内容；真实项目可以在 `renderContent` 中挂载自己的编辑器组件。
 
 ```ts
 import type { DesignerMaterial } from '@easyink/plugin-api/ui'
@@ -83,12 +83,6 @@ export const priceTagDesigner: DesignerMaterial = {
       company: { priceTag: { name: 'Price tag', label: 'Label', price: 'Price', group: 'Company' } },
     },
   },
-  ai: {
-    type: priceTagModel.type,
-    description: 'A price tag with a label and numeric price.',
-    properties: ['label', 'price'],
-    binding: 'single',
-  },
   ui: {
     palette: [{
       id: 'price-tag',
@@ -108,7 +102,6 @@ export const priceTagDesigner: DesignerMaterial = {
   v-model:schema="schema"
   :materials="[priceTagDesigner]"
   :locale="zhCN"
-  :extensions="assistantExtensions"
 />
 ```
 
@@ -120,7 +113,7 @@ import { materials as builtin } from '@easyink/builtin/all/designer'
 const designerMaterials = [...builtin, priceTagDesigner]
 ```
 
-`ui.palette[].group` 决定目录分组，`order` 决定同组顺序。目录、属性、locale 和 AI 信息都跟随物料声明，不需要额外的 catalog registry。
+`ui.palette[].group` 决定目录分组，`order` 决定同组顺序。目录、属性、locale 信息都跟随物料声明，不需要额外的 catalog registry。
 
 ## Viewer 声明 {#viewer-material}
 
@@ -262,7 +255,7 @@ const tableViewer: ViewerMaterial = {
 
 - Designer 和 Viewer 使用同一个 `model` 身份；两端 renderer 都在创建时传入；
 - `createDefaultNode()` 只生成可序列化默认节点，默认值与单位稳定；
-- properties、palette、locale、AI 描述和 binding 都来自物料本身；
+- properties、palette、locale 和 binding 都来自物料本身；
 - Viewer 输出只使用 `context.document`，不捕获宿主页面的 document；
 - 异步 renderer、图表引擎、字体和事件都通过 `ResourceContext.onDispose` 清理；
 - 绑定、条件、measure、分页和未知物料诊断有真实宿主测试；

@@ -339,7 +339,7 @@ export class DesignerStore {
 
   // ─── Generic extensions API ───────────────────────────────────
   // Read/write `schema.extensions[key]` without designer needing to
-  // know about specific extension namespaces (e.g. ai, comments).
+  // know about specific extension namespaces (e.g. comments).
 
   /** Get an extension value by key. */
   getExtension<T = unknown>(key: string): T | undefined {

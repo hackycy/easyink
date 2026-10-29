@@ -82,7 +82,7 @@ export interface DataUnionBinding {
 export interface DataSourceProviderFactory {
   /** Unique identifier for this provider factory */
   readonly id: string
-  /** Namespace for isolation (e.g., '__ai__' for Assistant-generated sources) */
+  /** Namespace for isolation (e.g., 'external' for remote sources) */
   readonly namespace: string
   /** Resolve the data source asynchronously */
   resolve: () => Promise<DataSourceDescriptor>

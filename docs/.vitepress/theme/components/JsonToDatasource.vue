@@ -6,7 +6,6 @@ const DEFAULT_JSON = JSON.stringify({}, null, 2)
 const jsonText = ref(DEFAULT_JSON)
 const parseError = ref('')
 const copied = ref(false)
-const promptCopied = ref(false)
 
 watch(jsonText, () => {
   try {
@@ -70,37 +69,6 @@ async function handleCopy() {
     copied.value = false
   }, 1500)
 }
-
-const renamePrompt = computed(() => {
-  if (!output.value) {
-    return ''
-  }
-  return `请根据每个字段 path 的语义，将下面 DataSourceDescriptor 中所有 DataFieldNode 的 title 字段改为更具语义的中文名称。
-
-规则：
-1. 分组节点（有 fields 子节点）：根据 path 语义翻译为中文，如 address -> 地址、items -> 商品列表
-2. 叶子节点（无 fields）：根据 path 的完整语义生成简短的中文名称，如 customer/name -> 姓名、items/price -> 单价、address/city -> 城市
-3. name 字段保持原值不动，只改 title
-4. DataSourceDescriptor 顶层的 id、name、title 保持不变
-5. 只输出修改后的完整 JSON，不要解释
-
-以下是需要处理的 DataSourceDescriptor：
-\`\`\` json
-${output.value}
-\`\`\`
-`
-})
-
-async function handleCopyPrompt() {
-  if (!renamePrompt.value) {
-    return
-  }
-  await navigator.clipboard.writeText(renamePrompt.value)
-  promptCopied.value = true
-  setTimeout(() => {
-    promptCopied.value = false
-  }, 1500)
-}
 </script>
 
 <template>
@@ -161,22 +129,6 @@ async function handleCopyPrompt() {
             <span class="ei-j2ds__label">DataSourceDescriptor</span>
           </div>
           <div class="ei-j2ds__actions">
-            <!-- copy AI prompt -->
-            <button
-              class="ei-j2ds__btn ei-j2ds__btn--icon ei-j2ds__btn--ai"
-              :class="{ 'ei-j2ds__btn--ok': promptCopied }"
-              :disabled="!output"
-              title="复制 AI 重命名提示词"
-              @click="handleCopyPrompt"
-            >
-              <!-- lightning bolt, visual center at (8,8) in 16x16 -->
-              <svg v-if="!promptCopied" width="15" height="15" viewBox="0 0 16 16" fill="none">
-                <path d="M10 1.5L5 8H8.5L6 14.5L11 8H7.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
-              </svg>
-              <svg v-else width="15" height="15" viewBox="0 0 16 16" fill="none">
-                <path d="M3 8l3.5 3.5 6.5-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </button>
             <!-- copy JSON -->
             <button
               class="ei-j2ds__btn ei-j2ds__btn--icon"
@@ -208,7 +160,6 @@ async function handleCopyPrompt() {
           <path d="M6.5 5.5v4M6.5 3.8v.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
         </svg>
         粘贴业务 JSON 对象，右侧自动生成 DataSourceDescriptor 结构。
-        <span class="ei-j2ds__hint-icon"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M10 1.5L5 8H8.5L6 14.5L11 8H7.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" /></svg> 复制 AI 提示词</span>后发送给大模型可自动补全中文标题。
         <span class="ei-j2ds__hint-icon"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3" /><path d="M10.5 5.5V4a1 1 0 0 0-1-1H3.5a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1H5.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /></svg> 复制结构</span>后粘贴至设计器数据源配置。
       </span>
     </div>
@@ -345,13 +296,6 @@ async function handleCopyPrompt() {
 .ei-j2ds__btn:disabled {
   opacity: 0.38;
   cursor: not-allowed;
-}
-
-/* AI button distinct teal tint */
-.ei-j2ds__btn--ai:not(:disabled):hover {
-  border-color: var(--ei-c-teal, #14b8a6);
-  color: var(--ei-c-teal, #14b8a6);
-  background: color-mix(in srgb, var(--ei-c-teal, #14b8a6) 6%, transparent);
 }
 
 .ei-j2ds__btn--ok {

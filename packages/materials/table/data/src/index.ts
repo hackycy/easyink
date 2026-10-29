@@ -1,4 +1,3 @@
-export * from './ai'
 export * from './datasource'
 export { canResizeTableDataRow } from './designer'
 export { tableData } from './designer-material'

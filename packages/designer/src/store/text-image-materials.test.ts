@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { DesignerStore } from './designer-store'
 
 describe('complete text and image Designer consumption', () => {
-  it('installs palette, properties, locale and AI without extra declarations and retains undo', async () => {
+  it('installs palette, properties and locale without extra declarations and retains undo', async () => {
     const store = await DesignerStore.create({
       materials: [image, text],
       schema: { elements: [createTextNode({ id: 'title', props: { content: 'Before' } }), createImageNode({ id: 'logo' })] },
@@ -21,13 +21,11 @@ describe('complete text and image Designer consumption', () => {
         expect(definition.binding).toEqual(material.model.binding)
         expect(definition.condition).toEqual(material.model.condition)
         expect(definition.props).toEqual(material.properties)
-        expect(definition.aiDescriptor).toEqual(material.ai)
         expect(store.t(`materials.${material.model.type}.name`)).not.toBe(`materials.${material.model.type}.name`)
         expect(store.getDesignerExtension(material.model.type)?.renderContent).toBeTypeOf('function')
       }
       const declarations = store.getMaterialDeclarations()
       expect(declarations.map(material => material.model.type)).toEqual(['image', 'text'])
-      expect(JSON.stringify(declarations.map(material => material.ai))).not.toContain('undefined')
       store.commands.execute(new UpdateMaterialPropsCommand(store.schema.elements, 'title', { content: 'After' }))
       expect(store.getElementById('title')?.props.content).toBe('After')
       store.commands.undo()
@@ -38,7 +36,7 @@ describe('complete text and image Designer consumption', () => {
     }
   })
 
-  it('keeps the model usable with optional UI, properties, locale and AI omitted', async () => {
+  it('keeps the model usable with optional UI, properties and locale omitted', async () => {
     const store = await DesignerStore.create({ materials: [{ model: image.model, renderer: image.renderer! }] })
     try {
       expect(store.getMaterial('image')?.binding).toEqual(image.model.binding)

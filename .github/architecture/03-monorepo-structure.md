@@ -1,6 +1,6 @@
 # 3. Monorepo 包结构
 
-包结构以“文档模型、数据源、核心能力、设计器、Viewer、物料系统、导出/打印、Assistant”几条主轴组织。
+包结构以“文档模型、数据源、核心能力、设计器、Viewer、物料系统、导出/打印”几条主轴组织。
 
 ```
 easyink/
@@ -26,9 +26,7 @@ easyink/
 │   ├── prop-schemas/           # @easyink/prop-schemas — 内置物料基础属性 Schema
 │   ├── ui/                     # @easyink/ui — 面板、表单、工作台基础组件
 │   ├── icons/                  # @easyink/icons — 图标资产
-│   ├── schema-tools/           # @easyink/schema-tools — Schema 校验、DataSource 对齐
 │   ├── samples/                # @easyink/samples — 示例 schema、data 与 datasource
-│   ├── assistant/              # @easyink/assistant-* — Assistant 平台包族
 │   └── materials/
 │       ├── text/
 │       ├── image/
@@ -62,7 +60,7 @@ easyink/
 
 ### `@easyink/plugin-api`
 
-- `./material` 提供共享模型、binding、静态能力、condition/pageAware、locale 和 AI 声明。
+- `./material` 提供共享模型、binding、静态能力、condition/pageAware、locale 声明。
 - `./designer` 提供完整 Designer 物料、只读查询、受控编辑及参数/结果关联的命令；`./viewer` 提供同步 renderer、受管 loader 与可选会话实现声明。
 - `./ui` 单独引用 Vue，声明物料目录、专属属性组件及独立工具栏、右键和弹层扩展。根、material、designer、viewer 入口不重导出 UI。
 - 依赖 core/schema/shared 的领域协议及 datasource 描述类型，不依赖 Designer/Viewer 实现；底层包不反向依赖 plugin-api。
@@ -133,7 +131,7 @@ easyink/
 - 应用通过插槽和 `useDesignerStore()` 接入工作台；物料/独立扩展创建前传完整声明，扩展仅取得受控 context，不再使用 `setupStore` 或旧 Contribution activate。Designer 不在包级直接依赖 `@easyink/viewer`。
 - 应用创建前显式选择完整物料，产品默认选择 builtin all；底层省略或空数组为 none，重复物料身份失败，不按顺序覆盖
 - 依赖 `@easyink/locales` 和 `@easyink/prop-schemas` 获取内置语言包与基础属性 Schema；对外仍通过 `@easyink/designer/locale` 透出语言包
-- 独立 UI/命令使用 plugin-api 的 `DesignerExtension` 声明和受控 context；旧 Contribution API 已删除，不直接依赖 Assistant 集成包或 `@easyink/schema-tools`
+- 独立 UI/命令使用 plugin-api 的 `DesignerExtension` 声明和受控 context；旧 Contribution API 已删除
 - 对外发布时保持 `vue` 为 peerDependencies，避免宿主拿到重复 Vue runtime；`codemirror` 属于 designer 自身运行时组成部分，必须作为 dependencies 随包安装，保证开箱即用
 
 ### `@easyink/locales`
@@ -154,13 +152,6 @@ easyink/
 - 每种物料一个独立包
 - 包内同时提供 Schema 默认值、属性描述、Designer 交互、Viewer 渲染器
 - 先服务内置体系，第三方开放后再稳定契约
-
-### `@easyink/schema-tools`
-
-- Schema 三层校验器（structure / semantic / binding），`validate()` 无副作用，`autoFix()` 操作 deep clone
-- DataSource 字段对齐工具，支持模糊匹配
-- 无 Vue 依赖，可被 Assistant capabilities、orchestrator 和批处理脚本消费
-- 依赖 `datasource`、`schema`、`shared`
 
 ## 3.2 物料包内部结构
 
@@ -204,7 +195,6 @@ print-core ─── viewer + export-runtime
 print-integration-easyink-printer ─── print-core + viewer + export-plugin-dom-pdf
 print-integration-hiprint ─── print-core + viewer + vue-plugin-hiprint
 
-assistant-* ── 多个 assistant 包彼此依赖，形成独立 Assistant 平台子图
 
 playground ── designer + viewer + export-runtime + samples + schema
 ```
@@ -220,11 +210,9 @@ playground ── designer + viewer + export-runtime + samples + schema
 - `print-core` 只承接打印驱动共享逻辑；具体打印通道放在 `packages/print/*` 下独立包中
 - `print-integration-easyink-printer` 依赖 `print-core`、`viewer` 与 `export-plugin-dom-pdf`；负责 EasyInk.Printer 通道的协议和 Viewer 驱动
 - `print-integration-hiprint` 依赖 `print-core`、`viewer` 与 `vue-plugin-hiprint`；负责 HiPrint 通道的协议和 Viewer 驱动
-- `builtin` 依赖全部内置 `material-*` 包，集中维护 Designer / Viewer / Assistant 三侧共享的默认物料清单
+- `builtin` 依赖全部内置 `material-*` 包，集中维护 Designer / Viewer 两侧共享的默认物料清单
 - `ui` 依赖 `icons` 和 `shared`，不依赖 `designer`；方向为 designer 依赖 ui
 - `samples` 依赖 `datasource`、`schema`、`shared`，不依赖 `designer`
-- `schema-tools` 仅依赖 `datasource`、`schema`、`shared`；无 Vue 依赖；可在 Node 与浏览器双端运行
-- `assistant-*` 形成独立平台子图，通过 DesignerExtension 与 typed commands 接入 Designer，核心 Designer / Viewer 不反向依赖 Assistant 包
 
 ## 3.4 对外消费方式
 

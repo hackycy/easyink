@@ -118,7 +118,7 @@ Render 会用到几类 JSON 文件。我们先看最常改的请求文件：
 
 `samples/*/request.json` 是给 `easyink-render render --request` 读取的输入样例。你调服务渲染时，通常复制这类文件，然后改 `source`、`wait`、`pdf`、`security` 和 `output`。
 
-`pnpm render:manifest` 验证当前构建生成的 `internal-packages/viewer-runtime/dist/runtime/runtime-manifest.json`：记录实际 SDK 版本、Git HEAD、本地 diff 摘要，以及 HTML/JS/CSS/模块图的大小和 SHA-256；检查 Go embed 副本匹配、真实 JavaScript 和声明图没有 Designer/Vue/Assistant UI。Android AAR 同步同一 manifest，构建检查内嵌内容与当前构建逐字节一致。
+`pnpm render:manifest` 验证当前构建生成的 `internal-packages/viewer-runtime/dist/runtime/runtime-manifest.json`：记录实际 SDK 版本、Git HEAD、本地 diff 摘要，以及 HTML/JS/CSS/模块图的大小和 SHA-256；检查 Go embed 副本匹配、真实 JavaScript 和声明图没有 Designer/Vue。Android AAR 同步同一 manifest，构建检查内嵌内容与当前构建逐字节一致。
 
 发布包还有一个 manifest：
 

@@ -21,7 +21,7 @@
 | --- | --- |
 | Schema normalization / codec | `packages/schema/src/defaults.test.ts`、`codec.test.ts`：未知节点、自定义数据、条件、单位及输入不变性；迁移身份由 `migration.test.ts` 覆盖 |
 | builtin 集合与默认节点 | `packages/builtin/src/collection-source.test.ts`、`index.test.ts`、`condition.test.ts`、`material-defaults.test.ts`：成员、顺序、条件能力、mm/pt/px 几何及 props 覆盖语义 |
-| 独立与自定义物料 | `packages/builtin/src/independent-materials.test.ts`、`custom-material.test.ts`、`designer.test.ts`：单物料消费、空集合、目录、locale、AI、懒加载及自定义输出 |
+| 独立与自定义物料 | `packages/builtin/src/independent-materials.test.ts`、`custom-material.test.ts`、`designer.test.ts`：单物料消费、空集合、目录、locale、懒加载及自定义输出 |
 | Viewer 输出 | `packages/viewer/src/output-regression.test.ts`、`table-session.test.ts`、`conditional-schema.test.ts`、`text-image-materials.test.ts`：页数、份数、页码、几何、绑定、条件与表格分页内容 |
 | Host / Session 所有权 | Designer、Viewer、plugin-runtime 中的生命周期测试：安装回滚、资源释放、并发隔离、懒加载失败重试与销毁 |
 | 公共消费与依赖边界 | 各包 `public-contracts.test.*` 及 `test-fixtures/check-consumption.mjs`：真实 exports、构建声明、入口依赖隔离与公开类型消费 |
@@ -40,7 +40,7 @@
 7. 设计器打开 → 多次操作 → 撤销/重做 → 验证状态
 ```
 
-实际浏览器检查通过 `internal-packages/viewer-runtime/scripts/check-resource-readiness.mjs` 驱动 Chromium。默认模式覆盖字体、图片等资源就绪；`--cutover` 模式覆盖 Playground、Assistant、PDF/PNG 输出、懒加载重试、托管打印和内嵌 runtime 的销毁链路。它们使用真实浏览器与输出，不由 DOM 模拟环境替代。
+实际浏览器检查通过 `internal-packages/viewer-runtime/scripts/check-resource-readiness.mjs` 驱动 Chromium。默认模式覆盖字体、图片等资源就绪；`--cutover` 模式覆盖 Playground、PDF/PNG 输出、懒加载重试、托管打印和内嵌 runtime 的销毁链路。它们使用真实浏览器与输出，不由 DOM 模拟环境替代。
 
 Android 的真实设备检查保留 `lib/EasyInk.Android/samples/minimal/src/test-fixtures/check-cutover.mjs` 和 instrumentation 入口；修改相关宿主或制品时执行。历史检查记录不能代替当前构建制品的验收。
 

@@ -28,7 +28,6 @@ export const material: ViewerMaterial = {
   model,
   renderer,
   locale: { messages: { fixture: { name: 'Fixture' } } },
-  ai: { type: model.type, description: 'Fixture', properties: [] },
 }
 export const lazyMaterial: ViewerMaterial = {
   model,

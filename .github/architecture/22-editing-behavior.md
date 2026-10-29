@@ -477,14 +477,14 @@ selection 变化时框架自动调 `selectionType.getPropertySchema(sel, node)`�
 
 ### 22.6.4 Escape Hatch：EphemeralPanel
 
-少数场景（异步加载字段、AI 建议、与 selection 完全无关的瞬时操作面板）保留命令式：
+少数场景（异步加载字段、与 selection 完全无关的瞬时操作面板）保留命令式：
 
 ```typescript
 ctx.surfaces.requestPanel({
-  id: 'ai-suggest',
+  id: 'field-details',
   title: '...',
   position: { anchor: 'selection-bottom', offset: { x: 0, y: 8 } },
-  component: AiSuggestPanel,
+  component: FieldDetailsPanel,
   props: { ... },
   onClose: () => { ... },
 })

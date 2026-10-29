@@ -4,7 +4,7 @@ description: 在 Designer 和 Viewer 中使用完整 text/image 物料。
 
 # text/image 完整组合
 
-物料根入口提供 Designer 完整定义，`/viewer` 提供同名 Viewer 定义。应用选好数组再创建宿主；目录、属性、文案和 AI 描述随 Designer 物料提供。
+物料根入口提供 Designer 完整定义，`/viewer` 提供同名 Viewer 定义。应用选好数组再创建宿主；目录、属性、文案随 Designer 物料提供。
 
 ```vue
 <script setup lang="ts">
@@ -61,4 +61,4 @@ const customText: ViewerMaterial = {
 }
 ```
 
-未选择的物料节点保留并显示未知物料诊断。所选物料必须有 renderer 或受管 loadRenderer；已声明 loader 的加载失败显示局部不可用诊断，其他节点继续输出。缺少可选 palette、properties 或 AI 只影响对应功能。
+未选择的物料节点保留并显示未知物料诊断。所选物料必须有 renderer 或受管 loadRenderer；已声明 loader 的加载失败显示局部不可用诊断，其他节点继续输出。缺少可选 palette 或 properties 只影响对应功能。

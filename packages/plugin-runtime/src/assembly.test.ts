@@ -63,7 +63,7 @@ describe('complete Host assembly', () => {
     expect(initialize).not.toHaveBeenCalled()
   })
 
-  it('does not reinterpret missing optional UI, properties, AI or locale as fatal', async () => {
+  it('does not reinterpret missing optional UI, properties or locale as fatal', async () => {
     const host = await createHost({ kind: 'designer', materials: [designerMaterial('minimal')] })
     expect(host.registry.getMaterial('minimal')).toBeDefined()
     await host.destroy()

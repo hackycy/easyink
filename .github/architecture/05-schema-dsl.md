@@ -240,7 +240,7 @@ interface BenchmarkElementCompatState {
 }
 ```
 
-`MaterialNode` 的泛型只表达编译期所有权：schema 层仍把外部输入视为开放对象，具体物料在自己的包内通过 `MaterialNode<TextProps>` 或 `getNodeProps<TextProps>(node)` 获得类型化 props。不要在业务代码中使用 `as unknown as XxxProps` 穿透类型系统；如果数据来自 codec / MCP / migration 等不可信边界，先做最小形状校验，再进入规范模型。
+`MaterialNode` 的泛型只表达编译期所有权：schema 层仍把外部输入视为开放对象，具体物料在自己的包内通过 `MaterialNode<TextProps>` 或 `getNodeProps<TextProps>(node)` 获得类型化 props。不要在业务代码中使用 `as unknown as XxxProps` 穿透类型系统；如果数据来自 codec / 外部数据源 / migration 等不可信边界，先做最小形状校验，再进入规范模型。
 
 为什么保留 `children`：
 
@@ -424,7 +424,7 @@ const chartBinding: DataContractBinding = {
 - `mappings` 的 key 是目标字段 id，如 `category`、`value`，不是数据源字段名。
 - `select.path` 永远保存完整 source path，例如 `monthlySales/month`。Resolver 如需集合内叶子路径，只能临时推导，不得把 path 截断写回 schema。
 - `relation.kind='auto'` 是默认值，表示 Resolver 自行判断共享 record collection 或 index 对齐；binding 不保存 `mode`。
-- `relation.kind='record'` 或 `'index'` 只表达显式约束，用于宿主或 AI 明确要求某种对齐方式的场景。
+- `relation.kind='record'` 或 `'index'` 只表达显式约束，用于宿主明确要求某种对齐方式的场景。
 - Designer 不因不同 collection、不同 sourceId 或顶层数组形态拒绝 mapping；这些运行时关系由 Resolver 统一诊断。
 - 普通 `BindingRef` schema 继续用于文本、图片、条码、二维码等单字段物料；`DataContractBinding` 用于结构化数据物料。
 

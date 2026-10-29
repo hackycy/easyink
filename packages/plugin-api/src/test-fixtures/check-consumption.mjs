@@ -7,7 +7,7 @@ import { build } from 'vite'
 
 const root = process.cwd()
 const normalize = path => path.replaceAll('\\', '/').replace(`${root.replaceAll('\\', '/')}/`, '')
-const forbidden = path => /(?:^|\/)(?:vue|@vue|designer|viewer|assistant-[^/]*)(?:[/.@]|$)/.test(path)
+const forbidden = path => /(?:^|\/)(?:vue|@vue|designer|viewer)(?:[/.@]|$)/.test(path)
 // /plugin-api/designer and /plugin-api/viewer are contracts, not host implementations.
 const forbiddenDependency = path => !path.includes('plugin-api/') && forbidden(path)
 

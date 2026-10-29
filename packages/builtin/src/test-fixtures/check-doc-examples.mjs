@@ -18,7 +18,6 @@ function compile(name, source, extraFiles = []) {
     '@easyink/plugin-api/viewer': ['packages/plugin-api', './viewer'],
     '@easyink/designer': ['packages/designer', '.'],
     '@easyink/designer/locale': ['packages/designer', './locale'],
-    '@easyink/assistant-designer-bridge': ['packages/assistant/designer-bridge', '.'],
     '@easyink/viewer': ['packages/viewer', '.'],
     '@easyink/schema': ['packages/schema', '.'],
     '@easyink/icons': ['packages/icons', '.'],
@@ -60,13 +59,6 @@ await Promise.all([store.destroy(), viewer.destroy()])
 compile('extension-doc', blocks('docs/advanced/contributions.md')[0])
 compile('migration-doc', blocks('docs/guide/migration-0.1.0.md')[0])
 compile('architecture-extension', blocks('.github/architecture/23-contribution.md')[0])
-const assistant = readFileSync('docs/designer/assistant.md', 'utf8').match(/<script setup lang="ts">\r?\n([\s\S]*?)<\/script>/)[1]
-compile('assistant-doc', `${assistant}
-import { DesignerStore } from '@easyink/designer'
-const store = await DesignerStore.create({ schema: schema.value, materials, extensions, preferenceProvider })
-await store.destroy()
-`, [resolve('node_modules/vite/client.d.ts')])
-
 for (const path of ['docs/printing/index.md', 'docs/hiprint/index.md', 'docs/lodop/index.md', 'docs/dotnet/index.md', 'docs/hiprint/getting-started.md', 'docs/lodop/getting-started.md', 'docs/dotnet/getting-started.md', 'docs/viewer/print-export.md']) {
   const example = blocks(path).find(block => block.includes('viewerOptions: { materials: viewerMaterials }'))
   assert.ok(example, path)

@@ -6,7 +6,7 @@ EasyInk 分层的关键点是：设计器和 Viewer 是两个明确协作的上�
 ┌─────────────────────────────────────────────────────────────┐
 │                    Consumer Application                    │
 ├─────────────────────────────────────────────────────────────┤
-│        @easyink/designer / @easyink/viewer / Assistant      │
+│        @easyink/designer / @easyink/viewer                  │
 ├─────────────────────────────────────────────────────────────┤
 │  @easyink/designer                                         │
 │  ┌───────────────────────────────────────────────────────┐  │
@@ -82,7 +82,7 @@ EasyInk 分层的关键点是：设计器和 Viewer 是两个明确协作的上�
 
 - `@easyink/builtin` 负责内置物料装配
 - 它消费 `material-*` 包，根/all/basic 输出完整 Designer `materials`，all/viewer 和 basic/viewer 输出纯 Viewer `materials`，none 是两端可用的纯空集合
-- 应用显式选择集合；Designer/Viewer 底层没有 builtin 运行依赖。物料 AI 声明由当前 Host 提供只读查询，Assistant 不通过另一套物料登记获得它
+- 应用显式选择集合；Designer/Viewer 底层没有 builtin 运行依赖
 
 ### `designer` 层
 
@@ -169,5 +169,5 @@ API 设计要点：
 - `viewer` 是独立消费面
 - `viewer` 只消费 `schema + data`，不接收 `dataSources`
 - `designer` 不内置 `viewer`，由宿主决定何时引入预览、打印和导出能力
-- 应用给 `designer` / `viewer` 选择对应完整集合；各实例独立装配，Assistant 读取所在 Designer Host 的物料声明
+- 应用给 `designer` / `viewer` 选择对应完整集合；各实例独立装配
 - 数据源协议由 `datasource` 层统一，不再只通过 Designer 私有 props 传递

@@ -2,9 +2,6 @@ name: Deploy GitHub Pages
 
 on:
   workflow_call:
-    secrets:
-      EASYINK_ASSISTANT_SERVER_URL:
-        required: false
   workflow_dispatch:
 
 permissions:
@@ -71,8 +68,6 @@ jobs:
         run: pnpm exec vitest run scripts/docs-site.test.mjs docs/.vitepress/versioning.test.ts
 
       - name: Build playground
-        env:
-          VITE_EASYINK_ASSISTANT_ENDPOINT: ${{ secrets.EASYINK_ASSISTANT_SERVER_URL }}
         run: pnpm --filter @easyink/playground build
 
       - name: Build all documentation series

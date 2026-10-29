@@ -31,7 +31,6 @@ pnpm add @easyink/designer @easyink/viewer @easyink/builtin
 | `@easyink/schema` | 你想手动构造、归一化、校验模板 |
 | `@easyink/core` | 你在做字体、物料扩展、布局或底层能力复用 |
 | `@easyink/datasource` | 你想在业务层维护数据源字段树 |
-| `@easyink/schema-tools` | 你要做 Schema 校验、对齐或 AI 生成后的修复 |
 
 通常是这样的顺序：先用 Designer 和 Viewer，遇到更细的模板问题时，再往这些包下钻。
 
@@ -104,40 +103,6 @@ pnpm add @easyink/designer @easyink/viewer @easyink/builtin
 
 只有当你在研究自定义物料、对照内置实现写扩展时，才需要逐个看这些包。图表物料使用拆分包：常规图表走轻量 chart kernel，自定义 ECharts 可通过 `@easyink/material-chart-kernel/full` 使用完整 ECharts 入口。
 
-## AI 与 Assistant 平台
-
-AI 能力通过 Assistant 平台实现，分为三层：
-
-**Designer 集成层：**
-
-| 包 | 作用 |
-| --- | --- |
-| `@easyink/assistant-designer-bridge` | 通过独立 Designer 扩展将 AI 面板接入 Designer |
-| `@easyink/assistant-ui` | AI 任务面板 Vue 组件 |
-
-**Orchestrator 服务层：**
-
-| 包 | 作用 |
-| --- | --- |
-| `@easyink/assistant-orchestrator` | 主服务：LangGraph 管道 + ComposerAgent + HTTP API |
-| `@easyink/assistant-llm` | Provider 无关的 LLM 网关 |
-| `@easyink/assistant-store` | 任务、版本、草稿存储 |
-| `@easyink/assistant-capabilities` | Schema 验证、diff、patch、preview |
-| `@easyink/assistant-adapters` | 外部数据源适配器 |
-
-**知识与推理层：**
-
-| 包 | 作用 |
-| --- | --- |
-| `@easyink/assistant-material-knowledge` | 物料知识注册表（从 manifest 动态构建） |
-| `@easyink/assistant-constraint-engine` | 可执行约束引擎（验证 + 自动修复） |
-| `@easyink/assistant-schema-builder` | Schema 构建 DSL |
-| `@easyink/assistant-type-aligner` | 类型驱动数据对齐 |
-| `@easyink/assistant-scenario-templates` | 场景模板库与分类器 |
-| `@easyink/assistant-tool-registry` | Agent 工具注册表 |
-
-这些包不属于 Designer 运行时必需依赖。只有在接 AI 生成模板工作流时才需要引入。
-
 ## 选包原则
 
 如果你不想每次都从零判断，可以直接按下面这个规则来：
@@ -145,6 +110,6 @@ AI 能力通过 Assistant 平台实现，分为三层：
 - 只做编辑和预览：装 `@easyink/designer`、`@easyink/viewer`
 - 做打印：再加官方打印集成包
 - 做导出：再加导出运行时和对应插件
-- 做高级扩展：再看 `schema`、`core`、物料包和 Assistant 包
+- 做高级扩展：再看 `schema`、`core`和物料包
 
 关于包，目前知道这些就够用了。后面读具体章节时，再按需深入某个包即可。

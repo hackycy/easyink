@@ -46,7 +46,7 @@ const packageGroups = [
   },
   {
     title: '处理 Schema 和数据',
-    packages: ['@easyink/schema', '@easyink/schema-tools', '@easyink/datasource'],
+    packages: ['@easyink/schema', '@easyink/datasource'],
     text: '如果你要生成、校验或批量处理模板，先看这些包。它们提供模型、数据源和字段树工具。',
   },
 ]
@@ -454,7 +454,6 @@ watch(activeStage, () => {
         <div class="ei-arch-band ei-arch-band--model">
           <span>文档模型</span>
           <strong>@easyink/schema</strong>
-          <strong>@easyink/schema-tools</strong>
           <strong>@easyink/material-*</strong>
         </div>
       </div>

@@ -12,7 +12,6 @@ Typical files:
 - `src/designer.ts`: `createXExtension(context)`.
 - `src/viewer.ts`: render plus optional `measure()`, `getRenderSize()`, or `fragmentPaginator`.
 - `src/prop-schemas.ts`: material-owned property panel additions when needed.
-- `src/ai.ts`: `AIMaterialDescriptor` plus optional `knowledge` for Assistant generation, material selection, binding, sizing, and scenario fit.
 - `src/material-model.ts`: the shared model; `src/designer-material.ts` and `src/viewer-material.ts`: complete host declarations; `src/index.ts`: the Designer material and pure public helpers.
 - `src/*.test.ts`: focused tests for rendering, defaults, deep editing, measure, pagination, and schema behavior.
 
@@ -89,7 +88,7 @@ Simple materials can set `container.innerHTML`. Complex materials can create Vue
 
 Designer coordinates and design-time page context come through framework-owned surface planning. Material code should use material-local coordinates in geometry and datasource drop protocols, and should not convert output page plans or `renderContextSignal` values back into schema coordinates or persisted props.
 
-For heavyweight Designer renderers, put only the renderer implementation behind `loadRenderer`. The complete declaration retains synchronous model, properties, locale, AI and palette. Host tasks prevent late publication after destroy; loading content remounts only after the current generation succeeds.
+For heavyweight Designer renderers, put only the renderer implementation behind `loadRenderer`. The complete declaration retains synchronous model, properties, locale and palette. Host tasks prevent late publication after destroy; loading content remounts only after the current generation succeeds.
 
 For font-bearing materials:
 
@@ -209,7 +208,6 @@ For a new built-in material:
 3. Add package dependency to `packages/builtin/package.json`.
 7. Leave `condition` omitted unless this material explicitly opts out or narrows hidden effects; do not register the framework default.
 8. If Designer rendering is heavy, register metadata synchronously and use `loadRenderer` for the Designer extension chunk only; keep complete Viewer declaration synchronous.
-9. Set material-local `ai` in the complete declaration. The Host manifest derives from selected materials; builtin maintains only membership.
 10. Add `src/locale.ts` in the material package and pass it as `localeMessages` on the Designer material entry. Keep `@easyink/locales` for Designer common strings only.
 12. Update tests or snapshots affected by built-in type lists, catalog grouping, lazy registration, root/subpath exports, package-size boundaries, condition overrides, or binding format tabs. Include a root-entry check when aliases or registration helpers change so consumers are not forced onto unpublished source subpaths.
 13. Run focused package tests and then broader validation when registration, descriptors, or shared Designer/Viewer behavior changed.

@@ -1,6 +1,6 @@
 # 23. Designer 独立扩展
 
-Designer 在创建前通过 `extensions` 接受 `@easyink/plugin-api/ui` 的 `DesignerExtension`。完整物料通过 `materials` 自带模型、绘制和可选 UI；独立扩展用于 Assistant、面板和工作台命令。装配、身份校验和生命周期由每实例唯一 plugin-runtime Host 管理。
+Designer 在创建前通过 `extensions` 接受 `@easyink/plugin-api/ui` 的 `DesignerExtension`。完整物料通过 `materials` 自带模型、绘制和可选 UI；独立扩展用于面板和工作台命令。装配、身份校验和生命周期由每实例唯一 plugin-runtime Host 管理。
 
 ## 23.1 声明与入口
 
@@ -37,9 +37,5 @@ const extension: DesignerExtension = {
 每个 Host 有独立登记与 UI 根。overlay 挂载到实例根；同一扩展可在两个 Designer 使用，状态按 Host 身份隔离。UI 每次挂载获取短 Scope，订阅、监听和异步工作通过 `signal`、`onDispose` 归属；卸载先失效，销毁等待实际清理。不可取消的迟到资源由任务自行释放。
 
 重复身份、核心能力冲突和必需初始化失败整体拒绝创建并回滚。局部 UI 渲染或 props 失败记录诊断并隔离相应 UI；locale 缺失或冲突按稳定 fallback 记录诊断，保持非阻断。
-
-## 23.4 Assistant
-
-`createAssistantContribution()` 这个既有名称返回完整 `DesignerExtension`，直接声明 commands、toolbar、overlay 和 locale。面板按需加载，状态按 Host context 隔离。manifest 从当前所选完整物料生成，移除函数、组件和运行句柄；具体见 [25. AI Assistant](./25-ai-assistant.md)。
 
 作者用法见 [独立扩展指南](../../docs/advanced/contributions.md)，框架装配与资源边界见 [9. 内部扩展机制](./09-plugin-system.md)。

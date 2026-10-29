@@ -20,7 +20,6 @@ description: EasyInk API 索引：快速定位公开能力的包入口，涵盖 
 | `useDesignerStore` | Function | Vue inject 获取 store |
 | `useWorkbenchPersistence` | Function | 工作台偏好持久化 composable |
 | `DesignerInteractionService` | Class | 设计器用户交互桥接服务 |
-| `TemplateHistoryManager` | Class | 模板历史管理 |
 | `createLocalStoragePreferenceProvider` | Function | localStorage 偏好持久化 |
 | `createDefaultWorkbenchState` | Function | 创建默认工作台状态 |
 | `createDefaultSaveBranchMenu` | Function | 创建默认保存分支菜单状态 |
@@ -191,7 +190,7 @@ DOM-to-image 导出插件。
 | `setSourceNamespace` | Function | 写入数据源命名空间 |
 | `getSourceNamespace` | Function | 读取数据源命名空间 |
 
-常量导出：`DEFAULT_NAMESPACE`, `AI_NAMESPACE`
+常量导出：`DEFAULT_NAMESPACE`
 
 类型导出：`DataSourceDescriptor`, `DataFieldNode`, `DataFieldDisplayFormatConfig`, `DataFieldCustomFormatTemplate`, `DataFieldLookup`, `DataUnionBinding`, `DataSourceProviderFactory`, `ResolvedDataSourceEntry`, `DataSourceChangeCallback`
 

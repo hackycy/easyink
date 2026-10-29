@@ -9,7 +9,7 @@ async function checkEntry(name) {
   const root = process.cwd()
   const entry = resolve(root, `packages/viewer/src/test-fixtures/${name}.ts`)
   const normalize = path => path.replaceAll('\\', '/').replace(`${root.replaceAll('\\', '/')}/`, '')
-  const forbidden = path => !path.includes('plugin-api/') && /(?:^|\/)(?:vue|@vue|designer|assistant-ui|assistant-designer-bridge)(?:[/.@]|$)/.test(path)
+  const forbidden = path => !path.includes('plugin-api/') && /(?:^|\/)(?:vue|@vue|designer)(?:[/.@]|$)/.test(path)
   let moduleIds = []
   const output = await build({
     configFile: false,

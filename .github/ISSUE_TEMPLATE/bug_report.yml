@@ -38,7 +38,7 @@ body:
         - Viewer 预览 / 分页 / 渲染异常
         - 打印 / 导出链路异常
         - 数据源 / Schema / 绑定异常
-        - Assistant / 插件 / Contribution 异常
+        - 插件 / Contribution 异常
         - 构建 / 安装 / CI / 发布异常
         - 文档描述与实际行为不一致
         - 其他
@@ -53,11 +53,10 @@ body:
       options:
         - label: '`packages/designer` - 设计器工作台、画布、面板、交互'
         - label: '`packages/viewer` - 预览、分页、打印入口、导出入口'
-        - label: '`packages/schema` / `packages/core` / `packages/datasource` / `packages/schema-tools`'
+        - label: '`packages/schema` / `packages/core` / `packages/datasource`'
         - label: '`packages/materials/*` / `packages/builtin` / `packages/prop-schemas`'
         - label: '`packages/print/*` - EasyInk Printer / HiPrint / Lodop 集成'
         - label: '`packages/export/*` - 导出运行时或 PDF 导出插件'
-        - label: '`packages/assistant/*` - Assistant 平台、UI、orchestrator、plugins'
         - label: '`internal-packages/render-api-service`'
         - label: '`lib/EasyInk.Render` - Render host / sample / manifest'
         - label: '`playground` - 示例、回归验证环境'

@@ -177,7 +177,7 @@ The root exports the named Designer material and `/viewer` the named Viewer mate
 
 Applications pass complete arrays before creation. Builtin all/basic comes from `collection-source.ts`, none is empty. Each instance has one plugin-runtime Host; UI and render consumers only query its declarations. Store workbench projections and renderer caches are derived state, never another writable capability source.
 
-Designer optional fields are `properties`, `sectionFilter`, `ui.palette`, `locale`, and `ai`. Shared palette groups come from `@easyink/shared`. Missing optional features affect only those features; missing core renderer/loader rejects creation. An unknown persisted node stays visible with a diagnostic. See [public author guide](../../../docs/advanced/custom-materials.md) for an executable example.
+Designer optional fields are `properties`, `sectionFilter`, `ui.palette`, and `locale`. Shared palette groups come from `@easyink/shared`. Missing optional features affect only those features; missing core renderer/loader rejects creation. An unknown persisted node stays visible with a diagnostic. See [public author guide](../../../docs/advanced/custom-materials.md) for an executable example.
 
 ## Contribution Boundary
 

@@ -5,7 +5,6 @@ import type {
   BorderAppearance,
   BorderType,
   LayoutStrategyKind,
-  MaterialUseToken,
   PageMode,
   PageModelKind,
   PageScale,
@@ -48,112 +47,8 @@ export interface DocumentMeta {
 }
 
 /**
- * Serializable data source snapshot stored inside schema extensions.
- * Kept local to the schema package so contribution-driven persistence does
- * not invert package dependencies.
- */
-export interface DataSourceSnapshot {
-  id: string
-  name: string
-  tag?: string
-  title?: string
-  icon?: string
-  expand?: boolean
-  headless?: boolean
-  fields: DataFieldSnapshot[]
-  meta?: Record<string, unknown>
-}
-
-/**
- * Serializable field-tree node for persisted MCP data source snapshots.
- */
-export interface DataFieldSnapshot {
-  name: string
-  key?: string
-  path?: string
-  title?: string
-  id?: string
-  tag?: string
-  use?: MaterialUseToken
-  props?: Record<string, unknown>
-  format?: BindingDisplayFormat
-  bindIndex?: number
-  union?: DataUnionBindingSnapshot[]
-  expand?: boolean
-  fields?: DataFieldSnapshot[]
-  meta?: Record<string, unknown>
-}
-
-/**
- * Serializable one-drag-multi-create binding snapshot.
- */
-export interface DataUnionBindingSnapshot {
-  name?: string
-  key?: string
-  path?: string
-  title?: string
-  id?: string
-  tag?: string
-  use?: string
-  offsetX?: number
-  offsetY?: number
-  props?: Record<string, unknown>
-  format?: BindingDisplayFormat
-}
-
-/**
- * Snapshot of a provider factory for serialization.
- */
-export interface ProviderFactorySnapshot {
-  id: string
-  namespace: string
-  meta?: Record<string, unknown>
-}
-
-/**
- * A saved version of a template.
- * `source` is an open string so contributions can label history origins.
- * Conventional values: 'user', 'template', 'ai'.
- */
-export interface TemplateVersion {
-  id: string
-  schema: DocumentSchema
-  prompt?: string
-  source: string
-  timestamp: number
-  parentId?: string
-  metadata?: Record<string, unknown>
-}
-
-/**
- * Expected data source structure for schema-first alignment.
- * Returned by getSchema tool, consumed by getDataSource tool.
- */
-export interface ExpectedDataSource {
-  /** Expected data source name */
-  name: string
-  /** Expected field structure with types */
-  fields: ExpectedField[]
-  /** Sample data for validation */
-  sampleData?: Record<string, unknown>
-}
-
-/**
- * Expected field in the data source.
- */
-export interface ExpectedField {
-  name: string
-  title?: string
-  fieldLabel?: string
-  type: 'string' | 'number' | 'boolean' | 'array' | 'object'
-  required?: boolean
-  path: string
-  children?: ExpectedField[]
-}
-
-/**
  * Open extension namespace map. Contributions own their own top-level keys
- * (e.g. `ai`, `comments`) and store arbitrary serialisable values under them.
+ * (e.g. `comments`) and store arbitrary serialisable values under them.
  */
 export interface DocumentSchemaExtensions {
   [key: string]: unknown

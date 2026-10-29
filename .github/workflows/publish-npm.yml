@@ -18,7 +18,6 @@ jobs:
       packages: write
     outputs:
       published: ${{ steps.changesets.outputs.published }}
-      published_packages: ${{ steps.changesets.outputs.publishedPackages }}
 
     steps:
       - name: Checkout
@@ -76,16 +75,3 @@ jobs:
       pages: write
       id-token: write
     uses: ./.github/workflows/deploy-pages.yml
-    secrets:
-      EASYINK_ASSISTANT_SERVER_URL: ${{ secrets.EASYINK_ASSISTANT_SERVER_URL }}
-
-  publish-orchestrator-image:
-    needs:
-      - release
-    if: ${{ needs.release.result == 'success' && needs.release.outputs.published == 'true' && contains(needs.release.outputs.published_packages, '@easyink/assistant-orchestrator') }}
-    permissions:
-      contents: read
-      packages: write
-    uses: ./.github/workflows/publish-orchestrator-image.yml
-    with:
-      push_latest: true

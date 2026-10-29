@@ -11,7 +11,7 @@ EasyInk 的数据源系统是 Designer 专属的设计时基础设施，负责�
 - 批量投放和多参数绑定
 - 推荐物料
 - **外部数据源注册（运行时动态注册）**
-- **MCP 数据源集成**
+- **外部数据源集成**
 
 ## 8.2 规范协议
 
@@ -84,7 +84,7 @@ interface DataUnionBinding {
 
 interface DataSourceProviderFactory {
   readonly id: string           // 数据源唯一标识
-  readonly namespace: string   // 命名空间（如 '__ai__'）
+  readonly namespace: string   // 命名空间（如 'external'）
   resolve(): Promise<DataSourceDescriptor>
 }
 ```
@@ -118,12 +118,10 @@ class DataSourceRegistry {
 ```typescript
 // @easyink/datasource
 
-// AI 驱动数据源隐式使用 '__ai__' 命名空间
-export const AI_NAMESPACE = '__ai__'
 export const DEFAULT_NAMESPACE = 'default'
 
 // 工具函数
-export function isMcpNamespace(ns?: string): boolean
+export function isDefaultNamespace(ns?: string): boolean
 export function getNamespacedId(id: string, namespace?: string): string
 export function parseNamespacedId(fullId: string): { namespace: string, id: string } | null
 ```
@@ -133,7 +131,7 @@ export function parseNamespacedId(fullId: string): { namespace: string, id: stri
 | 命名空间 | 来源 | 说明 |
 |---|---|---|
 | `default` | 用户手动注册 | 默认命名空间 |
-| `__ai__` | AI / contribution 生成 | 隐式分配，不可指定 |
+| `external` 等自定义值 | 外部数据源 | 由宿主或 Provider Factory 指定 |
 
 ### 8.3.4 注册流程
 
@@ -147,8 +145,8 @@ registry.registerSource({
 
 // 方式二：Provider Factory 注册（异步）
 registry.registerProviderFactory({
-  id: 'mcp-datasource-1',
-  namespace: '__ai__',
+  id: 'external-datasource-1',
+  namespace: 'external',
   async resolve() {
     // 动态获取数据源
     const response = await fetch('https://api.example.com/fields')
@@ -200,7 +198,7 @@ EasyInk 的做法应是：
 | `bindIndex` | 多参数绑定位次 | BWIP、函数、公式等 |
 | `expand` | 默认展开状态 | 字段树 UI |
 | `headless` | 不作为独立显示根节点 | UI/兼容 |
-| `namespace` | 数据源命名空间 | AI / 外部适配器隔离、权限控制 |
+| `namespace` | 数据源命名空间 | 外部适配器隔离、权限控制 |
 
 字段树只提供默认格式和自定义函数模板，不决定属性面板展示哪些格式 tab。格式 tab 是物料注册能力：`binding.formatEditor` 声明 `preset/custom` 等可用 tab。普通文本类物料可以开放 `preset/custom`；自定义 SVG、chart 类物料默认只开放 `custom`，避免出现运行时不消费的预设配置。
 

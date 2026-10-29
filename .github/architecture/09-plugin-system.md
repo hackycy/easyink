@@ -4,9 +4,9 @@ EasyInk 当前保留扩展抽象，但它的目标是支撑内置体系演进，
 
 ## 已落地的公共声明入口
 
-`@easyink/plugin-api` 已提供独立的 material/designer/viewer/ui 构建入口。完整物料声明包含同一共享模型和对应宿主 renderer 或 loader；目录、属性、locale 与 AI 可以缺省。模型拥有 binding、condition 与 pageAware，renderer 负责绘制和设计交互。独立 UI/命令扩展以自己的 id 声明，无需伪造物料。
+`@easyink/plugin-api` 已提供独立的 material/designer/viewer/ui 构建入口。完整物料声明包含同一共享模型和对应宿主 renderer 或 loader；目录、属性、locale 可以缺省。模型拥有 binding、condition 与 pageAware，renderer 负责绘制和设计交互。独立 UI/命令扩展以自己的 id 声明，无需伪造物料。
 
-Designer UI 组件和回调取得受控上下文。组件业务 props 不得覆盖 `context`；物料属性上下文与独立 Designer 上下文类型不同。命令调用保留参数和结果类型。纯 Viewer 入口的 JavaScript 与声明依赖图均不包含 Vue、Designer 或 Assistant UI。
+Designer UI 组件和回调取得受控上下文。组件业务 props 不得覆盖 `context`；物料属性上下文与独立 Designer 上下文类型不同。命令调用保留参数和结果类型。纯 Viewer 入口的 JavaScript 与声明依赖图均不包含 Vue 或 Designer。
 
 验证入口是 `packages/plugin-api/src/test-fixtures/check-consumption.mjs` 与 `contracts.test.ts`：消费真实 exports 和已生成声明，负向夹具使用 `@ts-expect-error` 验证缺失 renderer、编辑权限、只读查询、异步 render 和组件 context 错配。消费检查也覆盖 plugin-runtime 的只读登记权限及 JavaScript/声明依赖图。
 
@@ -24,7 +24,7 @@ registry 由 runtime 唯一写入，对外只提供深只读声明和不可变�
 
 DesignerStore.create 返回 Promise，完整声明经唯一 Host 校验后才创建核心 Store 并初始化 eager factories；必需 factory 失败等待回滚，lazy 首次消费才加载。原物料写 Map、registerMaterial/registerDesignerFactory/registerLocaleMessages 与 bundle 登记 facade 已删除，工作台只投影最终物料/目录声明。UI/命令 context 按 owner Scope 缓存，仅包含 DesignerContext 权限；typed command 查内核登记并使用命令 owner 的 context。销毁同步失效，返回同一清理 Promise，字体和 lazy 的迟到结果不能更新缓存或活动诊断。
 
-Vue 组件内部等待 Store 创建，通过 ready/error 和 loading/error slots 反馈启动；卸载后迟到 Store 自行销毁。实际工作台保留编辑/persistence/autosave，扩展 toolbar/overlay 只读消费内核声明，overlay 使用每实例 DOM 根，框架最后传入受控 context。旧 Contribution registry、activate、setupStore 与完整 Store 注入已删除。25 个物料根入口自带完整 Designer 声明，builtin all/basic Designer 子入口只聚合所选声明；playground 显式选择 all，Assistant 使用受控文档/选区/数据源操作与 typed commands，运行状态按 Host context 隔离。五类 UI 以短挂载 Scope 消费声明；Session、UI 与物料功能有对应行为检查，实际平台链路另行验收。
+Vue 组件内部等待 Store 创建，通过 ready/error 和 loading/error slots 反馈启动；卸载后迟到 Store 自行销毁。实际工作台保留编辑/persistence/autosave，扩展 toolbar/overlay 只读消费内核声明，overlay 使用每实例 DOM 根，框架最后传入受控 context。旧 Contribution registry、activate、setupStore 与完整 Store 注入已删除。25 个物料根入口自带完整 Designer 声明，builtin all/basic Designer 子入口只聚合所选声明；playground 显式选择 all。五类 UI 以短挂载 Scope 消费声明；Session、UI 与物料功能有对应行为检查，实际平台链路另行验收。
 
 ## 9.1 当前边界
 

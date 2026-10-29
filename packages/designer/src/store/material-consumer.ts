@@ -87,7 +87,6 @@ export class MaterialConsumer {
       condition: deepClone(material.model.condition) as MaterialPresentation['condition'],
       createDefaultNode: material.model.createDefaultNode,
       props: deepClone(material.properties ?? []) as MaterialPresentation['props'],
-      aiDescriptor: deepClone(material.ai) as MaterialPresentation['aiDescriptor'],
       sectionFilter: material.sectionFilter,
     }
   }

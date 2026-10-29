@@ -9,7 +9,6 @@ Source files:
 - `packages/materials/table/data/src/prop-schemas.ts`
 - `packages/materials/table/data/src/viewer.ts`
 - `packages/materials/table/data/src/layout.ts`
-- `packages/materials/table/data/src/ai.ts`
 - `packages/materials/table/kernel/src/geometry.ts`
 - `packages/materials/table/kernel/src/commands.ts`
 - `packages/materials/table/kernel/src/resize-adapter.ts`
@@ -106,7 +105,7 @@ Designer lessons:
 - Use shared Designer control policy rather than checking `flow-row` in canvas or property-panel components.
 - Disable `height` and hide vertical outer resize handles through policy.
 - Keep column editing and column width gestures selection-scoped; changing columns must leave text input mode.
-- Tests should assert the fixed policy and the runtime repeat detection helper separately if the helper remains exported for Viewer or AI use.
+- Tests should assert the fixed policy and the runtime repeat detection helper separately if the helper remains exported for Viewer use.
 
 Viewer lessons:
 
@@ -133,7 +132,7 @@ What to copy:
 
 - Use ordinary binding for whole-object option projection when the data source already returns the material runtime configuration.
 - Use `type: 'code'` prop schemas with editor sizing and JavaScript language for authored option source.
-- Keep heavy Designer rendering behind `loadRenderer` while leaving catalog, binding, prop schemas, locale messages, and AI descriptor immediately available.
+- Keep heavy Designer rendering behind `loadRenderer` while leaving catalog, binding, prop schemas, and locale messages immediately available.
 - Convert option execution and JSON parsing errors into diagnostics instead of throwing through Viewer render.
 
 What not to copy blindly:

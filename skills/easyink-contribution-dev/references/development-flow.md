@@ -1,6 +1,6 @@
 # Designer extension implementation flow
 
-1. Follow the actual `@easyink/assistant-designer-bridge` declaration for id, locale, commands and UI. Choose only the features needed by the task.
+1. Follow the example in `docs/advanced/contributions.md` for id, locale, commands and UI. Choose only the features needed by the task.
 2. Export `DesignerExtension` from the package and select it through `<EasyInkDesigner :extensions="extensions" />` or `DesignerStore.create({ extensions, materials })`.
 3. Components receive a required controlled `context` prop. `getProps(context)` supplies business values; UI state belongs to that Host or mount, never the Schema.
 4. Commands preserve argument/result types. Call `context.executeCommand(command, args)` so the handler uses its owner's context.

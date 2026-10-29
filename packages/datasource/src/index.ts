@@ -6,11 +6,9 @@ export {
 export type { DataFieldLookup } from './display-format'
 
 export {
-  AI_NAMESPACE,
   DEFAULT_NAMESPACE,
   getNamespacedId,
   getSourceNamespace,
-  isAINamespace,
   isDefaultNamespace,
   parseNamespacedId,
   setSourceNamespace,

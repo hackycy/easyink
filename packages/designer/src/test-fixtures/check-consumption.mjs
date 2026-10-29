@@ -55,12 +55,12 @@ async function main() {
     }],
     build: { write: false, minify: false, lib: { entry, formats: ['es'], cssFileName: 'designer-consumption' } },
   })
-  const forbidden = [...modules, ...declarations].filter(path => /(?:^|\/)(?:packages|@easyink)\/(?:viewer|assistant(?:-[^/]*)?)(?:\/|$)/.test(path))
+  const forbidden = [...modules, ...declarations].filter(path => /(?:^|\/)(?:packages|@easyink)\/viewer(?:\/|$)/.test(path))
   const eagerChart = eagerModules.filter(path => /materials\/chart\/(?:custom\/dist\/designer\.mjs$|kernel\/dist\/full)|echarts\/index\.js$/.test(path))
   if (process.argv.includes('--check-lazy') && eagerChart.length)
     throw new Error(`Designer collection eagerly loads chart-custom code: ${eagerChart.join(', ')}`)
   if (forbidden.length)
-    throw new Error(`Designer imports another host or Assistant: ${forbidden.join(', ')}`)
+    throw new Error(`Designer imports another host: ${forbidden.join(', ')}`)
   if (!declarations.some(path => path.startsWith('packages/designer/dist/')) || !declarations.some(path => /(?:^|\/)vue\//.test(path)))
     throw new Error('Fixture must consume emitted Designer and actual Vue declarations')
   const pkg = JSON.parse(await readFile(resolve(root, 'packages/designer/package.json'), 'utf8'))

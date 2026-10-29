@@ -1,6 +1,5 @@
 import { normalizeDocumentSchema } from '@easyink/schema'
 import { describe, expect, it } from 'vitest'
-import { createAssistantMaterialManifest } from '../../assistant/designer-bridge/src/material-manifest'
 import { DesignerStore } from '../../designer/src/store/designer-store'
 import { createViewer } from '../../viewer/src/index'
 import { materials as designerMaterials } from './all/designer'
@@ -13,7 +12,6 @@ describe('independent complete builtin materials', () => {
     const store = await DesignerStore.create({
       materials: [material],
       schema: { elements: [node] },
-      extensions: [{ id: 'inspect', commands: [{ id: 'manifest', handler: (_args, context) => createAssistantMaterialManifest(context) }] }],
     })
     const container = document.createElement('div')
     const viewer = await createViewer({ materials: [viewerMaterial], container })
@@ -23,15 +21,11 @@ describe('independent complete builtin materials', () => {
       const definition = store.getMaterial(type)!
       expect(definition.binding).toEqual(material.model.binding)
       expect(definition.props).toEqual(material.properties)
-      expect(definition.aiDescriptor).toEqual(material.ai)
       expect(store.getCatalog().map(item => item.id)).toEqual(material.ui!.palette!.map(item => item.id))
       for (const preset of material.ui!.palette!) {
         expect(store.t(preset.label)).not.toBe(preset.label)
         expect(store.t(preset.group.label)).not.toBe(preset.group.label)
       }
-      const manifest = createAssistantMaterialManifest(store.getExtensionContext(store.getContributions('designer.command')[0]!.owner))
-      expect(manifest.materials.map(item => item.type)).toEqual([type])
-      expect(manifest.materials[0]?.ai).toEqual(material.ai)
       if (material.loadRenderer) {
         expect(material.renderer).toBeUndefined()
         store.getDesignerExtension(type)

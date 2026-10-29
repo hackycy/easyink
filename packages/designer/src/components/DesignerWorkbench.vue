@@ -54,7 +54,7 @@ watch(() => props.schema, (newSchema) => {
 })
 
 // Sync schema replacement back to the parent so `v-model:schema` reflects
-// programmatic mutations (e.g. AI generation calling `store.setSchema`).
+// programmatic mutations (e.g. host code calling `store.setSchema`).
 // In-place mutations of the same object reach the parent automatically
 // because props are passed by reference; this watcher only fires when the
 // internal _schema is reassigned to a new object identity.

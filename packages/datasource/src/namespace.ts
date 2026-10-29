@@ -1,21 +1,7 @@
 /**
- * Default namespace constant used by Assistant/contribution-driven sources.
- * Kept in datasource so designer and datasource utilities can recognise the
- * namespace without depending on a concrete Assistant integration package.
- */
-export const AI_NAMESPACE = '__ai__'
-
-/**
  * Default namespace for user-registered data sources.
  */
 export const DEFAULT_NAMESPACE = 'default'
-
-/**
- * Check if a namespace is the AI namespace.
- */
-export function isAINamespace(ns?: string): boolean {
-  return ns === AI_NAMESPACE
-}
 
 /**
  * Check if a namespace is the default namespace.
@@ -40,7 +26,7 @@ export function getNamespacedId(id: string, namespace?: string): string {
 
 /**
  * Parse a namespaced ID into its components.
- * @param fullId - The full qualified ID (e.g., "__ai__:ds-123")
+ * @param fullId - The full qualified ID (e.g., "external:ds-123")
  * @returns Object with namespace and id, or null if not namespaced
  */
 export function parseNamespacedId(fullId: string): { namespace: string, id: string } | null {

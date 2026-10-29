@@ -19,7 +19,6 @@ cache
 **/build/
 lib/EasyInk.Android/src/main/assets/easyink-viewer/
 lib/EasyInk.Android/local.properties
-.easyink-assistant/
 lib/EasyInk.Render/releases-browser-docker/
 lib/EasyInk.Render/releases-package-docker/
 lib/EasyInk.Render/releases/

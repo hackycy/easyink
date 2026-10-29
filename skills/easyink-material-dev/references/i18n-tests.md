@@ -38,24 +38,6 @@ Property schemas can store label keys directly because `PropertiesPanel.vue` res
 - History panel can display the command label. Prefer stable `materials.<material>.history.*` keys for material commands.
 - Custom materials own `locale`; the Host handles stable non-blocking conflict/fallback diagnostics.
 
-## AI Reminder
-
-Read `references/ai-assistant-materials.md` when AI behavior matters. In short:
-
-- Put `src/ai.ts` next to the material when it should be generated or selected by Assistant.
-- Include `AIMaterialDescriptor.knowledge` when Assistant needs reliable material selection, binding, sizing, or scenario fitness.
-- Declare descriptors as `ai` on complete materials; builtin only selects membership.
-- Assistant receives serialized model/properties/AI from current Host declarations.
-
-Assistant reads canonical material types, binding rules, props, and optional AI descriptors from the live Designer material manifest. If a generated material should be available to Assistant but lacks a Designer `ai`, selection and schema generation become weaker even when Designer and Viewer registration are otherwise correct.
-
-## AI Review Smells
-
-- AI descriptor mentions a prop that does not exist or omits required specialized schema rules.
-- Descriptor binding says `single` or `multi` but `knowledge.bindingSpec.mode` says a different data shape.
-- `knowledge.sizing.defaultSize` does not match the factory default size in mm.
-- Custom material tries to update prompt text or a static AI list instead of registering Designer `ai`.
-
 ## Tests to Add or Run
 
 Choose focused tests based on risk:

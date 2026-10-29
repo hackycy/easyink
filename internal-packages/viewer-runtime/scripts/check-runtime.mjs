@@ -23,8 +23,8 @@ for (const [file, expected] of Object.entries(manifest.files)) {
   }
 }
 const modules = JSON.parse(await readFile(resolve(runtimeRoot, 'easyink-viewer/assets/module-graph.json'), 'utf8'))
-const forbidden = path => !path.includes('plugin-api/') && /(?:^|\/)(?:vue|@vue|designer|assistant-ui|assistant-designer-bridge)(?:[/.@]|$)/.test(path)
-assert.deepEqual(modules.filter(forbidden), [], 'Embedded JavaScript must remain free of Designer/Vue/Assistant UI')
+const forbidden = path => !path.includes('plugin-api/') && /(?:^|\/)(?:vue|@vue|designer)(?:[/.@]|$)/.test(path)
+assert.deepEqual(modules.filter(forbidden), [], 'Embedded JavaScript must remain free of Designer/Vue')
 assert(modules.some(path => path.endsWith('/packages/viewer/dist/index.mjs')), 'Must consume the actual emitted Viewer')
 const entry = resolve(repoRoot, 'internal-packages/viewer-runtime/src/main.ts')
 const program = ts.createProgram([entry], {

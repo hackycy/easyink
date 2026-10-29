@@ -29,7 +29,6 @@ export const badge: DesignerMaterial = {
   },
   properties: [{ key: 'label', label: 'vendor.badge.label', type: 'string' }],
   locale: { messages: { vendor: { badge: { name: 'Badge', label: 'Label', group: 'Vendor' } } } },
-  ai: { type: badgeModel.type, description: 'A named badge', properties: ['label'], binding: 'single' },
   ui: { palette: [
     { id: 'badge', label: 'vendor.badge.name', icon: { render: () => null }, group: { id: 'vendor', label: 'vendor.badge.group' }, order: 2 },
     { id: 'priority-badge', label: 'vendor.badge.name', icon: { render: () => null }, group: { id: 'vendor', label: 'vendor.badge.group' }, order: 1, createDefaultNode: input => badgeModel.createDefaultNode({ ...input, props: { label: 'Priority', ...input?.props } }) },

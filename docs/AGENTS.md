@@ -108,4 +108,4 @@ node scripts/docs-versions.mjs check
 
 准备包发行时，除常规检查外执行 `pnpm test`、`pnpm docs:build` 和 `pnpm render:manifest`，核对迁移与移除清单、Go/Android 内嵌 runtime、构建 HEAD、平台运行结果和制品 checksum。源码或平台制品变化后重新核验，不能以构建成功代替平台验收。
 
-核对首次 npm 发布前提、账户及 scope 权限、新增公共包的发布权限，以及 Changesets 分组是否覆盖目标包。`pnpm release` 会推进版本并执行 commit、tag、push，不把它当作验证命令。既有 `npm-v*` tag 工作流发布成功会触发 Pages，发布包含 assistant-orchestrator 时还会触发镜像构建。保持仓库既有人工发布流程，按任务授权执行实际发布操作。
+核对首次 npm 发布前提、账户及 scope 权限、新增公共包的发布权限，以及 Changesets 分组是否覆盖目标包。`pnpm release` 会推进版本并执行 commit、tag、push，不把它当作验证命令。既有 `npm-v*` tag 工作流发布成功会触发 Pages。保持仓库既有人工发布流程，按任务授权执行实际发布操作。

@@ -1,7 +1,5 @@
 import type { MaterialBindingDefinition, MaterialConditionCapability } from '@easyink/core'
 import type { MaterialNode } from '@easyink/schema'
-import type { AIMaterialDescriptor } from '@easyink/shared'
-import type { DeepReadonly } from './resources'
 
 export type { DeepReadonly, Dispose, ResourceContext } from './resources'
 
@@ -37,7 +35,6 @@ export interface LocaleDeclaration {
 export interface MaterialDeclaration {
   readonly model: MaterialModel
   readonly locale?: LocaleDeclaration
-  readonly ai?: DeepReadonly<AIMaterialDescriptor>
 }
 
 /** A renderer is either immediately available or explicitly loaded on demand. */

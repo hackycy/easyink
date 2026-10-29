@@ -8,7 +8,7 @@ body:
         欢迎提出能力建议。EasyInk 的边界比较清晰，好的需求描述通常需要回答三个问题：
 
         - 它要解决的真实场景是什么？
-        - 更适合落在哪一层：Schema、Core、Designer、Viewer、打印/导出、Assistant，还是文档与工具链？
+        - 更适合落在哪一层：Schema、Core、Designer、Viewer、打印/导出，还是文档与工具链？
         - 它会不会引入新的兼容、扩展或维护成本？
 
         如果你已经有 API 草案、交互稿、示例 schema 或竞品参考，一并提供会很有帮助。
@@ -46,11 +46,10 @@ body:
       options:
         - label: '`packages/designer`'
         - label: '`packages/viewer`'
-        - label: '`packages/schema` / `packages/core` / `packages/datasource` / `packages/schema-tools`'
+        - label: '`packages/schema` / `packages/core` / `packages/datasource`'
         - label: '`packages/materials/*` / `packages/builtin` / `packages/prop-schemas`'
         - label: '`packages/print/*`'
         - label: '`packages/export/*`'
-        - label: '`packages/assistant/*`'
         - label: '`internal-packages/render-api-service`'
         - label: '`lib/EasyInk.Render`'
         - label: '`playground`'
